@@ -7,8 +7,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from 'dotenv';
 import { AgentOrchestrator } from './agent-orchestrator.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 dotenv.config();
+
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,6 +40,33 @@ async function initMCP() {
     console.error("Error conectando a MCP:", error);
   }
 }
+
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  try {
+    const result = await mcpClient.request(
+      {
+        method: "tools/call",
+        params: {
+          name: "sdp_authenticate_user",
+          arguments: { username, password }
+        },
+      },
+      CallToolResultSchema
+    );
+
+    if (result.isError) {
+      return res.status(401).json({ success: false, message: "Error de autenticación: " + result.content[0].text });
+    }
+
+    const data = JSON.parse(result.content[0].text);
+    res.json(data);
+  } catch (error) {
+    console.error("Error en login:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 app.post('/api/verify-user', async (req, res) => {
   const { search_text } = req.body;
@@ -162,52 +192,101 @@ app.post('/api/create-ticket', async (req, res) => {
 app.post('/api/chat', async (req, res) => {
   const { message, userContext } = req.body;
 
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const sendEvent = (type, data) => {
+    res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+  };
+
   try {
-    // 1. Preguntar a la IA qué hacer
+    // 0. Informar que estamos pensando
+    sendEvent('status', { message: 'Antigravity está analizando tu solicitud...' });
+
+    // 1. Orquestación agéntica (Primera llamada: Decisión)
     const aiDecision = await AgentOrchestrator.processMessage(message);
-
-    if (aiDecision.action === 'reply') {
-      return res.json({ type: 'text', content: aiDecision.content });
-    }
-
+    console.log(`[Bridge] IA decidió:`, JSON.stringify(aiDecision, null, 2));
+    
     if (aiDecision.action === 'call_tool') {
-      console.log(`[Bridge] Ejecutando herramienta: ${aiDecision.tool_name}`);
+      console.log(`[Bridge] Ejecutando: ${aiDecision.tool_name} con args:`, JSON.stringify(aiDecision.tool_args));
+      sendEvent('status', { message: `Consultando herramienta: ${aiDecision.tool_name}...` });
       
+      // Enviamos el mensaje inicial de la IA mientras procesamos la herramienta
+      sendEvent('text', { content: aiDecision.content + "\n\n" });
+
       // Inyectar el requester_id si la herramienta lo necesita y lo tenemos en el contexto
       if (aiDecision.tool_name === 'sdp_list_requests' && userContext?.id) {
+        aiDecision.tool_args = aiDecision.tool_args || {};
         aiDecision.tool_args.requester_id = userContext.id;
       }
 
-      const result = await mcpClient.request(
-        {
-          method: "tools/call",
-          params: {
-            name: aiDecision.tool_name,
-            arguments: aiDecision.tool_args
+      try {
+        const toolResult = await mcpClient.request(
+          {
+            method: "tools/call",
+            params: {
+              name: aiDecision.tool_name,
+              arguments: aiDecision.tool_args || {}
+            },
           },
-        },
-        CallToolResultSchema
-      );
+          CallToolResultSchema
+        );
 
-      if (result.isError) {
-        return res.json({ type: 'text', content: "Hubo un error al ejecutar la herramienta: " + result.content[0].text });
+        const toolOutput = toolResult.content[0].text;
+        console.log(`[Bridge] Resultado técnico obtenido.`);
+        
+        // Segunda llamada: Resumen humano (CON STREAMING usando Gemini)
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        try {
+          const model = genAI.getGenerativeModel({
+            model: "gemini-3.5-flash",
+            systemInstruction: "Eres Antigravity, el agente de soporte IT de Barraza y Cía. Resume este resultado técnico de forma muy humana, clara y organizada en Markdown. Si hay varios tickets o elementos estructurados, preséntalos SIEMPRE en una TABLA Markdown con columnas claras (como ID, Asunto, Estado, Prioridad, Técnico, etc.). Usa emojis de forma profesional para destacar estados (ej: 🔴 Alta, 🟢 Cerrado, 🔵 Abierto). No uses frases introductorias genéricas como 'Aquí tienes el resumen'."
+          });
+          const result = await model.generateContentStream({
+            contents: [{ role: 'user', parts: [{ text: `Resultado técnico: ${toolOutput}` }] }]
+          });
+          for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            if (chunkText) {
+              sendEvent('text_chunk', { content: chunkText });
+            }
+          }
+        } catch (geminiError) {
+          console.warn(`[Bridge] gemini-3.5-flash fallido en streaming, ejecutando fallback a gemini-2.5-flash:`, geminiError.message);
+          const model = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+            systemInstruction: "Eres Antigravity, el agente de soporte IT de Barraza y Cía. Resume este resultado técnico de forma muy humana, clara y organizada en Markdown. Si hay varios tickets o elementos estructurados, preséntalos SIEMPRE en una TABLA Markdown con columnas claras (como ID, Asunto, Estado, Prioridad, Técnico, etc.). Usa emojis de forma profesional para destacar estados (ej: 🔴 Alta, 🟢 Cerrado, 🔵 Abierto). No uses frases introductorias genéricas como 'Aquí tienes el resumen'."
+          });
+          const result = await model.generateContentStream({
+            contents: [{ role: 'user', parts: [{ text: `Resultado técnico: ${toolOutput}` }] }]
+          });
+          for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            if (chunkText) {
+              sendEvent('text_chunk', { content: chunkText });
+            }
+          }
+        }
+
+        sendEvent('done', {});
+        res.end();
+
+      } catch (error) {
+        console.error(`[Bridge] Error crítico ejecutando herramienta ${aiDecision.tool_name}:`, error.message);
+        sendEvent('text', { content: `⚠️ Oye, parece que tuve un problema técnico al intentar usar **${aiDecision.tool_name}**. Déjame revisar mis circuitos e intenta de nuevo.` });
+        res.end();
       }
-
-      const data = JSON.parse(result.content[0].text);
-      
-      // Devolvemos el resultado a la IA para que lo explique, o directamente al frontend con un tipo especial
-      // Por ahora, devolvemos un objeto enriquecido para que el frontend use sus Cards
-      return res.json({ 
-        type: 'tool_result', 
-        tool: aiDecision.tool_name, 
-        data,
-        ai_suggestion: `He ejecutado la herramienta ${aiDecision.tool_name} para ti.`
-      });
+    } else {
+      // Respuesta directa sin herramienta
+      sendEvent('text', { content: aiDecision.content });
+      sendEvent('done', {});
+      res.end();
     }
 
   } catch (error) {
-    console.error("Error en endpoint de chat:", error);
-    res.status(500).json({ error: "Error interno en el agente." });
+    sendEvent('error', { message: error.message });
+    res.end();
   }
 });
 
