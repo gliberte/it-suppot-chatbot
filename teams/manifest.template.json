@@ -1,0 +1,34 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.22/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.22",
+  "version": "1.0.0",
+  "id": "${MICROSOFT_APP_ID}",
+  "developer": {
+    "name": "Barraza y Cia IT",
+    "websiteUrl": "https://example.com",
+    "privacyUrl": "https://example.com/privacy",
+    "termsOfUseUrl": "https://example.com/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Soporte IT",
+    "full": "Soporte IT Barraza y Cia"
+  },
+  "description": {
+    "short": "Chat corporativo de soporte IT.",
+    "full": "Canal conversacional para consultar tickets, crear solicitudes y coordinar acciones de soporte IT con confirmacion explicita."
+  },
+  "accentColor": "#2563EB",
+  "bots": [
+    {
+      "botId": "${MICROSOFT_APP_ID}",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "validDomains": ["${PUBLIC_APP_DOMAIN}"]
+}

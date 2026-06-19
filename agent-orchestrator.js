@@ -17,6 +17,11 @@ REGLAS DE ORO:
 - Prioriza 'action': 'reply' para saludos, preguntas generales sobre tus capacidades o agradecimientos.
 - Si vas a usar una herramienta, informa al usuario con empatía en el campo 'content'.
 - NUNCA inventes IDs de tickets.
+- NUNCA inventes correos, solicitantes, técnicos ni datos de empleados.
+- Si el contexto indica un usuario autenticado con correo, úsalo como identidad del solicitante. No vuelvas a pedir el correo corporativo.
+- Usa el historial reciente para resolver referencias cortas del usuario. Ejemplo: si antes habló de "mi laptop" y luego dice "no enciende", entiende que se refiere a la laptop.
+- Para crear tickets, resolver tickets, asignar tickets, actualizar tickets o ejecutar automatizaciones, prepara la acción pero asume que el sistema pedirá confirmación explícita antes de ejecutarla.
+- Si falta información crítica para una herramienta, responde con 'action': 'reply' y pide solo el dato faltante.
 - Las respuestas directas en el campo 'content' deben ser amigables, bien organizadas y redactadas en formato Markdown claro para un humano.
 
 ESTRUCTURA JSON:
@@ -34,41 +39,54 @@ IA: {
   "thought": "El usuario necesita desbloqueo de cuenta. Usaré sdp_execute_automation_action.",
   "action": "call_tool",
   "tool_name": "sdp_execute_automation_action",
-  "tool_args": { "action_type": "UNLOCK_ACCOUNT", "request_id": "AUTO", "user_email": "usuario@bacosa.com" },
-  "content": "Uff, entiendo lo frustrante que es quedarse fuera del sistema. No te preocupes, voy a intentar desbloquear tu cuenta de Active Directory ahora mismo. Un momento..."
+  "tool_args": { "action_type": "UNLOCK_ACCOUNT", "request_id": "ID_REAL_DEL_TICKET", "user_email": "correo_real_confirmado" },
+  "content": "Uff, entiendo lo frustrante que es quedarse fuera del sistema. Antes de ejecutar el desbloqueo, voy a dejar la acción preparada para confirmarla de forma segura."
 }`;
 
+const DECISION_MODEL = process.env.GEMINI_DECISION_MODEL || 'gemini-2.5-flash';
+const FALLBACK_DECISION_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
+
 export class AgentOrchestrator {
-  static async processMessage(message, history = []) {
+  static async processMessage(message, context = {}, history = []) {
     try {
       console.log(`[Agent] Procesando mensaje con Gemini: "${message}"`);
+      const contextText = JSON.stringify({
+        authenticated_user: context.user ? {
+          name: context.user.name,
+          email: context.user.email,
+          department: context.user.department,
+          sdpRequesterId: context.user.sdpRequesterId || context.user.id
+        } : null
+      });
+      const historyText = JSON.stringify(history.slice(-8));
+      const userPrompt = `Contexto seguro del sistema: ${contextText}\n\nHistorial reciente: ${historyText}\n\nMensaje actual del usuario: ${message}`;
       
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
       let response;
       try {
         const model = genAI.getGenerativeModel({
-          model: 'gemini-3.5-flash',
+          model: DECISION_MODEL,
           systemInstruction: SYSTEM_PROMPT
         });
 
         response = await model.generateContent({
           contents: [
-            { role: 'user', parts: [{ text: message }] }
+            { role: 'user', parts: [{ text: userPrompt }] }
           ],
           generationConfig: {
             responseMimeType: 'application/json'
           }
         });
       } catch (geminiError) {
-        console.warn(`[Agent] gemini-3.5-flash fallido, intentando fallback a gemini-2.5-flash:`, geminiError.message);
+        console.warn(`[Agent] ${DECISION_MODEL} fallido, intentando fallback a ${FALLBACK_DECISION_MODEL}:`, geminiError.message);
         const model = genAI.getGenerativeModel({
-          model: 'gemini-2.5-flash',
+          model: FALLBACK_DECISION_MODEL,
           systemInstruction: SYSTEM_PROMPT
         });
 
         response = await model.generateContent({
           contents: [
-            { role: 'user', parts: [{ text: message }] }
+            { role: 'user', parts: [{ text: userPrompt }] }
           ],
           generationConfig: {
             responseMimeType: 'application/json'

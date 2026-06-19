@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, CheckCircle, AlertCircle, Loader2, Paperclip, ChevronRight, PlusCircle, LogOut } from 'lucide-react';
+import { Send, Bot, Loader2, Paperclip, ChevronRight, PlusCircle, LogOut, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Login from './Login';
 import { marked } from 'marked';
@@ -9,10 +9,61 @@ interface Message {
   text: string;
   sender: 'ai' | 'user';
   type?: 'text' | 'card';
-  data?: any;
+  data?: TicketCardData;
 }
 
-const TicketCard = ({ data }: { data: any }) => (
+interface TicketCardData {
+  subject?: string;
+  category?: string;
+  priority?: string;
+  status?: string;
+  technician?: string;
+}
+
+interface AuthenticatedUser {
+  id?: string;
+  sdpRequesterId?: string;
+  name: string;
+  email?: string;
+  department?: string;
+}
+
+interface PendingConfirmation {
+  actionId: string;
+  toolName: string;
+  expiresInMinutes: number;
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+
+const sanitizeHtml = (html: string) => {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const blockedTags = ['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta'];
+
+  blockedTags.forEach((tag) => {
+    doc.querySelectorAll(tag).forEach((node) => node.remove());
+  });
+
+  doc.body.querySelectorAll('*').forEach((element) => {
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim().toLowerCase();
+
+      if (name.startsWith('on') || value.startsWith('javascript:') || value.startsWith('data:text/html')) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+  });
+
+  return doc.body.innerHTML;
+};
+
+const renderMarkdown = (text: string) => {
+  const html = marked.parse(text, { async: false }) as string;
+  return sanitizeHtml(html);
+};
+
+const TicketCard = ({ data }: { data: TicketCardData }) => (
   <motion.div 
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
@@ -62,6 +113,7 @@ const TicketCard = ({ data }: { data: any }) => (
 );
 
 const App: React.FC = () => {
+  const messageIdRef = useRef(1);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -72,11 +124,20 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [flowState, setFlowState] = useState<'INITIAL' | 'AWAITING_DESCRIPTION' | 'AWAITING_TICKET_ID' | 'TRIAGE' | 'CONFIRMING' | 'DONE'>('INITIAL');
-  const [ticketDraft, setTicketDraft] = useState<any>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => {
+    const savedUser = localStorage.getItem('it_support_user');
+    return savedUser ? JSON.parse(savedUser) as AuthenticatedUser : null;
+  });
+  const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('it_support_token'));
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem('it_support_token')));
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const nextMessageId = () => {
+    messageIdRef.current += 1;
+    return `msg-${messageIdRef.current}`;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -86,56 +147,105 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const handleLoginSuccess = (user: any) => {
+  const handleLoginSuccess = (user: AuthenticatedUser, token: string) => {
     setCurrentUser(user);
+    setAuthToken(token);
+    localStorage.setItem('it_support_token', token);
+    localStorage.setItem('it_support_user', JSON.stringify(user));
     setIsAuthenticated(true);
     setMessages(prev => [
       ...prev,
       {
-        id: Date.now().toString(),
+        id: nextMessageId(),
         text: `¡Hola **${user.name}**! He verificado tus credenciales de AD correctamente. ¿En qué puedo apoyarte hoy con los servicios de IT de Barraza y Cía?`,
         sender: 'ai'
       }
     ]);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (authToken) {
+      try {
+        await fetch(`${API_BASE_URL}/api/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+      } catch {
+        // Local logout should still succeed if the server is unreachable.
+      }
+    }
+
     setIsAuthenticated(false);
     setCurrentUser(null);
-    setFlowState('INITIAL');
+    setAuthToken(null);
+    localStorage.removeItem('it_support_token');
+    localStorage.removeItem('it_support_user');
+    setMessages([]);
+  };
+
+  const clearLocalSession = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setAuthToken(null);
+    setPendingConfirmation(null);
+    localStorage.removeItem('it_support_token');
+    localStorage.removeItem('it_support_user');
+  };
+
+  const handleSessionExpired = () => {
+    clearLocalSession();
     setMessages([]);
   };
 
   const handleSend = async () => {
     if (!input.trim()) return;
 
-    const userMessage: Message = { id: Date.now().toString(), text: input, sender: 'user' };
-    setMessages(prev => [...prev, userMessage]);
+    const userMessage: Message = { id: nextMessageId(), text: input, sender: 'user' };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
     const currentInput = input;
     setInput('');
     setIsTyping(true);
 
     // AI Logic Simulation
     setTimeout(() => {
-      processAIMessage(currentInput);
+      processAIMessage(currentInput, nextMessages);
     }, 1500);
   };
 
-  const processAIMessage = async (userInput: string) => {
+  const getConversationHistory = (sourceMessages: Message[]) => {
+    return sourceMessages
+      .filter((msg) => msg.type !== 'card' && msg.text.trim())
+      .slice(-8)
+      .map((msg) => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text.slice(0, 1200)
+      }));
+  };
+
+  const processAIMessage = async (userInput: string, sourceMessages: Message[]) => {
     setIsTyping(false);
     
     // Crear un ID único para el mensaje de la IA que vamos a ir llenando
-    const aiMessageId = Date.now().toString();
+    const aiMessageId = nextMessageId();
     
     try {
-      const response = await fetch('http://localhost:3001/api/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        },
         body: JSON.stringify({ 
           message: userInput,
-          userContext: currentUser
+          history: getConversationHistory(sourceMessages)
         })
       });
+
+      if (response.status === 401) {
+        handleSessionExpired();
+        return;
+      }
 
       if (!response.body) throw new Error('No se pudo establecer el flujo de datos.');
 
@@ -173,6 +283,12 @@ const App: React.FC = () => {
               setStatusMessage(null);
               accumulatedText += data.content;
               updateAiMessage(aiMessageId, accumulatedText);
+            } else if (data.type === 'confirmation_required') {
+              setPendingConfirmation({
+                actionId: data.actionId,
+                toolName: data.toolName,
+                expiresInMinutes: Math.max(1, Math.ceil(data.expiresInMs / 60000))
+              });
             } else if (data.type === 'done') {
               setStatusMessage(null);
             }
@@ -184,69 +300,63 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Error en streaming:", error);
       setMessages(prev => [...prev, {
-        id: Date.now().toString(),
+        id: nextMessageId(),
         text: '⚠️ Oye, parece que perdí la conexión con mi base de conocimientos. ¿Podrías intentar de nuevo?',
         sender: 'ai'
       }]);
     }
   };
 
+  const handleConfirmAction = async () => {
+    if (!pendingConfirmation || !authToken) return;
+
+    setIsConfirming(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/confirm-action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ actionId: pendingConfirmation.actionId })
+      });
+
+      if (response.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+
+      const data = await response.json() as { success: boolean; message?: string };
+      setMessages(prev => [...prev, {
+        id: nextMessageId(),
+        text: data.message || (data.success ? 'Acción ejecutada correctamente.' : 'No pude ejecutar la acción confirmada.'),
+        sender: 'ai'
+      }]);
+      setPendingConfirmation(null);
+    } catch {
+      setMessages(prev => [...prev, {
+        id: nextMessageId(),
+        text: 'No pude confirmar la acción por un problema de conexión.',
+        sender: 'ai'
+      }]);
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleCancelConfirmation = () => {
+    setPendingConfirmation(null);
+    setMessages(prev => [...prev, {
+      id: nextMessageId(),
+      text: 'Acción cancelada. No ejecuté ningún cambio.',
+      sender: 'ai'
+    }]);
+  };
+
   const updateAiMessage = (id: string, text: string) => {
     setMessages(prev => prev.map(msg => 
       msg.id === id ? { ...msg, text } : msg
     ));
-  };
-
-  const handleToolResult = (result: any) => {
-    const { tool, data, ai_suggestion } = result;
-
-    if (tool === 'sdp_list_requests') {
-      if (data.requests && data.requests.length > 0) {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          text: result.content || `He encontrado **${data.requests.length}** tickets para ti:`,
-          sender: 'ai'
-        }]);
-
-        data.requests.forEach((req: any, index: number) => {
-          setMessages(prev => [...prev, {
-            id: (Date.now() + index).toString(),
-            text: '',
-            sender: 'ai',
-            type: 'card',
-            data: { 
-              category: req.category?.name || 'N/A', 
-              subject: req.subject,
-              status: req.status?.name || 'N/A',
-              priority: req.priority?.name || 'N/A',
-              technician: req.technician?.name || 'No asignado'
-            }
-          }]);
-        });
-      } else {
-        setMessages(prev => [...prev, { id: Date.now().toString(), text: 'No encontré tickets abiertos.', sender: 'ai' }]);
-      }
-    } else if (tool === 'sdp_get_request_details') {
-      const req = data.request;
-      if (req) {
-        setMessages(prev => [...prev, { id: Date.now().toString(), text: result.content || `Detalles del ticket **#${req.id}**:`, sender: 'ai' }]);
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          text: '',
-          sender: 'ai',
-          type: 'card',
-          data: { 
-            category: req.category?.name || 'N/A', 
-            subject: req.subject,
-            status: req.status?.name || 'N/A',
-            priority: req.priority?.name || 'N/A',
-            technician: req.technician?.name || 'No asignado'
-          }
-        }]);
-      }
-    } else if (tool === 'sdp_create_request') {
-       setMessages(prev => [...prev, { id: Date.now().toString(), text: result.content || `✅ Ticket creado exitosamente con ID: **#${data.request?.id}**.`, sender: 'ai' }]);
-    }
   };
 
   if (!isAuthenticated) {
@@ -336,7 +446,7 @@ const App: React.FC = () => {
           <div className="flex items-center">
             <div className="bg-slate-800 border px-3 py-1.5 rounded-lg flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs font-bold text-slate-300 uppercase">Llama 3 Online</span>
+              <span className="text-xs font-bold text-slate-300 uppercase">Gemini Online</span>
             </div>
           </div>
         </header>
@@ -352,12 +462,12 @@ const App: React.FC = () => {
                 style={{ justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}
               >
                 <div className={`flex ${msg.sender === 'user' ? 'user-bubble' : 'ai-bubble'} message-bubble`}>
-                  {msg.type === 'card' ? (
+                  {msg.type === 'card' && msg.data ? (
                     <TicketCard data={msg.data} />
                   ) : (
                     <div 
                       className="leading-relaxed markdown-content"
-                      dangerouslySetInnerHTML={{ __html: marked.parse(msg.text) as string }} 
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} 
                     />
                   )}
                 </div>
@@ -385,6 +495,35 @@ const App: React.FC = () => {
         </div>
 
         <div className="chat-input-area">
+          {pendingConfirmation && (
+            <div className="confirm-action-bar">
+              <div>
+                <p className="confirm-action-title">Confirmación requerida</p>
+                <p className="confirm-action-copy">
+                  {pendingConfirmation.toolName} vence en {pendingConfirmation.expiresInMinutes} min.
+                </p>
+              </div>
+              <div className="confirm-action-buttons">
+                <button
+                  className="confirm-action-secondary"
+                  onClick={handleCancelConfirmation}
+                  disabled={isConfirming}
+                  title="Cancelar acción"
+                >
+                  <X size={16} />
+                </button>
+                <button
+                  className="confirm-action-primary"
+                  onClick={handleConfirmAction}
+                  disabled={isConfirming}
+                  title="Confirmar acción"
+                >
+                  {isConfirming ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                  <span>Confirmar</span>
+                </button>
+              </div>
+            </div>
+          )}
           <div className="chat-input-wrapper">
             <button className="p-3 text-slate-500 hover:text-blue-400 transition-colors" style={{ background: 'transparent', border: 'none' }}>
               <Paperclip size={20} />

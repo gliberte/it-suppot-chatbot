@@ -2,9 +2,26 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Cpu, MessageSquare, ArrowRight, Lock, User } from 'lucide-react';
 
-interface LoginProps {
-  onLoginSuccess: (user: any) => void;
+interface AuthenticatedUser {
+  id?: string;
+  sdpRequesterId?: string;
+  name: string;
+  email?: string;
+  department?: string;
 }
+
+interface LoginResponse {
+  success: boolean;
+  user?: AuthenticatedUser;
+  token?: string;
+  message?: string;
+}
+
+interface LoginProps {
+  onLoginSuccess: (user: AuthenticatedUser, token: string) => void;
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
@@ -18,20 +35,20 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/login', {
+      const response = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
 
-      const data = await response.json();
+      const data = await response.json() as LoginResponse;
 
-      if (data.success) {
-        onLoginSuccess(data.user);
+      if (data.success && data.user && data.token) {
+        onLoginSuccess(data.user, data.token);
       } else {
         setError(data.message || 'Credenciales inválidas. Por favor intente de nuevo.');
       }
-    } catch (err) {
+    } catch {
       setError('Error al conectar con el servidor de autenticación.');
     } finally {
       setLoading(false);

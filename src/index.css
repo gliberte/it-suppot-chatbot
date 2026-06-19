@@ -208,6 +208,81 @@ body {
   backdrop-blur: 10px;
 }
 
+.confirm-action-bar {
+  max-width: 900px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(250, 204, 21, 0.34);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.confirm-action-title {
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirm-action-copy {
+  color: var(--text-slate-400);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.confirm-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.confirm-action-primary,
+.confirm-action-secondary {
+  border: none;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-action-primary {
+  gap: 6px;
+  padding: 0 13px;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirm-action-primary:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.confirm-action-secondary {
+  width: 36px;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-slate-300);
+}
+
+.confirm-action-secondary:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.16);
+  color: #fca5a5;
+}
+
+.confirm-action-primary:disabled,
+.confirm-action-secondary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .chat-input-wrapper {
   max-width: 900px;
   margin: 0 auto;
@@ -387,4 +462,3 @@ body {
 .markdown-content h2 { font-size: 1.4em; }
 .markdown-content h3 { font-size: 1.2em; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 4px; }
 .markdown-content h4 { font-size: 1.1em; }
-
