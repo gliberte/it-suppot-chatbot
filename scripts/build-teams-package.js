@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
 
 const rootDir = process.cwd();
-const outDir = path.join(rootDir, 'dist', 'teams');
+const outDir = path.join(rootDir, 'teams', 'generated');
 const manifestTemplatePath = path.join(rootDir, 'teams', 'manifest.template.json');
 const crcTable = Array.from({ length: 256 }, (_, index) => {
   let crc = index;
@@ -36,8 +36,8 @@ JSON.parse(manifest);
 
 const files = [
   { name: 'manifest.json', bytes: Buffer.from(manifest) },
-  { name: 'color.png', bytes: createPng(192, 192, [37, 99, 235, 255], true) },
-  { name: 'outline.png', bytes: createPng(32, 32, [255, 255, 255, 255], false) }
+  { name: 'color.png', bytes: createColorIconPng(192, 192) },
+  { name: 'outline.png', bytes: createOutlineIconPng(32, 32) }
 ];
 
 for (const file of files) {
@@ -48,7 +48,23 @@ await writeFile(path.join(outDir, 'soporte-it-teams.zip'), createZip(files));
 
 console.log(`Paquete Teams generado en ${path.join(outDir, 'soporte-it-teams.zip')}`);
 
-function createPng(width, height, rgba, filled) {
+function createColorIconPng(width, height) {
+  return createPng(width, height, (x, y) => {
+    if (!isInsideRoundedSquare(x, y, width, height)) return [37, 99, 235, 0];
+    if (isInsideSophiaS(x, y, width, height)) return [255, 255, 255, 255];
+    return [37, 99, 235, 255];
+  });
+}
+
+function createOutlineIconPng(width, height) {
+  return createPng(width, height, (x, y) => (
+    isInsideSophiaS(x, y, width, height)
+      ? [255, 255, 255, 255]
+      : [255, 255, 255, 0]
+  ));
+}
+
+function createPng(width, height, getPixel) {
   const raw = Buffer.alloc((width * 4 + 1) * height);
 
   for (let y = 0; y < height; y += 1) {
@@ -57,11 +73,11 @@ function createPng(width, height, rgba, filled) {
 
     for (let x = 0; x < width; x += 1) {
       const offset = rowStart + 1 + x * 4;
-      const inMark = filled ? isInsideRoundedSquare(x, y, width, height) : isOnOutline(x, y, width, height);
+      const rgba = getPixel(x, y);
       raw[offset] = rgba[0];
       raw[offset + 1] = rgba[1];
       raw[offset + 2] = rgba[2];
-      raw[offset + 3] = inMark ? rgba[3] : 0;
+      raw[offset + 3] = rgba[3];
     }
   }
 
@@ -87,12 +103,27 @@ function isInsideRoundedSquare(x, y, width, height) {
   return (x - cornerX) ** 2 + (y - cornerY) ** 2 <= radius ** 2;
 }
 
-function isOnOutline(x, y, width, height) {
-  const pad = Math.round(width * 0.16);
-  const stroke = Math.max(2, Math.round(width * 0.1));
-  const insideOuter = x >= pad && x < width - pad && y >= pad && y < height - pad;
-  const insideInner = x >= pad + stroke && x < width - pad - stroke && y >= pad + stroke && y < height - pad - stroke;
-  return insideOuter && !insideInner;
+function isInsideSophiaS(x, y, width, height) {
+  const left = Math.round(width * 0.29);
+  const right = Math.round(width * 0.71);
+  const top = Math.round(height * 0.22);
+  const middle = Math.round(height * 0.50);
+  const bottom = Math.round(height * 0.78);
+  const stroke = Math.max(4, Math.round(width * 0.12));
+  const radius = Math.round(stroke * 0.45);
+
+  return isInsideRoundedRect(x, y, left, top, right, top + stroke, radius)
+    || isInsideRoundedRect(x, y, left, middle - Math.round(stroke / 2), right, middle + Math.round(stroke / 2), radius)
+    || isInsideRoundedRect(x, y, left, bottom - stroke, right, bottom, radius)
+    || isInsideRoundedRect(x, y, left, top, left + stroke, middle, radius)
+    || isInsideRoundedRect(x, y, right - stroke, middle, right, bottom, radius);
+}
+
+function isInsideRoundedRect(x, y, minX, minY, maxX, maxY, radius) {
+  if (x < minX || x > maxX || y < minY || y > maxY) return false;
+  const cornerX = x < minX + radius ? minX + radius : x > maxX - radius ? maxX - radius : x;
+  const cornerY = y < minY + radius ? minY + radius : y > maxY - radius ? maxY - radius : y;
+  return (x - cornerX) ** 2 + (y - cornerY) ** 2 <= radius ** 2;
 }
 
 function bufferFromUInts(...values) {

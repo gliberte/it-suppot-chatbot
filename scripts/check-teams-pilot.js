@@ -13,6 +13,7 @@ const optional = [
   'AZURE_TENANT_ID',
   'TEAMS_GRAPH_USER_LOOKUP',
   'TEAMS_DEV_TEST_TOKEN',
+  'TEAMS_ALLOWED_TENANT_IDS',
   'TEAMS_ALLOWED_CONVERSATION_IDS',
   'TEAMS_USER_OVERRIDES'
 ];
@@ -35,6 +36,10 @@ for (const name of optional) {
 if (process.env.TEAMS_GRAPH_USER_LOOKUP === 'true' && !process.env.AZURE_TENANT_ID) {
   console.log('ERR AZURE_TENANT_ID es requerido cuando TEAMS_GRAPH_USER_LOOKUP=true');
   hasError = true;
+}
+
+if (process.env.TEAMS_GRAPH_USER_LOOKUP !== 'true') {
+  console.log('WARN TEAMS_GRAPH_USER_LOOKUP=false: usuarios no incluidos en TEAMS_USER_OVERRIDES no se vincularan automaticamente');
 }
 
 if (process.env.MICROSOFT_APP_TYPE === 'SingleTenant' && !process.env.AZURE_TENANT_ID) {

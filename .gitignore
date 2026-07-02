@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+teams/generated
+data/rag-index.json
 *.local
 .env
 .env.local

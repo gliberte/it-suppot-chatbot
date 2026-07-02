@@ -117,7 +117,7 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: '¡Hola! Soy Antigravity, tu asistente técnico avanzado de BACOSA. Estoy aquí para ayudarte a resolver cualquier inconveniente técnico o gestionar tus tickets en ServiceDesk Plus. Para comenzar y brindarte un servicio personalizado, ¿podrías indicarme tu correo electrónico?',
+      text: '¡Hola! Soy Sophia, tu asistente técnico avanzado de BACOSA. Estoy aquí para ayudarte a resolver cualquier inconveniente técnico o gestionar tus tickets en ServiceDesk Plus. Para comenzar y brindarte un servicio personalizado, ¿podrías indicarme tu correo electrónico?',
       sender: 'ai'
     }
   ]);
@@ -373,7 +373,7 @@ const App: React.FC = () => {
               <Bot className="text-white" size={24} />
             </div>
             <div>
-              <h1 className="font-bold text-xl text-white">Antigravity</h1>
+              <h1 className="font-bold text-xl text-white">Sophia</h1>
               <div className="flex items-center text-xs uppercase tracking-widest font-bold text-blue-400">
                 <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" style={{ marginRight: '6px' }} />
                 AI Support Agent
