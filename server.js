@@ -10,7 +10,7 @@ import { AgentOrchestrator } from './agent-orchestrator.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { formatKnowledgeContext, searchKnowledge } from './rag.js';
 import { getTicketRoutingMap, normalizeRoutingText, resolveTicketRoutingFromText } from './ticket-routing.js';
-import { appendFile } from 'fs/promises';
+import { appendFile, mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { CloudAdapter, ConfigurationBotFrameworkAuthentication, TeamsActivityHandler, TurnContext } from 'botbuilder';
 
@@ -25,10 +25,12 @@ const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 8 * 60 * 60 * 1000);
 const PENDING_ACTION_TTL_MS = Number(process.env.PENDING_ACTION_TTL_MS || 5 * 60 * 1000);
 const GEMINI_SUMMARY_MODEL = process.env.GEMINI_SUMMARY_MODEL || 'gemini-2.5-flash';
 const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
+const RUNTIME_STATE_PATH = process.env.RUNTIME_STATE_PATH || path.join(__dirname, 'data', 'runtime-state.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsUserCache = new Map();
 const graphTokenCache = { accessToken: null, expiresAt: 0 };
+let runtimeStateSaveTimer = null;
 const READ_ONLY_CHAT_TOOLS = new Set([
   'sdp_list_requests',
   'sdp_get_request_details',
@@ -92,7 +94,10 @@ function getSessionForRequest(req) {
   const session = token ? sessions.get(token) : null;
 
   if (!session || session.expiresAt <= Date.now()) {
-    if (token) sessions.delete(token);
+    if (token) {
+      sessions.delete(token);
+      scheduleRuntimeStateSave();
+    }
     return null;
   }
 
@@ -126,6 +131,98 @@ async function callMcpTool(name, args = {}) {
   }
 
   return result;
+}
+
+function serializeSession(session) {
+  return {
+    user: session.user,
+    history: normalizeChatHistory(session.history || []),
+    expiresAt: session.expiresAt,
+    pendingActions: [...(session.pendingActions || new Map()).entries()].map(([id, action]) => ({
+      id,
+      ...action
+    }))
+  };
+}
+
+function deserializeSession(value) {
+  if (!value || value.expiresAt <= Date.now()) return null;
+  const pendingActions = new Map();
+  for (const action of value.pendingActions || []) {
+    if (!action?.id || action.expiresAt <= Date.now()) continue;
+    pendingActions.set(action.id, {
+      toolName: action.toolName,
+      args: action.args || {},
+      content: action.content || '',
+      expiresAt: action.expiresAt
+    });
+  }
+  return {
+    user: withUserRole(value.user),
+    history: normalizeChatHistory(value.history || []),
+    pendingActions,
+    expiresAt: value.expiresAt
+  };
+}
+
+async function loadRuntimeState() {
+  try {
+    const text = await readFile(RUNTIME_STATE_PATH, 'utf8');
+    const state = JSON.parse(text);
+    const now = Date.now();
+
+    for (const [token, sessionValue] of Object.entries(state.sessions || {})) {
+      const session = deserializeSession(sessionValue);
+      if (session && session.expiresAt > now) sessions.set(token, session);
+    }
+
+    for (const [key, sessionValue] of Object.entries(state.teamsSessions || {})) {
+      const session = deserializeSession(sessionValue);
+      if (session && session.expiresAt > now) teamsSessions.set(key, session);
+    }
+
+    console.log(`[State] Estado runtime restaurado: web=${sessions.size}, teams=${teamsSessions.size}`);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[State] No se pudo cargar el estado runtime:', error.message);
+    }
+  }
+}
+
+function scheduleRuntimeStateSave() {
+  if (runtimeStateSaveTimer) return;
+  runtimeStateSaveTimer = setTimeout(() => {
+    runtimeStateSaveTimer = null;
+    saveRuntimeState().catch((error) => {
+      console.warn('[State] No se pudo guardar el estado runtime:', error.message);
+    });
+  }, 250);
+}
+
+async function saveRuntimeState() {
+  pruneAllRuntimeSessions();
+  const state = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    sessions: Object.fromEntries([...sessions.entries()].map(([token, session]) => [token, serializeSession(session)])),
+    teamsSessions: Object.fromEntries([...teamsSessions.entries()].map(([key, session]) => [key, serializeSession(session)]))
+  };
+  const tmpPath = `${RUNTIME_STATE_PATH}.tmp`;
+  await mkdir(path.dirname(RUNTIME_STATE_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(state, null, 2));
+  await rename(tmpPath, RUNTIME_STATE_PATH);
+}
+
+function pruneAllRuntimeSessions() {
+  const now = Date.now();
+  for (const [token, session] of sessions.entries()) {
+    prunePendingActions(session, false);
+    if (session.expiresAt <= now) sessions.delete(token);
+  }
+  for (const [key, session] of teamsSessions.entries()) {
+    prunePendingActions(session, false);
+    if (session.expiresAt <= now) teamsSessions.delete(key);
+  }
 }
 
 async function enrichUserWithSdp(user) {
@@ -214,6 +311,7 @@ function createSession(user) {
     expiresAt: Date.now() + SESSION_TTL_MS,
     pendingActions: new Map()
   });
+  scheduleRuntimeStateSave();
   return token;
 }
 
@@ -288,7 +386,8 @@ function userCanAccessRequest(user, data) {
 }
 
 function userCanReadRequest(user, data) {
-  return isSupportAdmin(user) || userCanAccessRequest(user, data);
+  if (isSupportAdmin(user) || userCanAccessRequest(user, data)) return true;
+  return isMciRequestData(data) && userMatchesMciLeader(user, data);
 }
 
 function isMciRequestData(data) {
@@ -444,6 +543,15 @@ function minimizeAuditArgs(args = {}) {
     minimized.description_preview = truncateText(redactSensitiveText(args.description), 160);
   }
 
+  if (args.fields && typeof args.fields === 'object') {
+    minimized.fields = Object.fromEntries(
+      Object.entries(args.fields).map(([key, value]) => [
+        key,
+        truncateText(redactSensitiveText(String(value)), 120)
+      ])
+    );
+  }
+
   if (args.user_email || args.requester_email) {
     minimized.user_email_domain = getEmailDomain(args.user_email || args.requester_email);
   }
@@ -482,13 +590,17 @@ function createAdaptiveCardPreview(card) {
   return createAuditTextPreview(texts.join('\n'), 800);
 }
 
-function prunePendingActions(session) {
+function prunePendingActions(session, persist = true) {
   const now = Date.now();
+  const expiredActions = [];
   for (const [id, action] of session.pendingActions.entries()) {
     if (action.expiresAt <= now) {
       session.pendingActions.delete(id);
+      expiredActions.push({ id, action });
     }
   }
+  if (expiredActions.length > 0 && persist) scheduleRuntimeStateSave();
+  return expiredActions;
 }
 
 function createPendingAction(session, { toolName, args, content }) {
@@ -500,15 +612,259 @@ function createPendingAction(session, { toolName, args, content }) {
     content,
     expiresAt: Date.now() + PENDING_ACTION_TTL_MS
   });
+  scheduleRuntimeStateSave();
   return actionId;
 }
 
 function takePendingAction(session, actionId) {
-  prunePendingActions(session);
+  const expiredActions = prunePendingActions(session);
+  const expiredAction = expiredActions.find((entry) => entry.id === actionId);
+  if (expiredAction) {
+    return { expired: true, action: expiredAction.action };
+  }
   const action = session.pendingActions.get(actionId);
-  if (!action) return null;
+  if (!action) return { expired: false, action: null };
   session.pendingActions.delete(actionId);
-  return action;
+  scheduleRuntimeStateSave();
+  return { expired: false, action };
+}
+
+function takeFirstPendingAction(session) {
+  const expiredActions = prunePendingActions(session);
+  const pending = [...session.pendingActions.keys()][0];
+  if (pending) return takePendingAction(session, pending);
+
+  const latestExpired = expiredActions.at(-1)?.action || null;
+  return { expired: Boolean(latestExpired), action: latestExpired };
+}
+
+function formatExpiredConfirmationMessage(action) {
+  const actionLabel = getPendingActionLabel(action);
+  return [
+    `La confirmación${actionLabel ? ` para ${actionLabel}` : ''} expiró por seguridad.`,
+    'Vuelve a pedirme el cambio y lo preparo otra vez para que puedas confirmarlo.'
+  ].join(' ');
+}
+
+function getPendingActionLabel(action) {
+  if (!action?.toolName) return '';
+  const requestId = action.args?.request_id ? ` #${action.args.request_id}` : '';
+  if (action.toolName === 'sdp_update_mci') return `actualizar la MCI${requestId}`;
+  if (action.toolName === 'sdp_create_request') return 'crear la solicitud';
+  if (action.toolName === 'sdp_update_request') return `actualizar el ticket${requestId}`;
+  if (action.toolName === 'sdp_add_note') return `agregar seguimiento al ticket${requestId}`;
+  if (action.toolName === 'sdp_resolve_request') return `resolver el ticket${requestId}`;
+  if (action.toolName === 'sdp_assign_request') return `asignar el ticket${requestId}`;
+  if (action.toolName === 'sdp_execute_automation_action') return 'ejecutar la acción técnica';
+  return 'ejecutar la acción';
+}
+
+function createTeamsConfirmationCard({ actionId, toolName, args, user, intro, summaryText, expiresInMs }) {
+  const expiresMinutes = Math.max(1, Math.round(Number(expiresInMs || PENDING_ACTION_TTL_MS) / 60000));
+  const body = createTeamsConfirmationCardBody({ toolName, args, user, intro, summaryText, expiresMinutes });
+  return {
+    type: 'adaptive_card',
+    summaryText: 'Confirmación requerida',
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions: [
+        {
+          type: 'Action.Submit',
+          title: 'Confirmar',
+          style: 'positive',
+          data: {
+            action: 'sophia_confirm',
+            actionId,
+            toolName,
+            msteams: {
+              type: 'messageBack',
+              displayText: 'Confirmar',
+              text: `__sophia_confirm:${actionId}`,
+              value: { action: 'sophia_confirm', actionId, toolName }
+            }
+          }
+        },
+        {
+          type: 'Action.Submit',
+          title: 'Cancelar',
+          style: 'destructive',
+          data: {
+            action: 'sophia_cancel',
+            actionId,
+            toolName,
+            msteams: {
+              type: 'messageBack',
+              displayText: 'Cancelar',
+              text: `__sophia_cancel:${actionId}`,
+              value: { action: 'sophia_cancel', actionId, toolName }
+            }
+          }
+        }
+      ]
+    }
+  };
+}
+
+function createTeamsConfirmationCardBody({ toolName, args = {}, user, intro, summaryText, expiresMinutes }) {
+  const body = [
+    {
+      type: 'TextBlock',
+      text: 'Confirmación requerida',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    }
+  ];
+
+  if (intro) {
+    body.push({
+      type: 'TextBlock',
+      text: truncateText(stripHtml(intro), 500),
+      wrap: true,
+      spacing: 'Small'
+    });
+  }
+
+  if (toolName === 'sdp_create_request') {
+    body.push(createCreateRequestConfirmationBlock(args, user));
+  } else if (toolName === 'sdp_update_mci') {
+    body.push(createMciUpdateConfirmationBlock(args));
+  } else {
+    body.push({
+      type: 'TextBlock',
+      text: truncateText(stripHtml(summaryText || 'Preparé la acción solicitada.'), 900),
+      wrap: true,
+      spacing: 'Small'
+    });
+  }
+
+  body.push({
+    type: 'TextBlock',
+    text: `Por seguridad, esta confirmación vence en ${expiresMinutes} minutos.`,
+    wrap: true,
+    spacing: 'Small',
+    isSubtle: true,
+    size: 'Small'
+  });
+
+  return body;
+}
+
+function createCreateRequestConfirmationBlock(args = {}, user) {
+  const rows = [
+    ['Asunto', args.subject || 'Sin asunto'],
+    ['Categoría', args.category || '-'],
+    ['Subcategoría', args.subcategory || '-'],
+    ['Prioridad', args.priority || '-'],
+    ['Tipo', args.request_type || '-'],
+    ['Solicitante', user?.name || args.requester || '-']
+  ];
+  const classification = args.sophia_classification || {};
+  const items = [
+    {
+      type: 'TextBlock',
+      text: 'Solicitud preparada',
+      weight: 'Bolder',
+      wrap: true
+    },
+    ...rows.map(([label, value]) => createDetailFactRow(label, value))
+  ];
+
+  if (classification.routing || classification.confidence) {
+    items.push(
+      {
+        type: 'TextBlock',
+        text: 'Clasificación Sophia',
+        weight: 'Bolder',
+        wrap: true,
+        spacing: 'Medium'
+      },
+      createDetailFactRow('Ruta', classification.routing || '-'),
+      createDetailFactRow('Confianza', classification.confidence || '-'),
+      createDetailFactRow('Señales', (classification.matchedKeywords || []).join(', ') || '-')
+    );
+  }
+
+  if (args.description) {
+    items.push(createDetailTextBlock('Descripción', stripHtml(args.description)));
+  }
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items
+  };
+}
+
+function createMciUpdateConfirmationBlock(args = {}) {
+  const rows = [['MCI', args.request_id ? `#${args.request_id}` : '-']];
+  const fieldLabels = {
+    current_date: 'Fecha de actualización',
+    description: 'Descripción',
+    predictive: 'Predictiva',
+    progress: 'Avance',
+    status: 'Estado',
+    stage: 'Etapa',
+    previous_stage: 'Etapa anterior',
+    due_date: 'Fecha tope',
+    leader: 'Líder de MCI',
+    mci_priority: 'Prioridad MCI',
+    subject: 'Asunto'
+  };
+
+  for (const [field, value] of Object.entries(args.fields || {})) {
+    rows.push([fieldLabels[field] || field, formatConfirmationFieldValue(field, value)]);
+  }
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Cambio preparado',
+        weight: 'Bolder',
+        wrap: true
+      },
+      ...rows.map(([label, value]) => createDetailFactRow(label, value))
+    ]
+  };
+}
+
+function formatConfirmationFieldValue(field, value) {
+  if (field === 'progress' && value !== undefined && value !== null && value !== '') {
+    return /%$/.test(String(value)) ? String(value) : `${value}%`;
+  }
+  if (isConfirmationDateField(field)) {
+    return formatConfirmationDateValue(value);
+  }
+  if (typeof value === 'object' && value?.display_value) return value.display_value;
+  if (typeof value === 'object' && value?.value) return value.value;
+  return String(value ?? '-');
+}
+
+function isConfirmationDateField(field) {
+  return ['current_date', 'start_date', 'due_date', 'previous_week'].includes(field);
+}
+
+function formatConfirmationDateValue(value) {
+  if (typeof value === 'object' && value?.display_value) return value.display_value;
+  const rawValue = typeof value === 'object' && value?.value !== undefined ? value.value : value;
+  const numericValue = Number(rawValue);
+  if (!Number.isNaN(numericValue) && numericValue > 0) {
+    return new Intl.DateTimeFormat('es-PA', {
+      timeZone: 'America/Panama',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(new Date(numericValue));
+  }
+  return String(rawValue ?? '-');
 }
 
 function formatPendingActionSummary({ toolName, args, user, intro }) {
@@ -666,6 +1022,11 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '') {
 
   if (toolName === 'sdp_update_mci') {
     args.fields = normalizeMciUpdateFields(args.fields || args);
+    applyRelativeMciDatesFromMessage(args.fields, message);
+  }
+
+  if (toolName === 'sdp_update_request' && args.status) {
+    args.status = normalizeStatusValue(args.status);
   }
 
   if (toolName === 'sdp_execute_automation_action' && user?.email && !args.user_email) {
@@ -728,10 +1089,76 @@ function normalizeMciUpdateFields(fields = {}) {
   for (const [key, value] of Object.entries(fields || {})) {
     if (['request_id', 'comments'].includes(key)) continue;
     const normalizedKey = fieldAliases[normalizeFieldAlias(key)] || key;
-    normalized[normalizedKey] = value;
+    if (normalizedKey === 'progress') {
+      normalized[normalizedKey] = parseMciProgressValue(value);
+    } else if (normalizedKey === 'status') {
+      normalized[normalizedKey] = normalizeStatusValue(value);
+    } else {
+      normalized[normalizedKey] = value;
+    }
   }
 
   return normalized;
+}
+
+function parseMciProgressValue(value) {
+  if (typeof value === 'number') return value;
+  const normalized = String(value || '')
+    .trim()
+    .replace(/,/g, '.')
+    .replace(/\s*(%|por\s+ciento|percent|percentage)\s*$/i, '');
+  const parsed = Number(normalized);
+  return Number.isNaN(parsed) ? value : parsed;
+}
+
+function normalizeStatusValue(status) {
+  if (!status) return status;
+  const normalized = String(status).trim().toLowerCase();
+  
+  if (/\b(cancelad[oa]s?|cancelled|cancelar)\b/i.test(normalized)) {
+    return 'Cancelled';
+  }
+  if (/\b(abiert[oa]s?|open|abrir)\b/i.test(normalized)) {
+    return 'Abierto';
+  }
+  if (/\b(en espera|on\s*hold|espera)\b/i.test(normalized)) {
+    return 'En Espera';
+  }
+  if (/\b(en proceso|in\s*progress|proceso)\b/i.test(normalized)) {
+    return 'En Proceso';
+  }
+  if (/\b(resuelt[oa]s?|resolved|resolver)\b/i.test(normalized)) {
+    return 'Resuelto';
+  }
+  if (/\b(cerrad[oa]s?|closed|cerrar)\b/i.test(normalized)) {
+    return 'Cerrado';
+  }
+  if (/\b(suspendid[oa]s?|suspended|suspender)\b/i.test(normalized)) {
+    return 'Suspendido';
+  }
+  
+  return status;
+}
+
+function applyRelativeMciDatesFromMessage(fields, message = '') {
+  if (!fields || typeof fields !== 'object') return;
+  if (!Object.prototype.hasOwnProperty.call(fields, 'current_date')) return;
+
+  const normalizedMessage = normalizeComparableText(message);
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (/\bhoy\b|\btoday\b/.test(normalizedMessage)) {
+    fields.current_date = createSdpDateValue(Date.now());
+  } else if (/\bayer\b|\byesterday\b/.test(normalizedMessage)) {
+    fields.current_date = createSdpDateValue(Date.now() - dayMs);
+  } else if (/\bmanana\b|\btomorrow\b/.test(normalizedMessage)) {
+    fields.current_date = createSdpDateValue(Date.now() + dayMs);
+  }
+}
+
+function createSdpDateValue(timestamp) {
+  const date = new Date(timestamp);
+  const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return { value: String(localDate.getTime()) };
 }
 
 function normalizeFieldAlias(value) {
@@ -1136,6 +1563,83 @@ function minimizeRequest(request) {
   };
 }
 
+function createSanitizedKnowledgeResponse(data) {
+  const request = data?.request || data;
+  if (!request?.id) return null;
+
+  const status = getDisplayName(request.status);
+  if (!isResolvedKnowledgeStatus(status)) return null;
+
+  const resolution = redactKnowledgePeople(cleanKnowledgeText(getResolutionText(request.resolution), 900), request);
+  const description = redactKnowledgePeople(cleanKnowledgeText(request.description || request.short_description || '', 600), request);
+  if (!resolution && !description) return null;
+
+  const subject = redactKnowledgePeople(cleanKnowledgeText(request.subject || '', 180), request)
+    .replace(/^\s*\[persona-redacted\]\s*[-:]\s*/i, '')
+    .trim();
+  const category = getDisplayName(request.category);
+  const subcategory = getDisplayName(request.subcategory);
+  const classification = [category, subcategory].filter(Boolean).join(' / ');
+  const lines = [
+    `No puedo mostrar el detalle completo del ticket #${request.id} porque no pertenece a tu usuario, pero sí puedo compartir una versión sanitizada como referencia de conocimiento.`,
+    '',
+    '**Referencia reutilizable**'
+  ];
+
+  if (classification) lines.push(`- Categoría: ${classification}`);
+  if (subject) lines.push(`- Caso: ${subject}`);
+  if (description) lines.push(`- Síntoma o necesidad: ${description}`);
+  if (resolution) lines.push(`- Resolución aplicada: ${resolution}`);
+
+  lines.push(
+    '',
+    '**Opciones**',
+    '- Buscar tickets similares por síntoma',
+    '- Crear una solicitud con este contexto',
+    '- Pedir una guía paso a paso basada en esta resolución'
+  );
+
+  return lines.join('\n');
+}
+
+function isResolvedKnowledgeStatus(status) {
+  const normalized = normalizeComparableText(status);
+  return /\b(cerrado|closed|resuelto|resolved)\b/.test(normalized);
+}
+
+function cleanKnowledgeText(text, maxLength) {
+  const clean = redactSensitiveText(stripHtml(text || ''))
+    .replace(/\b(?:solicitante|usuario|tecnico|técnico)\s*:\s*[^\n.;]+/gi, '')
+    .replace(/\b(?:password|contraseña|clave)\s*[:=]\s*[^\s,.;]+/gi, '[credential-redacted]')
+    .replace(/\b(?:servidor|server|host)\s*[:=]\s*[A-Za-z0-9._-]+/gi, '[host-redacted]')
+    .replace(/\b(?:ip|direcci[oó]n ip)\s*[:=]\s*(?:\d{1,3}\.){3}\d{1,3}\b/gi, '[ip-redacted]')
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[ip-redacted]')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return truncateText(clean, maxLength);
+}
+
+function redactKnowledgePeople(text, request) {
+  let clean = String(text || '');
+  const names = [
+    getDisplayName(request?.requester),
+    getDisplayName(request?.technician)
+  ].filter(Boolean);
+
+  for (const name of names) {
+    const escapedName = escapeRegExp(name);
+    if (escapedName) {
+      clean = clean.replace(new RegExp(`\\b${escapedName}\\b`, 'gi'), '[persona-redacted]');
+    }
+  }
+
+  return clean.replace(/\s+/g, ' ').trim();
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function minimizePerson(person) {
   if (!person) return undefined;
   return {
@@ -1275,6 +1779,11 @@ async function runSupportTurn({
     onConfirmationRequired?.({
       actionId,
       toolName: aiDecision.tool_name,
+      ...(responseChannel === 'teams' ? {
+        args: preparedArgs,
+        user,
+        intro: aiDecision.content
+      } : {}),
       expiresInMs: PENDING_ACTION_TTL_MS
     });
     return;
@@ -1292,7 +1801,12 @@ async function runSupportTurn({
     if (aiDecision.tool_name === 'sdp_get_request_details') {
       const requestData = JSON.parse(toolOutput);
       if (!userCanReadRequest(user, requestData)) {
-        onText('Encontré ese ticket, pero no pertenece a tu usuario autenticado. Por seguridad no puedo mostrarlo.');
+        const knowledgeResponse = createSanitizedKnowledgeResponse(requestData);
+        if (knowledgeResponse) {
+          onText(knowledgeResponse);
+          return;
+        }
+        onText('Encontré ese ticket, pero no pertenece a tu usuario autenticado. Por seguridad no puedo mostrarlo. Si buscas una solución reutilizable, puedo ayudarte a buscar por síntoma, categoría o mensaje de error.');
         return;
       }
     }
@@ -1390,6 +1904,16 @@ async function executeConfirmedAction(action, user) {
     args: createdRequestId ? { ...action.args, request_id: createdRequestId } : action.args,
     outcome: 'confirmed_success'
   });
+
+  if (action.toolName === 'sdp_update_mci' && action.args?.request_id) {
+    const details = await callMcpTool('sdp_get_request_details', { request_id: action.args.request_id });
+    const card = createTicketDetailsAdaptiveCard(details.content[0].text);
+    if (card) {
+      card.summaryText = `MCI #${action.args.request_id} actualizada`;
+      return card;
+    }
+  }
+
   return summarizeToolOutput(toolResult.content[0].text);
 }
 
@@ -1695,6 +2219,7 @@ function getMciPredictiveValue(request) {
 
 function getLastUpdatedValue(request) {
   return getDisplayDate(
+    request?.udf_fields?.udf_date_1508 ||
     request?.last_updated_time ||
     request?.updated_time ||
     request?.last_update_time ||
@@ -1724,6 +2249,9 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
 
   const request = data?.request || data;
   if (!request?.id) return null;
+  if (isMciRequestData(request)) {
+    return createMciDetailsAdaptiveCard(request);
+  }
 
   const ticketId = `#${request.id}`;
   const subject = request.subject || 'Sin asunto';
@@ -1783,6 +2311,95 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
       version: '1.4',
       body
     }
+  };
+}
+
+function createMciDetailsAdaptiveCard(request) {
+  const mciId = `#${request.id}`;
+  const subject = request.subject || 'Sin asunto';
+  const summaryText = `Detalle de la MCI ${mciId}`;
+  const rows = [
+    ['Estado', getDisplayName(request.status) || '-'],
+    ['Líder de MCI', getMciLeaderDisplayValue(request) || '-'],
+    ['Avance', getMciProgressValue(request) || '-'],
+    ['Predictiva', getMciPredictiveValue(request) || '-'],
+    ['Actualización', getLastUpdatedValue(request) || '-'],
+    ['Prioridad MCI', getDisplayName(request?.udf_fields?.udf_pick_1505) || '-'],
+    ['MCI', getDisplayName(request?.udf_fields?.udf_pick_1501) || '-'],
+    ['Num. MCI', getDisplayName(request?.udf_fields?.udf_pick_1504) || '-'],
+    ['Etapa', getDisplayName(request?.udf_fields?.udf_pick_1510) || '-'],
+    ['Etapa anterior', getDisplayName(request?.udf_fields?.udf_pick_1512) || '-'],
+    ['Fecha inicio', getDisplayDate(request?.udf_fields?.udf_date_1509) || '-'],
+    ['Fecha tope', getDisplayDate(request?.udf_fields?.udf_date_1802) || '-'],
+    ['Técnico asignado', getDisplayName(request?.udf_fields?.udf_pick_2701) || getDisplayName(request.technician) || '-'],
+    ['Solicitante', getDisplayName(request.requester) || '-']
+  ];
+  const description = stripHtml(request.description || request.short_description || '');
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: `MCI ${mciId}`,
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: subject,
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'Container',
+      spacing: 'Medium',
+      separator: true,
+      items: rows.map(([label, value]) => createDetailFactRow(label, value))
+    }
+  ];
+
+  if (description) {
+    body.push(createDetailTextBlock('Descripción', description));
+  }
+
+  body.push(createMciDetailOptionsBlock(mciId));
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createMciDetailOptionsBlock(mciId) {
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Opciones',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: [
+          `Actualizar avance de la MCI ${mciId}`,
+          `Actualizar predictiva de la MCI ${mciId}`,
+          `Actualizar fecha de la MCI ${mciId}`
+        ].map((option) => `- ${option}`).join('\n'),
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
   };
 }
 
@@ -2006,6 +2623,7 @@ function getTeamsSession(activity, user) {
   if (current && current.expiresAt > Date.now()) {
     current.user = user;
     current.expiresAt = Date.now() + SESSION_TTL_MS;
+    scheduleRuntimeStateSave();
     return current;
   }
 
@@ -2016,6 +2634,7 @@ function getTeamsSession(activity, user) {
     expiresAt: Date.now() + SESSION_TTL_MS
   };
   teamsSessions.set(key, session);
+  scheduleRuntimeStateSave();
   return session;
 }
 
@@ -2136,6 +2755,11 @@ async function getGraphAccessToken({ tenantId, clientId, clientSecret }) {
 }
 
 function getTeamsText(activity) {
+  if (activity?.value?.action && activity?.value?.actionId) {
+    if (activity.value.action === 'sophia_confirm') return `__sophia_confirm:${activity.value.actionId}`;
+    if (activity.value.action === 'sophia_cancel') return `__sophia_cancel:${activity.value.actionId}`;
+  }
+
   const clonedActivity = { ...activity };
   let withoutMention = '';
   try {
@@ -2283,19 +2907,59 @@ async function handleTeamsMessage(context) {
 
   const session = getTeamsSession(context.activity, user);
   const normalizedText = text.toLowerCase();
+  const buttonActionMatch = normalizedText.match(/^__sophia_(confirm|cancel):([0-9a-f-]+)$/i);
 
-  if (CONFIRMATION_WORDS.has(normalizedText)) {
-    const pending = [...session.pendingActions.keys()][0];
-    const action = pending ? takePendingAction(session, pending) : null;
+  if (buttonActionMatch) {
+    const [, buttonAction, actionId] = buttonActionMatch;
+    const { action, expired } = takePendingAction(session, actionId);
 
     if (!action) {
-      await sendTeamsReply(context, 'No tengo una acción pendiente para confirmar, o ya expiró.');
+      await sendTeamsReply(context, 'No tengo esa acción pendiente. Puede que ya se haya usado o que el backend se haya reiniciado.');
+      return;
+    }
+
+    if (expired) {
+      await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmation_expired' });
+      await sendTeamsReply(context, formatExpiredConfirmationMessage(action));
+      return;
+    }
+
+    if (buttonAction === 'cancel') {
+      await sendTeamsReply(context, 'Listo, cancelé esa acción pendiente.');
       return;
     }
 
     try {
       const summary = await executeConfirmedAction(action, user);
-      session.history = pushChatHistory(session.history, 'assistant', summary);
+      session.history = pushChatHistory(session.history, 'assistant', summary?.summaryText || summary);
+      scheduleRuntimeStateSave();
+      await sendTeamsReply(context, summary);
+    } catch (error) {
+      await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmed_error', error });
+      console.error(`[Teams] Error confirmando acción ${action.toolName}:`, error.message);
+      await sendTeamsReply(context, `No pude ejecutar la acción confirmada: ${error.message}`);
+    }
+    return;
+  }
+
+  if (CONFIRMATION_WORDS.has(normalizedText)) {
+    const { action, expired } = takeFirstPendingAction(session);
+
+    if (!action) {
+      await sendTeamsReply(context, 'No tengo una acción pendiente para confirmar. Dime qué cambio quieres hacer y lo preparo de nuevo.');
+      return;
+    }
+
+    if (expired) {
+      await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmation_expired' });
+      await sendTeamsReply(context, formatExpiredConfirmationMessage(action));
+      return;
+    }
+
+    try {
+      const summary = await executeConfirmedAction(action, user);
+      session.history = pushChatHistory(session.history, 'assistant', summary?.summaryText || summary);
+      scheduleRuntimeStateSave();
       await sendTeamsReply(context, summary);
     } catch (error) {
       await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmed_error', error });
@@ -2307,6 +2971,7 @@ async function handleTeamsMessage(context) {
 
   if (CANCEL_WORDS.has(normalizedText)) {
     session.pendingActions.clear();
+    scheduleRuntimeStateSave();
     await sendTeamsReply(context, 'Listo, cancelé la acción pendiente.');
     return;
   }
@@ -2325,7 +2990,11 @@ async function handleTeamsMessage(context) {
       await context.sendActivity({ type: 'typing' });
       await sendTeamsReply(context, content);
     },
-    onConfirmationRequired: () => chunks.push('\n\nResponde **CONFIRMAR** para ejecutar esta acción o **CANCELAR** para descartarla.'),
+    onConfirmationRequired: (data) => {
+      const summaryText = chunks.filter((chunk) => typeof chunk === 'string').join('').trim();
+      chunks.length = 0;
+      chunks.push(createTeamsConfirmationCard({ ...data, summaryText }));
+    },
     streamSummary: false,
     responseChannel: 'teams'
   });
@@ -2333,12 +3002,14 @@ async function handleTeamsMessage(context) {
   const cardResponse = chunks.find((chunk) => chunk?.type === 'adaptive_card');
   if (cardResponse) {
     session.history = pushChatHistory(pushChatHistory(session.history, 'user', text), 'assistant', cardResponse.summaryText);
+    scheduleRuntimeStateSave();
     await sendTeamsReply(context, cardResponse);
     return;
   }
 
   const response = truncateText(chunks.join('').trim(), 27000);
   session.history = pushChatHistory(pushChatHistory(session.history, 'user', text), 'assistant', response);
+  scheduleRuntimeStateSave();
   await sendTeamsReply(context, response || 'No pude generar una respuesta para ese mensaje.');
 }
 
@@ -2364,6 +3035,7 @@ app.post('/api/login', async (req, res) => {
 
 app.post('/api/logout', requireAuth, async (req, res) => {
   sessions.delete(req.sessionToken);
+  scheduleRuntimeStateSave();
   res.json({ success: true });
 });
 
@@ -2609,10 +3281,21 @@ app.post('/api/create-ticket', requireAuth, async (req, res) => {
 
 app.post('/api/confirm-action', requireAuth, async (req, res) => {
   const { actionId } = req.body;
-  const action = takePendingAction(req.session, actionId);
+  const { action, expired } = takePendingAction(req.session, actionId);
 
   if (!action) {
-    return res.status(404).json({ success: false, message: 'La acción pendiente expiró o ya fue usada.' });
+    return res.status(404).json({
+      success: false,
+      message: 'No tengo una acción pendiente para confirmar. Vuelve a preparar el cambio e inténtalo otra vez.'
+    });
+  }
+
+  if (expired) {
+    await auditToolCall({ user: req.user, toolName: action.toolName, args: action.args, outcome: 'confirmation_expired' });
+    return res.status(410).json({
+      success: false,
+      message: formatExpiredConfirmationMessage(action)
+    });
   }
 
   try {
@@ -2754,7 +3437,33 @@ app.get('/api/teams/health', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Chatbot Backend Bridge corriendo en http://localhost:${PORT}`);
-  initMCP();
+async function startServer() {
+  await loadRuntimeState();
+  app.listen(PORT, () => {
+    console.log(`Chatbot Backend Bridge corriendo en http://localhost:${PORT}`);
+    initMCP();
+  });
+}
+
+async function flushRuntimeStateAndExit(signal) {
+  try {
+    if (runtimeStateSaveTimer) {
+      clearTimeout(runtimeStateSaveTimer);
+      runtimeStateSaveTimer = null;
+    }
+    await saveRuntimeState();
+    console.log(`[State] Estado runtime guardado antes de ${signal}.`);
+  } catch (error) {
+    console.warn(`[State] No se pudo guardar estado antes de ${signal}:`, error.message);
+  } finally {
+    process.exit(0);
+  }
+}
+
+process.on('SIGINT', () => flushRuntimeStateAndExit('SIGINT'));
+process.on('SIGTERM', () => flushRuntimeStateAndExit('SIGTERM'));
+
+startServer().catch((error) => {
+  console.error('No se pudo iniciar el backend:', error);
+  process.exit(1);
 });
