@@ -140,7 +140,11 @@ async function checkNginxConfig() {
   }
 
   const output = result.stderr || result.stdout || '';
-  if (output.includes('Permission denied') || output.includes('a password is required')) {
+  if (
+    output.includes('Permission denied')
+    || output.includes('a password is required')
+    || output.includes('interactive authentication is required')
+  ) {
     addCheck('Nginx config', 'warn', 'No se pudo validar nginx -t sin privilegios. Ejecutar manualmente: sudo nginx -t');
     return;
   }
