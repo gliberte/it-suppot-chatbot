@@ -100,6 +100,32 @@ tail -n 80 sdp-debug.log
 
 Si `teams-audit.log` no existe y tampoco hay entradas en Nginx al escribir desde Teams, el trafico no esta llegando al backend.
 
+## Persistencia Ligera
+
+Sophia guarda sesiones, historial de Teams y acciones pendientes en:
+
+```text
+data/runtime-state.json
+```
+
+Permiso recomendado:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+chmod 600 data/runtime-state.json
+```
+
+Validar despues de reiniciar:
+
+```bash
+sudo systemctl restart sophia
+sleep 2
+npm run prod:check
+curl -k https://localhost/api/teams/health
+```
+
+El check `runtime-state.json` muestra tamano, permisos, UID/GID, cantidad de sesiones, sesiones Teams, acciones pendientes e historial Teams sin imprimir el contenido sensible del archivo.
+
 ## Rotacion De Logs
 
 Sophia escribe logs locales en `/opt/sophia/it-support-chatbot/*.log`. La politica versionada esta en:

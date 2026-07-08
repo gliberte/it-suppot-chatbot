@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { access } from 'node:fs/promises';
+import { access, readFile, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
@@ -54,6 +54,20 @@ async function checkFile(path, label) {
   } catch {
     addCheck(label, 'warn', `No encontrado: ${path}`);
   }
+}
+
+function arrayLength(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function objectKeyCount(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.keys(value).length
+    : 0;
+}
+
+function formatMode(mode) {
+  return `0${(mode & 0o777).toString(8)}`;
 }
 
 async function checkSystemdService(name) {
@@ -197,11 +211,43 @@ async function checkRecentLogs() {
     ['audit.log', 'audit.log'],
     ['teams-audit.log', 'teams-audit.log'],
     ['sdp-debug.log', 'sdp-debug.log'],
-    ['data/runtime-state.json', 'runtime-state.json'],
   ];
 
   for (const [path, label] of logTargets) {
     await checkFile(path, label);
+  }
+}
+
+async function checkRuntimeState() {
+  const path = 'data/runtime-state.json';
+
+  try {
+    const [fileStat, raw] = await Promise.all([
+      stat(path),
+      readFile(path, 'utf8'),
+    ]);
+    const state = JSON.parse(raw);
+    const mode = formatMode(fileStat.mode);
+    const permissionStatus = mode === '0600' ? 'ok' : 'warn';
+    const detail = [
+      `size=${fileStat.size}B`,
+      `mode=${mode}`,
+      `uid=${fileStat.uid}`,
+      `gid=${fileStat.gid}`,
+      `sessions=${arrayLength(state.sessions)}`,
+      `teamsSessions=${arrayLength(state.teamsSessions)}`,
+      `pendingActions=${arrayLength(state.pendingActions)}`,
+      `teamsHistory=${objectKeyCount(state.teamsHistory)}`,
+      `savedAt=${state.savedAt || state.updatedAt || 'n/a'}`,
+    ].join(' ');
+
+    addCheck(
+      'runtime-state.json',
+      permissionStatus,
+      permissionStatus === 'ok' ? detail : `${detail} | recomendado: chmod 600 ${path}`,
+    );
+  } catch (error) {
+    addCheck('runtime-state.json', 'warn', `No se pudo leer ${path}: ${error.message}`);
   }
 }
 
@@ -219,6 +265,7 @@ async function main() {
   await checkHttp('https://localhost/api/teams/health', 'HTTPS local via Nginx', ['-k']);
   await checkEnv();
   await checkRecentLogs();
+  await checkRuntimeState();
 
   const width = Math.max(...checks.map((check) => check.name.length), 10);
   for (const check of checks) {
