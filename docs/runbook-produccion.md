@@ -247,6 +247,36 @@ mkdir -p /tmp/sophia-restore
 tar -xzf /opt/sophia/backups/sophia-backup-YYYYMMDD-HHMMSS.tar.gz -C /tmp/sophia-restore
 ```
 
+## Version Y Rollback
+
+Antes y despues de cada despliegue, registrar version activa:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:version
+```
+
+El comando muestra rama, commit, fecha del commit, estado del working tree, estado de `sophia.service`, estado de `nginx` y ultimo backup disponible.
+
+Antes de desplegar, guardar el commit bueno:
+
+```bash
+git rev-parse --short HEAD
+```
+
+Rollback de codigo a un commit conocido:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+git reset --hard <commit-bueno>
+npm install
+npm run build
+sudo systemctl restart sophia
+npm run prod:check
+```
+
+Restaurar `.env`, `runtime-state.json`, Nginx o systemd desde backup debe hacerse manualmente y solo copiando el archivo necesario desde un directorio temporal de restauracion.
+
 ## Revision Segura De .env
 
 Mostrar variables no secretas:

@@ -13,6 +13,7 @@
     "routing:check": "node scripts/check-routing.js",
     "prod:backup": "node scripts/prod-backup.js",
     "prod:check": "node scripts/prod-healthcheck.js",
+    "prod:version": "node scripts/prod-version.js",
     "teams:package": "node scripts/build-teams-package.js",
     "teams:check": "node scripts/check-teams-pilot.js",
     "build": "tsc -b && vite build",
