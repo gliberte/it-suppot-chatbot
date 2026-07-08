@@ -3353,6 +3353,10 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.post('/api/teams/messages', async (req, res) => {
+  if (!req.get('authorization')) {
+    return res.status(401).json({ success: false, message: 'Missing Bot Framework authorization header.' });
+  }
+
   await teamsAdapter.process(req, res, async (context) => {
     await teamsBot.run(context);
   });
