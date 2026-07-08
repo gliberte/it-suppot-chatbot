@@ -129,12 +129,23 @@ async function checkNginxConfig() {
     return;
   }
 
-  const result = await run('nginx', ['-t']);
+  const sudoAvailable = await commandExists('sudo');
+  const result = sudoAvailable
+    ? await run('sudo', ['-n', 'nginx', '-t'])
+    : await run('nginx', ['-t']);
+
   if (result.ok) {
-    addCheck('Nginx config', 'ok', 'nginx -t exitoso');
-  } else {
-    addCheck('Nginx config', 'fail', result.stderr || result.stdout || 'nginx -t fallo');
+    addCheck('Nginx config', 'ok', `${sudoAvailable ? 'sudo -n ' : ''}nginx -t exitoso`);
+    return;
   }
+
+  const output = result.stderr || result.stdout || '';
+  if (output.includes('Permission denied') || output.includes('a password is required')) {
+    addCheck('Nginx config', 'warn', 'No se pudo validar nginx -t sin privilegios. Ejecutar manualmente: sudo nginx -t');
+    return;
+  }
+
+  addCheck('Nginx config', 'fail', output || 'nginx -t fallo');
 }
 
 async function checkEnv() {
