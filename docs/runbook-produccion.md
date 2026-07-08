@@ -17,6 +17,15 @@ https://sophia.barrazaycia.com/api/teams/messages
 
 ## Estado Rapido
 
+Diagnostico automatizado de solo lectura:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:check
+```
+
+Este comando revisa `sophia.service`, `nginx`, puerto `443`, health checks HTTP/HTTPS, variables principales de Teams y archivos de auditoria/runtime. No reinicia servicios ni modifica archivos.
+
 ```bash
 sudo systemctl status sophia --no-pager
 sudo systemctl status nginx --no-pager

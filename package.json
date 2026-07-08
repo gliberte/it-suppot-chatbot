@@ -11,6 +11,7 @@
     "rag:test": "node scripts/test-rag.js",
     "audit:created-tickets": "node scripts/report-created-tickets.js",
     "routing:check": "node scripts/check-routing.js",
+    "prod:check": "node scripts/prod-healthcheck.js",
     "teams:package": "node scripts/build-teams-package.js",
     "teams:check": "node scripts/check-teams-pilot.js",
     "build": "tsc -b && vite build",
