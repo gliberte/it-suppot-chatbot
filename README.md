@@ -200,6 +200,12 @@ docs/runbook-produccion.md
 
 Incluye comandos de health check, monitoreo de Nginx, logs de `sophia.service`, revision segura de `.env`, checklist de corte a produccion y diagnostico de conectividad con Azure Bot/FortiGate.
 
+El plan de pruebas funcionales para validar Sophia en Teams, SDP, MCI, roles y formato de respuestas esta en:
+
+```text
+docs/plan-pruebas-funcionales.md
+```
+
 ## Validación De Ruteos
 
 Para revisar que las rutas de creación de tickets apunten a categorías/subcategorías observadas en el catálogo o histórico local de SDP:
