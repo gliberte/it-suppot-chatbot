@@ -207,6 +207,46 @@ El `WorkingDirectory` debe ser:
 /opt/sophia/it-support-chatbot
 ```
 
+## Backup Operativo
+
+Antes de cambios relevantes de codigo o configuracion, crear un respaldo local:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:backup
+```
+
+Por defecto genera un archivo:
+
+```text
+/opt/sophia/backups/sophia-backup-YYYYMMDD-HHMMSS.tar.gz
+```
+
+El respaldo intenta incluir:
+
+- `.env`
+- `data/runtime-state.json`
+- `teams/generated/soporte-it-teams.zip`
+- logs locales si existen
+- `/etc/systemd/system/sophia.service`
+- configuracion Nginx `sophia`
+- `/etc/logrotate.d/sophia`
+
+El archivo puede contener secretos de produccion. Debe mantenerse con permisos `0600`, no debe subirse a git y solo debe compartirse por canales aprobados.
+
+Para listar el contenido:
+
+```bash
+tar -tzf /opt/sophia/backups/sophia-backup-YYYYMMDD-HHMMSS.tar.gz
+```
+
+Para restaurar, extraer primero en un directorio temporal y copiar manualmente solo los archivos necesarios:
+
+```bash
+mkdir -p /tmp/sophia-restore
+tar -xzf /opt/sophia/backups/sophia-backup-YYYYMMDD-HHMMSS.tar.gz -C /tmp/sophia-restore
+```
+
 ## Revision Segura De .env
 
 Mostrar variables no secretas:
