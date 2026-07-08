@@ -39,8 +39,32 @@ function validateRoutingBehavior() {
       expectedRoute: 'internet_access'
     },
     {
+      text: 'Crea un ticket porque mi mouse no funciona',
+      expectedRoute: 'peripheral_mouse'
+    },
+    {
+      text: 'Crea un ticket porque mis audífonos no funcionan',
+      expectedRoute: 'peripheral_audio'
+    },
+    {
+      text: 'Reporte de celular corporativo dañado',
+      expectedRoute: 'mobile_device'
+    },
+    {
+      text: 'No puedo acceder a SAP',
+      expectedRoute: 'sap_access'
+    },
+    {
+      text: 'Necesito modificar una consulta de usuario SAP para informe de devolución por clientes y producción por lote',
+      expectedRoute: 'sap_reporting'
+    },
+    {
       text: 'Solicitar creación y asignación del subdominio sophia.bacosa.com para un servidor virtual. Prioridad alta.',
       expectedRoute: 'web_hosting_dns'
+    },
+    {
+      text: 'Impresora Zebra con papel atascado',
+      expectedRoute: 'printer'
     },
     {
       text: 'Laptop lenta',

@@ -10,6 +10,7 @@ Antes de iniciar:
 cd /opt/sophia/it-support-chatbot
 npm run prod:version
 npm run prod:check
+npm run qa:routing
 ```
 
 Durante las pruebas, monitorear:
@@ -34,6 +35,7 @@ Resultado minimo esperado antes de pruebas Teams:
 - `nginx` activo.
 - `HTTPS local via Nginx` en `200`.
 - `Teams messages route` en `401 esperado sin firma Bot Framework`.
+- `npm run qa:routing` sin fallos.
 - Azure Bot configurado con `https://sophia.barrazaycia.com/api/teams/messages`.
 
 ## Criterios Generales
