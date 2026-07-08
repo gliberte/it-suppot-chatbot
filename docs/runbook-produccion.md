@@ -100,6 +100,37 @@ tail -n 80 sdp-debug.log
 
 Si `teams-audit.log` no existe y tampoco hay entradas en Nginx al escribir desde Teams, el trafico no esta llegando al backend.
 
+## Rotacion De Logs
+
+Sophia escribe logs locales en `/opt/sophia/it-support-chatbot/*.log`. La politica versionada esta en:
+
+```text
+deploy/logrotate/sophia
+```
+
+Instalar o actualizar en el servidor:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+sudo cp deploy/logrotate/sophia /etc/logrotate.d/sophia
+sudo chown root:root /etc/logrotate.d/sophia
+sudo chmod 0644 /etc/logrotate.d/sophia
+```
+
+Validar sin ejecutar cambios:
+
+```bash
+sudo logrotate -d /etc/logrotate.d/sophia
+```
+
+Probar una rotacion forzada solo si se desea confirmar comportamiento:
+
+```bash
+sudo logrotate -f /etc/logrotate.d/sophia
+```
+
+La politica rota diariamente, conserva 14 archivos, comprime historicos y usa `copytruncate` para no requerir reinicio de Sophia.
+
 ## Servicio Sophia
 
 Reiniciar:
