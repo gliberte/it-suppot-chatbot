@@ -26,6 +26,11 @@ npm run prod:check
 
 Este comando revisa `sophia.service`, `nginx`, puerto `443`, health checks HTTP/HTTPS, variables principales de Teams y archivos de auditoria/runtime. No reinicia servicios ni modifica archivos.
 
+Tambien resume actividad reciente:
+
+- `Nginx Teams hits`: cuenta accesos recientes en Nginx a `/api/teams/messages` y `/api/teams/health`.
+- `Teams audit reciente`: resume eventos recientes de `teams-audit.log`, incluyendo mensajes recibidos, respuestas enviadas y errores.
+
 ```bash
 sudo systemctl status sophia --no-pager
 sudo systemctl status nginx --no-pager
@@ -84,6 +89,14 @@ Interpretacion:
 - No aparece nada en Nginx: Azure Bot/FortiGate/NAT no esta llegando al servidor.
 - Aparece en Nginx pero no en Sophia: revisar `proxy_pass` de Nginx hacia `localhost:3001`.
 - Aparece en Sophia pero no responde: revisar errores Bot Framework, variables `.env`, Graph, SDP o MCP.
+
+La misma lectura puede verse con:
+
+```bash
+npm run prod:check
+```
+
+Si `Nginx Teams hits` muestra `messages=0` despues de probar desde Teams, Azure Bot no esta llegando a Nginx. Si Nginx muestra hits pero `Teams audit reciente` no aumenta, revisar proxy/backend. Si ambos aumentan pero no hay respuesta en Teams, revisar errores del bridge o Bot Framework.
 
 ## Logs De Aplicacion
 

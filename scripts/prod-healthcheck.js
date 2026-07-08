@@ -70,6 +70,32 @@ function formatMode(mode) {
   return `0${(mode & 0o777).toString(8)}`;
 }
 
+function parseJsonLines(raw) {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function summarizeAuditEvent(event) {
+  const parts = [
+    event.timestamp,
+    event.outcome,
+    event.from?.name,
+    event.messagePreview ? `msg="${event.messagePreview}"` : '',
+    event.replyPreview ? `reply="${event.replyPreview}"` : '',
+  ].filter(Boolean);
+  return parts.join(' ');
+}
+
 async function checkSystemdService(name) {
   if (!(await commandExists('systemctl'))) {
     addCheck(`Servicio ${name}`, 'warn', 'systemctl no disponible en este entorno');
@@ -251,6 +277,71 @@ async function checkRuntimeState() {
   }
 }
 
+async function readTail(path, lines = 300) {
+  const direct = await run('tail', ['-n', String(lines), path]);
+  if (direct.ok) return direct.stdout;
+
+  if (await commandExists('sudo')) {
+    const viaSudo = await run('sudo', ['-n', 'tail', '-n', String(lines), path]);
+    if (viaSudo.ok) return viaSudo.stdout;
+  }
+
+  throw new Error(direct.stderr || `No se pudo leer ${path}`);
+}
+
+async function checkNginxTeamsHits() {
+  const path = '/var/log/nginx/access.log';
+
+  try {
+    const raw = await readTail(path, 500);
+    const lines = raw.split('\n').filter(Boolean);
+    const messageHits = lines.filter((line) => line.includes('/api/teams/messages'));
+    const healthHits = lines.filter((line) => line.includes('/api/teams/health'));
+    const lastMessage = messageHits.at(-1);
+    const lastHealth = healthHits.at(-1);
+
+    const detail = [
+      `messages=${messageHits.length}`,
+      `health=${healthHits.length}`,
+      lastMessage ? `lastMessage="${lastMessage.slice(0, 180)}"` : 'lastMessage=n/a',
+      !lastMessage && lastHealth ? `lastHealth="${lastHealth.slice(0, 140)}"` : '',
+    ].filter(Boolean).join(' ');
+
+    addCheck('Nginx Teams hits', messageHits.length ? 'ok' : 'warn', detail);
+  } catch (error) {
+    addCheck('Nginx Teams hits', 'warn', `No se pudo leer ${path}: ${error.message}`);
+  }
+}
+
+async function checkTeamsAuditSummary() {
+  const path = 'teams-audit.log';
+
+  if (!existsSync(path)) {
+    addCheck('Teams audit reciente', 'warn', `No encontrado: ${path}`);
+    return;
+  }
+
+  try {
+    const raw = await readTail(path, 80);
+    const events = parseJsonLines(raw);
+    const messageEvents = events.filter((event) => event.outcome === 'message_received');
+    const replyEvents = events.filter((event) => event.outcome === 'reply_sent');
+    const errorEvents = events.filter((event) => String(event.outcome || '').includes('error'));
+    const lastEvent = events.at(-1);
+    const detail = [
+      `events=${events.length}`,
+      `messages=${messageEvents.length}`,
+      `replies=${replyEvents.length}`,
+      `errors=${errorEvents.length}`,
+      lastEvent ? `last="${summarizeAuditEvent(lastEvent).slice(0, 220)}"` : 'last=n/a',
+    ].join(' ');
+
+    addCheck('Teams audit reciente', events.length ? 'ok' : 'warn', detail);
+  } catch (error) {
+    addCheck('Teams audit reciente', 'warn', `No se pudo leer ${path}: ${error.message}`);
+  }
+}
+
 async function main() {
   console.log('Sophia production healthcheck');
   console.log(`Directorio: ${process.cwd()}`);
@@ -266,6 +357,8 @@ async function main() {
   await checkEnv();
   await checkRecentLogs();
   await checkRuntimeState();
+  await checkNginxTeamsHits();
+  await checkTeamsAuditSummary();
 
   const width = Math.max(...checks.map((check) => check.name.length), 10);
   for (const check of checks) {
