@@ -64,6 +64,16 @@ curl -k -v -H "Host: sophia.barrazaycia.com" https://127.0.0.1/api/teams/health
 
 Si responde `200 OK`, Nginx, certificado y proxy local estan correctos.
 
+Prueba local de ruteo del endpoint Teams:
+
+```bash
+curl -k -i -X POST https://localhost/api/teams/messages \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Sin una firma valida de Bot Framework, respuestas como `400`, `401` o `403` son aceptables. Lo importante es que no sea `404`, timeout o error de proxy; eso confirma que Nginx enruta `/api/teams/messages` hacia Express.
+
 ## Monitoreo Durante Pruebas De Teams
 
 Abrir una sesion para Nginx:

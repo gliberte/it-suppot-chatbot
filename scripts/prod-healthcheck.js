@@ -163,6 +163,48 @@ async function checkHttp(url, label, extraArgs = []) {
   addCheck(label, 'fail', detail || `No hubo respuesta valida desde ${url}`);
 }
 
+async function checkTeamsMessagesRoute() {
+  if (!(await commandExists('curl'))) {
+    addCheck('Teams messages route', 'warn', 'curl no disponible en este entorno');
+    return;
+  }
+
+  const url = 'https://localhost/api/teams/messages';
+  const result = await run('curl', [
+    '-k',
+    '-sS',
+    '-m',
+    '10',
+    '-o',
+    '/dev/null',
+    '-w',
+    '%{http_code}',
+    '-X',
+    'POST',
+    '-H',
+    'Content-Type: application/json',
+    '-d',
+    '{}',
+    url,
+  ]);
+
+  const statusCode = result.stdout.trim();
+  if (['400', '401', '403'].includes(statusCode)) {
+    addCheck('Teams messages route', 'ok', `${url} -> ${statusCode} esperado sin firma Bot Framework`);
+    return;
+  }
+
+  if (statusCode === '404') {
+    addCheck('Teams messages route', 'fail', `${url} -> 404. Revisar ruta/proxy Nginx hacia Express`);
+    return;
+  }
+
+  const detail = [statusCode && `${url} -> ${statusCode}`, result.stderr]
+    .filter(Boolean)
+    .join(' | ');
+  addCheck('Teams messages route', result.ok ? 'warn' : 'fail', detail || `No hubo respuesta desde ${url}`);
+}
+
 async function checkNginxConfig() {
   if (!(await commandExists('nginx'))) {
     addCheck('Nginx config', 'warn', 'nginx no disponible en este entorno');
@@ -354,6 +396,7 @@ async function main() {
   await checkPort443();
   await checkHttp('http://localhost:3001/api/teams/health', 'Backend local');
   await checkHttp('https://localhost/api/teams/health', 'HTTPS local via Nginx', ['-k']);
+  await checkTeamsMessagesRoute();
   await checkEnv();
   await checkRecentLogs();
   await checkRuntimeState();
