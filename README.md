@@ -190,6 +190,16 @@ npm run audit:created-tickets -- --format json --output reports/created-tickets.
 
 El reporte muestra usuario, ticket, categoria, subcategoria, ruta RAG, confianza, fuente principal y error resumido cuando la creación fue clasificada con el sistema RAG o falló contra SDP.
 
+## Operacion En Produccion
+
+El runbook operativo de Sophia en Linux/Nginx/Azure Bot esta en:
+
+```text
+docs/runbook-produccion.md
+```
+
+Incluye comandos de health check, monitoreo de Nginx, logs de `sophia.service`, revision segura de `.env`, checklist de corte a produccion y diagnostico de conectividad con Azure Bot/FortiGate.
+
 ## Validación De Ruteos
 
 Para revisar que las rutas de creación de tickets apunten a categorías/subcategorías observadas en el catálogo o histórico local de SDP:

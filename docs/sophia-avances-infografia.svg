@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Sophia - avances, mejoras y pendientes</title>
+  <desc id="desc">Infografia ejecutiva del estado del proyecto Sophia al 7 de julio de 2026.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f6f8fb; }
+      .ink { fill: #172033; }
+      .muted { fill: #5f6b7a; }
+      .line { stroke: #d7dde7; stroke-width: 2; }
+      .card { fill: #ffffff; stroke: #dfe5ee; stroke-width: 2; rx: 22; }
+      .header { fill: #0f2742; }
+      .accent { fill: #1f7a8c; }
+      .green { fill: #238a63; }
+      .amber { fill: #b7791f; }
+      .red { fill: #b73b3b; }
+      .blue-soft { fill: #e8f3f7; }
+      .green-soft { fill: #e9f6ef; }
+      .amber-soft { fill: #fff4df; }
+      .red-soft { fill: #fdecec; }
+      .title { font: 800 52px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .subtitle { font: 400 26px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .h2 { font: 800 28px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .body { font: 400 23px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .small { font: 400 19px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .tag { font: 700 18px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .num { font: 800 48px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="1000"/>
+
+  <rect x="70" y="58" width="1460" height="150" rx="28" class="header"/>
+  <text x="110" y="122" class="title" fill="#ffffff">Sophia - estado del proyecto</text>
+  <text x="112" y="165" class="subtitle" fill="#cfe7ef">Asistente IT para Teams, ServiceDesk Plus, LDAP y conocimiento operativo</text>
+  <text x="1280" y="116" class="tag" fill="#ffffff">07 JUL 2026</text>
+  <text x="1280" y="150" class="small" fill="#cfe7ef">Piloto a producción</text>
+
+  <g transform="translate(90 250)">
+    <rect width="330" height="150" class="card"/>
+    <circle cx="64" cy="64" r="34" class="blue-soft"/>
+    <text x="52" y="77" class="num accent">1</text>
+    <text x="115" y="58" class="h2 ink">Teams</text>
+    <text x="115" y="93" class="body muted">Chat personal 1:1</text>
+    <text x="115" y="124" class="small muted">Bot Framework + Azure</text>
+  </g>
+
+  <g transform="translate(455 250)">
+    <rect width="330" height="150" class="card"/>
+    <circle cx="64" cy="64" r="34" class="green-soft"/>
+    <text x="52" y="77" class="num green">2</text>
+    <text x="115" y="58" class="h2 ink">SDP seguro</text>
+    <text x="115" y="93" class="body muted">Tickets y MCI</text>
+    <text x="115" y="124" class="small muted">ownership + permisos</text>
+  </g>
+
+  <g transform="translate(820 250)">
+    <rect width="330" height="150" class="card"/>
+    <circle cx="64" cy="64" r="34" class="amber-soft"/>
+    <text x="52" y="77" class="num amber">3</text>
+    <text x="115" y="58" class="h2 ink">RAG</text>
+    <text x="115" y="93" class="body muted">Catálogo y reglas</text>
+    <text x="115" y="124" class="small muted">mejor clasificación</text>
+  </g>
+
+  <g transform="translate(1185 250)">
+    <rect width="330" height="150" class="card"/>
+    <circle cx="64" cy="64" r="34" class="red-soft"/>
+    <text x="52" y="77" class="num red">4</text>
+    <text x="115" y="58" class="h2 ink">Producción</text>
+    <text x="115" y="93" class="body muted">Linux + Nginx</text>
+    <text x="115" y="124" class="small muted">HTTPS instalado</text>
+  </g>
+
+  <g transform="translate(90 445)">
+    <rect width="690" height="250" class="card"/>
+    <rect x="0" y="0" width="690" height="62" rx="22" class="blue-soft"/>
+    <text x="34" y="41" class="h2 ink">Mejoras recientes</text>
+    <text x="38" y="96" class="body ink">• Confirmaciones con botones en Teams</text>
+    <text x="38" y="132" class="body ink">• Tarjetas de tickets y MCI más claras</text>
+    <text x="38" y="168" class="body ink">• Fechas humanas en cambios de MCI</text>
+    <text x="38" y="204" class="body ink">• Persistencia ligera de sesiones y acciones</text>
+  </g>
+
+  <g transform="translate(820 445)">
+    <rect width="690" height="250" class="card"/>
+    <rect x="0" y="0" width="690" height="62" rx="22" class="green-soft"/>
+    <text x="34" y="41" class="h2 ink">Seguridad y control</text>
+    <text x="38" y="96" class="body ink">• Validación Bot Framework y tenant permitido</text>
+    <text x="38" y="132" class="body ink">• Usuarios por Microsoft Graph</text>
+    <text x="38" y="168" class="body ink">• Roles admin vs usuario normal</text>
+    <text x="38" y="204" class="body ink">• Consultas sanitizadas de base de conocimiento</text>
+  </g>
+
+  <g transform="translate(90 730)">
+    <rect width="690" height="200" class="card"/>
+    <rect x="0" y="0" width="690" height="62" rx="22" class="amber-soft"/>
+    <text x="34" y="41" class="h2 ink">Avances de despliegue</text>
+    <text x="38" y="96" class="body ink">• Backend en VM Linux con systemd</text>
+    <text x="38" y="132" class="body ink">• Nginx como proxy HTTPS en puerto 443</text>
+    <text x="38" y="168" class="body ink">• Certificado Let’s Encrypt emitido e instalado</text>
+  </g>
+
+  <g transform="translate(820 730)">
+    <rect width="690" height="200" class="card"/>
+    <rect x="0" y="0" width="690" height="62" rx="22" class="red-soft"/>
+    <text x="34" y="41" class="h2 ink">Pendientes inmediatos</text>
+    <text x="38" y="96" class="body ink">• Confirmar llegada de Azure Bot a Nginx</text>
+    <text x="38" y="132" class="body ink">• Validar Sophia desde Teams en producción</text>
+    <text x="38" y="168" class="body ink">• Monitorear logs y ajustar FortiGate si no hay hits</text>
+  </g>
+
+  <line x1="250" y1="420" x2="250" y2="445" class="line"/>
+  <line x1="615" y1="420" x2="615" y2="445" class="line"/>
+  <line x1="980" y1="420" x2="980" y2="445" class="line"/>
+  <line x1="1345" y1="420" x2="1345" y2="445" class="line"/>
+
+  <text x="90" y="968" class="small muted">Sophia: soporte automatizado con IA para Barraza y Cía. Estado enfocado en piloto, seguridad y paso a producción.</text>
+</svg>

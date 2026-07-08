@@ -79,6 +79,8 @@ export class AgentOrchestrator {
     try {
       console.log(`[Agent] Procesando mensaje con Gemini: "${message}"`);
       const contextText = JSON.stringify({
+        current_date: new Date().toLocaleDateString('es-PA', { timeZone: 'America/Panama' }),
+        current_timezone: 'America/Panama',
         authenticated_user: context.user ? {
           name: context.user.name,
           email: context.user.email,
