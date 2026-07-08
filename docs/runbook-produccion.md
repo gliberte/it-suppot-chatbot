@@ -277,6 +277,31 @@ npm run prod:check
 
 Restaurar `.env`, `runtime-state.json`, Nginx o systemd desde backup debe hacerse manualmente y solo copiando el archivo necesario desde un directorio temporal de restauracion.
 
+## Checklist De Despliegue
+
+Antes o despues de un despliegue, ejecutar:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:deploy-check
+```
+
+Este comando no ejecuta `git pull`, no crea backups, no reinicia servicios y no modifica configuracion. Valida version actual, sintaxis del backend, sintaxis de scripts operativos, build y `prod:check`.
+
+Flujo manual recomendado para desplegar:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:version
+npm run prod:backup
+git pull
+npm install
+npm run build
+sudo systemctl restart sophia
+npm run prod:check
+npm run prod:version
+```
+
 ## Revision Segura De .env
 
 Mostrar variables no secretas:
