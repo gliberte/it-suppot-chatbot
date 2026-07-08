@@ -1,4 +1,5 @@
 /opt/sophia/it-support-chatbot/*.log {
+    su lsolano lsolano
     daily
     rotate 14
     compress

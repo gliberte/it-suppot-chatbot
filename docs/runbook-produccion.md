@@ -129,7 +129,7 @@ Probar una rotacion forzada solo si se desea confirmar comportamiento:
 sudo logrotate -f /etc/logrotate.d/sophia
 ```
 
-La politica rota diariamente, conserva 14 archivos, comprime historicos y usa `copytruncate` para no requerir reinicio de Sophia.
+La politica rota diariamente, conserva 14 archivos, comprime historicos y usa `copytruncate` para no requerir reinicio de Sophia. Incluye `su lsolano lsolano` porque el directorio del proyecto pertenece al usuario de despliegue; sin esa directiva logrotate puede rechazar la rotacion por permisos del directorio padre.
 
 ## Servicio Sophia
 
