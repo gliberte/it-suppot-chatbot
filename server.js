@@ -557,6 +557,10 @@ function minimizeAuditArgs(args = {}) {
     );
   }
 
+  if (args.udf_fields && typeof args.udf_fields === 'object') {
+    minimized.udf_fields = summarizeAuditUdfFields(args.udf_fields);
+  }
+
   if (args.user_email || args.requester_email) {
     minimized.user_email_domain = getEmailDomain(args.user_email || args.requester_email);
   }
@@ -566,6 +570,27 @@ function minimizeAuditArgs(args = {}) {
   }
 
   return minimized;
+}
+
+function summarizeAuditUdfFields(udfFields = {}) {
+  return Object.fromEntries(
+    Object.entries(udfFields).map(([key, value]) => [
+      key,
+      summarizeAuditUdfValue(value)
+    ])
+  );
+}
+
+function summarizeAuditUdfValue(value) {
+  if (value && typeof value === 'object') {
+    return {
+      id: value.id ? redactSensitiveText(String(value.id)) : undefined,
+      name: value.name ? redactSensitiveText(String(value.name)) : undefined,
+      value: value.value ? redactSensitiveText(String(value.value)) : undefined,
+      display_value: value.display_value ? redactSensitiveText(String(value.display_value)) : undefined
+    };
+  }
+  return redactSensitiveText(String(value ?? ''));
 }
 
 function createAuditTextPreview(text, maxLength = 500) {
