@@ -1456,6 +1456,25 @@ function applyCreateTicketDefaults(args) {
     ...(args.udf_fields || {}),
     udf_pick_2701: args.udf_fields?.udf_pick_2701 || routing.udf_pick_2701 || process.env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
   };
+  normalizeCreateRequestUdfFields(args);
+}
+
+function normalizeCreateRequestUdfFields(args) {
+  if (!args.udf_fields || typeof args.udf_fields !== 'object') {
+    args.udf_fields = {};
+    return;
+  }
+
+  args.udf_fields = Object.fromEntries(
+    Object.entries(args.udf_fields)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => {
+        if (key.startsWith('udf_pick_') && typeof value === 'string') {
+          return [key, { name: value }];
+        }
+        return [key, value];
+      })
+  );
 }
 
 function resolveSubcategoryValue(args, routing, hasRouting) {
@@ -1938,6 +1957,7 @@ function prepareConfirmedActionArgs(action) {
 
   if (action.toolName === 'sdp_create_request') {
     applyCreateTicketDefaults(args);
+    normalizeCreateRequestUdfFields(args);
     sanitizeCreateRequestArgs(args);
     if (!args.udf_fields?.udf_pick_2701) {
       throw new Error('No pude completar el técnico asignado obligatorio (udf_pick_2701). Revisa SDP_DEFAULT_UDF_PICK_2701 o la ruta de clasificación antes de confirmar.');
