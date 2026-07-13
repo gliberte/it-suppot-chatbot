@@ -103,6 +103,22 @@ Señales:
 Una falla de mouse no corresponde a `Contraseñas / Usuario Windows`.
 Una falla de audífonos o headset no corresponde a `Contraseñas / Usuario Windows`.
 
+## Monitores y pantallas externas
+
+Usar `Computadoras / Monitor` para fallas o solicitudes relacionadas con monitores, pantallas externas o displays conectados al computador.
+
+Señales:
+- monitor no prende
+- monitor no enciende
+- monitor sin imagen
+- monitor se apaga
+- monitor con rayas
+- líneas en la pantalla
+- pantalla externa dañada
+- display externo con falla
+
+Una falla de monitor o pantalla externa no corresponde a `Contraseñas / Usuario Windows`.
+
 ## Celulares
 
 Usar `Teléfonos / Celulares` para celulares corporativos dañados o con falla física o funcional.

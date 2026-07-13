@@ -47,6 +47,10 @@ function validateRoutingBehavior() {
       expectedRoute: 'peripheral_audio'
     },
     {
+      text: 'Falla de monitor con líneas en la pantalla',
+      expectedRoute: 'computer_monitor'
+    },
+    {
       text: 'Reporte de celular corporativo dañado',
       expectedRoute: 'mobile_device'
     },

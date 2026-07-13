@@ -161,6 +161,26 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_PERIPHERAL_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      name: 'computer_monitor',
+      keywords: [
+        'monitor',
+        'monitores',
+        'pantalla externa',
+        'display externo',
+        'lineas en la pantalla',
+        'líneas en la pantalla',
+        'rayas en la pantalla',
+        'monitor no prende',
+        'monitor no enciende',
+        'monitor sin imagen',
+        'pantalla sin imagen'
+      ],
+      category: env.SDP_COMPUTER_CATEGORY || 'Computadoras',
+      subcategory: env.SDP_MONITOR_SUBCATEGORY || 'Monitor',
+      priority: env.SDP_COMPUTER_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_COMPUTER_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'peripheral',
       keywords: ['periferico', 'periférico', 'accesorio', 'camara usb', 'cámara usb', 'adaptador', 'cable hdmi', 'cable usb'],
       category: env.SDP_PERIPHERAL_CATEGORY || 'Accesorio',
