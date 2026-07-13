@@ -390,6 +390,11 @@ function userCanReadRequest(user, data) {
   return isMciRequestData(data) && userMatchesMciLeader(user, data);
 }
 
+function userCanSeeListRequest(user, request, { isMciResult = false } = {}) {
+  if (isMciResult) return userCanReadRequest(user, request);
+  return userCanAccessRequest(user, request);
+}
+
 function isMciRequestData(data) {
   const request = data?.request || data;
   const udfFields = request?.udf_fields || {};
@@ -1789,7 +1794,7 @@ async function runSupportTurn({
     return;
   }
 
-  console.log(`[Bridge] Ejecutando: ${aiDecision.tool_name} con args:`, JSON.stringify(aiDecision.tool_args));
+  console.log(`[Bridge] Ejecutando: ${aiDecision.tool_name} con args:`, JSON.stringify(preparedArgs));
   onStatus?.(`Consultando herramienta: ${aiDecision.tool_name}...`);
   await Promise.resolve(onWorking?.(createWorkingMessage(aiDecision, message)));
 
@@ -1797,7 +1802,10 @@ async function runSupportTurn({
     const toolResult = await callMcpTool(aiDecision.tool_name, preparedArgs);
     await auditToolCall({ user, toolName: aiDecision.tool_name, args: preparedArgs, outcome: 'success' });
 
-    const toolOutput = toolResult.content[0].text;
+    let toolOutput = toolResult.content[0].text;
+    if (aiDecision.tool_name === 'sdp_list_requests') {
+      toolOutput = scopeListToolOutputForUser(toolOutput, user, message);
+    }
     if (aiDecision.tool_name === 'sdp_get_request_details') {
       const requestData = JSON.parse(toolOutput);
       if (!userCanReadRequest(user, requestData)) {
@@ -2153,6 +2161,38 @@ function createTicketsAdaptiveCard(toolOutput) {
       body
     }
   };
+}
+
+function scopeListToolOutputForUser(toolOutput, user, message = '') {
+  if (isSupportAdmin(user) && !isPersonalTicketsRequest(message)) return toolOutput;
+
+  let data;
+  try {
+    data = JSON.parse(toolOutput);
+  } catch {
+    return toolOutput;
+  }
+
+  if (!Array.isArray(data?.requests)) return toolOutput;
+
+  const isMciResult = data?.result_type === 'mci' || isMciListRequest(message);
+  const originalCount = data.requests.length;
+  const scopedRequests = data.requests.filter((request) => userCanSeeListRequest(user, request, { isMciResult }));
+
+  if (scopedRequests.length === originalCount) return toolOutput;
+
+  console.warn(`[Security] Lista SDP filtrada por ownership: ${originalCount} -> ${scopedRequests.length} para ${user?.email || user?.name || 'usuario'}`);
+
+  return JSON.stringify({
+    ...data,
+    list_info: {
+      ...(data.list_info || {}),
+      row_count: scopedRequests.length,
+      has_more_rows: false,
+      scoped_by_sophia: true
+    },
+    requests: scopedRequests
+  }, null, 2);
 }
 
 function createResultOptionsBlock({ isMciResult, hasResults }) {
