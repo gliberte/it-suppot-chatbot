@@ -759,12 +759,14 @@ function createTeamsConfirmationCardBody({ toolName, args = {}, user, intro, sum
 }
 
 function createCreateRequestConfirmationBlock(args = {}, user) {
+  const assignedTechnician = getDisplayName(args.udf_fields?.udf_pick_2701) || args.udf_fields?.udf_pick_2701 || '-';
   const rows = [
     ['Asunto', args.subject || 'Sin asunto'],
     ['Categoría', args.category || '-'],
     ['Subcategoría', args.subcategory || '-'],
     ['Prioridad', args.priority || '-'],
     ['Tipo', args.request_type || '-'],
+    ['Técnico asignado', assignedTechnician],
     ['Solicitante', user?.name || args.requester || '-']
   ];
   const classification = args.sophia_classification || {};
@@ -882,6 +884,7 @@ function formatPendingActionSummary({ toolName, args, user, intro }) {
 
 function formatCreateRequestConfirmation(args = {}, user, intro) {
   const classification = args.sophia_classification || {};
+  const assignedTechnician = getDisplayName(args.udf_fields?.udf_pick_2701) || args.udf_fields?.udf_pick_2701 || '-';
   const lines = [
     intro || 'Preparé esta solicitud para ServiceDesk Plus.',
     '',
@@ -894,6 +897,7 @@ function formatCreateRequestConfirmation(args = {}, user, intro) {
     `| Subcategoría | ${escapeMarkdownTableValue(args.subcategory || '-')} |`,
     `| Prioridad | ${escapeMarkdownTableValue(args.priority || '-')} |`,
     `| Tipo | ${escapeMarkdownTableValue(args.request_type || '-')} |`,
+    `| Técnico asignado | ${escapeMarkdownTableValue(assignedTechnician)} |`,
     `| Solicitante | ${escapeMarkdownTableValue(user?.name || args.requester || '-')} |`
   ];
 
@@ -1901,28 +1905,46 @@ function pickWorkingMessage(seed, options) {
 }
 
 async function executeConfirmedAction(action, user) {
-  await assertToolAllowedForUser(action.toolName, action.args, user);
-  const toolResult = await callMcpTool(action.toolName, action.args);
+  const confirmedArgs = prepareConfirmedActionArgs(action);
+  await assertToolAllowedForUser(action.toolName, confirmedArgs, user);
+  const toolResult = await callMcpTool(action.toolName, confirmedArgs);
   const createdRequestId = action.toolName === 'sdp_create_request'
     ? extractRequestIdFromToolResult(toolResult)
     : null;
   await auditToolCall({
     user,
     toolName: action.toolName,
-    args: createdRequestId ? { ...action.args, request_id: createdRequestId } : action.args,
+    args: createdRequestId ? { ...confirmedArgs, request_id: createdRequestId } : confirmedArgs,
     outcome: 'confirmed_success'
   });
 
-  if (action.toolName === 'sdp_update_mci' && action.args?.request_id) {
-    const details = await callMcpTool('sdp_get_request_details', { request_id: action.args.request_id });
+  if (action.toolName === 'sdp_update_mci' && confirmedArgs?.request_id) {
+    const details = await callMcpTool('sdp_get_request_details', { request_id: confirmedArgs.request_id });
     const card = createTicketDetailsAdaptiveCard(details.content[0].text);
     if (card) {
-      card.summaryText = `MCI #${action.args.request_id} actualizada`;
+      card.summaryText = `MCI #${confirmedArgs.request_id} actualizada`;
       return card;
     }
   }
 
   return summarizeToolOutput(toolResult.content[0].text);
+}
+
+function prepareConfirmedActionArgs(action) {
+  const args = { ...(action.args || {}) };
+  if (args.udf_fields && typeof args.udf_fields === 'object') {
+    args.udf_fields = { ...args.udf_fields };
+  }
+
+  if (action.toolName === 'sdp_create_request') {
+    applyCreateTicketDefaults(args);
+    sanitizeCreateRequestArgs(args);
+    if (!args.udf_fields?.udf_pick_2701) {
+      throw new Error('No pude completar el técnico asignado obligatorio (udf_pick_2701). Revisa SDP_DEFAULT_UDF_PICK_2701 o la ruta de clasificación antes de confirmar.');
+    }
+  }
+
+  return args;
 }
 
 function extractRequestIdFromToolResult(toolResult) {
