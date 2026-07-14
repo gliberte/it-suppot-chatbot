@@ -1059,6 +1059,22 @@ function escapeMarkdownTableValue(value) {
 }
 
 function normalizeTicketToolDecision(aiDecision, message, user) {
+  if (shouldConvertUpdateRequestToNote(aiDecision, message)) {
+    const toolArgs = aiDecision.tool_args || {};
+    aiDecision.tool_name = 'sdp_add_note';
+    aiDecision.tool_args = {
+      request_id: toolArgs.request_id,
+      note_text: toolArgs.note_text ||
+        toolArgs.notes ||
+        toolArgs.comment ||
+        toolArgs.fields?.note_text ||
+        toolArgs.fields?.notes ||
+        toolArgs.fields?.comment ||
+        extractFollowUpTextFromMessage(message),
+      is_public: toolArgs.is_public ?? true
+    };
+  }
+
   if (
     aiDecision?.tool_name === 'sdp_search_user' &&
     isSupportAdmin(user) &&
@@ -1080,6 +1096,28 @@ function normalizeTicketToolDecision(aiDecision, message, user) {
       mci_only: isMciListRequest(message) || undefined
     };
   }
+}
+
+function shouldConvertUpdateRequestToNote(aiDecision, message = '') {
+  if (aiDecision?.tool_name !== 'sdp_update_request') return false;
+  const args = aiDecision.tool_args || {};
+  const fields = args.fields || {};
+  return Boolean(
+    args.note_text ||
+    args.notes ||
+    args.comment ||
+    fields.note_text ||
+    fields.notes ||
+    fields.comment ||
+    /\b(seguimiento|comentario|nota|evidencia|agrega esto|anade esto|añade esto)\b/i.test(message)
+  );
+}
+
+function extractFollowUpTextFromMessage(message = '') {
+  const text = String(message || '').trim();
+  const split = text.split(/:\s+/);
+  if (split.length > 1) return split.slice(1).join(': ').trim();
+  return text.replace(/\b(agrega|añade|anade|registra)\b\s+(un\s+)?(seguimiento|comentario|nota|evidencia)\b/i, '').trim();
 }
 
 async function prepareToolArgs(toolName, toolArgs, user, message = '', session = null) {
@@ -1164,6 +1202,13 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
 
   if (isTicketScopedTool(toolName)) {
     resolveTicketReferenceArgs(args, message, session);
+  }
+
+  if (toolName === 'sdp_add_note') {
+    args.note_text = args.note_text || args.notes || args.comment || extractFollowUpTextFromMessage(message);
+    args.is_public = args.is_public ?? true;
+    delete args.notes;
+    delete args.comment;
   }
 
   if (toolName === 'sdp_update_request' && args.status) {

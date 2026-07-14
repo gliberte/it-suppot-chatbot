@@ -20,6 +20,9 @@ Formato recomendado:
 - El contexto seguro enviado al modelo incluye `operational_memory.lastTicket` para continuidad conversacional.
 - Al consultar, listar o crear tickets, Sophia actualiza automáticamente el último ticket recordado.
 
+### Fixed
+- Los seguimientos de tickets usan `sdp_add_note`; si la IA intenta usar `sdp_update_request` con `fields.notes`, el backend lo convierte automáticamente a nota de seguimiento.
+
 ## [0.3.0] - 2026-07-14
 
 ### Added
