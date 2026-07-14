@@ -676,6 +676,25 @@ function formatExpiredConfirmationMessage(action) {
   ].join(' ');
 }
 
+function formatConfirmedActionError(action, error) {
+  const minimizedError = minimizeAuditError(error);
+  const fields = minimizedError?.fields || [];
+
+  if (action?.toolName === 'sdp_create_request' && fields.includes('udf_pick_2701')) {
+    return [
+      'No pude crear la solicitud porque ServiceDesk Plus rechazó un campo interno obligatorio: Técnico asignado.',
+      'No necesitas indicar tipo de activo ni ubicación para resolver esto; es un ajuste de configuración de Sophia/SDP.',
+      'Voy a dejarlo registrado para revisión técnica. Puedes pedirme crear otra solicitud cuando validemos ese campo.'
+    ].join('\n\n');
+  }
+
+  if (fields.length) {
+    return `No pude ejecutar la acción confirmada porque ServiceDesk Plus pidió revisar estos campos: ${fields.join(', ')}.`;
+  }
+
+  return `No pude ejecutar la acción confirmada: ${error.message}`;
+}
+
 function getPendingActionLabel(action) {
   if (!action?.toolName) return '';
   const requestId = action.args?.request_id ? ` #${action.args.request_id}` : '';
@@ -1493,12 +1512,6 @@ function normalizeCreateRequestUdfFields(args) {
   args.udf_fields = Object.fromEntries(
     Object.entries(args.udf_fields)
       .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => {
-        if (key.startsWith('udf_pick_') && typeof value === 'string') {
-          return [key, { name: value }];
-        }
-        return [key, value];
-      })
   );
 }
 
@@ -3044,7 +3057,7 @@ async function handleTeamsMessage(context) {
     } catch (error) {
       await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmed_error', error });
       console.error(`[Teams] Error confirmando acción ${action.toolName}:`, error.message);
-      await sendTeamsReply(context, `No pude ejecutar la acción confirmada: ${error.message}`);
+      await sendTeamsReply(context, formatConfirmedActionError(action, error));
     }
     return;
   }
@@ -3071,7 +3084,7 @@ async function handleTeamsMessage(context) {
     } catch (error) {
       await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmed_error', error });
       console.error(`[Teams] Error confirmando acción ${action.toolName}:`, error.message);
-      await sendTeamsReply(context, `No pude ejecutar la acción confirmada: ${error.message}`);
+      await sendTeamsReply(context, formatConfirmedActionError(action, error));
     }
     return;
   }
