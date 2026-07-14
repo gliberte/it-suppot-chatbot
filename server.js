@@ -1470,6 +1470,7 @@ function hasAssignedTechnicianScope(message) {
 function getAdminPersonScopeClarification(message, user) {
   if (!isSupportAdmin(user) || isPersonalTicketsRequest(message)) return null;
   if (isCreateTicketIntent(message)) return null;
+  if (isTicketFollowUpIntent(message)) return null;
   if (!/\b(tickets?|solicitudes?|mci)\b/i.test(String(message || ''))) return null;
   if (isMciListRequest(message)) return null;
   if (hasRequesterScope(message) || hasAssignedTechnicianScope(message)) return null;
@@ -1478,6 +1479,10 @@ function getAdminPersonScopeClarification(message, user) {
   if (!personName) return null;
 
   return `Para consultar a ${personName}, necesito aclarar el criterio de búsqueda: ¿quieres verlo como solicitante o en el campo Técnico asignado?`;
+}
+
+function isTicketFollowUpIntent(message) {
+  return /\b(seguimiento|seguimientos|comentario|comentarios|nota|notas|evidencia|agrega esto|añade esto|anade esto|registrar seguimiento|agregar seguimiento|agregar una nota|agregar nota)\b/i.test(String(message || ''));
 }
 
 async function resolveSdpRequesterIdByName(searchText) {
