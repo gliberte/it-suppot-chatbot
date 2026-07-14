@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 teams/generated
+reports/prod-monitor-latest.txt
+reports/prod-monitor-history.log
 data/rag-index.json
 data/runtime-state.json
 data/runtime-state.json.tmp

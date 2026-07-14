@@ -41,6 +41,31 @@ npm run prod:monitor -- --minutes 15
 
 `prod:monitor` resume PM2, health local, actividad Teams, auditoria de herramientas, posibles errores SDP y hits Nginx. Es util despues de pruebas piloto, reinicios o reportes de que Sophia no responde.
 
+Para cron o registro historico, usar el comando que escribe archivos:
+
+```bash
+npm run prod:monitor:write
+```
+
+Genera:
+
+```text
+reports/prod-monitor-latest.txt
+reports/prod-monitor-history.log
+```
+
+Cron recomendado cada 10 minutos:
+
+```cron
+*/10 * * * * cd /opt/sophia/it-support-chatbot && npm run prod:monitor:write >/dev/null 2>&1
+```
+
+Con ventana personalizada:
+
+```cron
+*/10 * * * * cd /opt/sophia/it-support-chatbot && npm run prod:monitor:write -- --minutes 15 >/dev/null 2>&1
+```
+
 Tambien resume actividad reciente:
 
 - `Nginx Teams hits`: cuenta accesos recientes en Nginx a `/api/teams/messages` y `/api/teams/health`.

@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.1.3] - 2026-07-14
+
+### Ops
+- Agregado `npm run prod:monitor:write` para escribir el último reporte operativo y un histórico acumulado.
+- Los reportes generados `reports/prod-monitor-latest.txt` y `reports/prod-monitor-history.log` quedan ignorados por git.
+- El comando acepta la misma ventana de monitoreo con `-- --minutes <n>`.
+
 ## [0.1.2] - 2026-07-14
 
 ### Ops
