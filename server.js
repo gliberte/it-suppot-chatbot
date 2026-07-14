@@ -470,13 +470,33 @@ function userCanAccessRequest(user, data) {
 }
 
 function userCanReadRequest(user, data) {
-  if (isSupportAdmin(user) || userCanAccessRequest(user, data)) return true;
+  if (isSupportAdmin(user) || userCanAccessRequest(user, data) || userMatchesAssignedTechnician(user, data)) return true;
   return isMciRequestData(data) && userMatchesMciLeader(user, data);
 }
 
 function userCanSeeListRequest(user, request, { isMciResult = false } = {}) {
   if (isMciResult) return userCanReadRequest(user, request);
-  return userCanAccessRequest(user, request);
+  return userCanAccessRequest(user, request) || userMatchesAssignedTechnician(user, request);
+}
+
+function userMatchesAssignedTechnician(user, data) {
+  const request = data?.request || data;
+  const assignedTechnician = normalizeComparableText(getAssignedTechnicianValue(request));
+  if (!assignedTechnician) return false;
+
+  const userCandidates = [
+    user?.name,
+    user?.email,
+    user?.displayName,
+    user?.mail,
+    user?.userPrincipalName
+  ].map(normalizeComparableText).filter(Boolean);
+
+  return userCandidates.some((candidate) => (
+    candidate === assignedTechnician ||
+    assignedTechnician.includes(candidate) ||
+    candidate.includes(assignedTechnician)
+  ));
 }
 
 function isMciRequestData(data) {
@@ -1163,8 +1183,14 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
       }
     }
 
+    const assignedTechnicianSelfScope = getSelfAssignedTechnicianScope(user, args, message);
     if (!isSupportAdmin(user) || isPersonalTicketsRequest(message)) {
-      if (isMciListRequest(message) && !hasRequesterScope(message)) {
+      if (assignedTechnicianSelfScope && !isMciListRequest(message)) {
+        args.assigned_technician_name = assignedTechnicianSelfScope;
+        delete args.requester_id;
+      } else if (hasAssignedTechnicianScope(message) && args.assigned_technician_name && !assignedTechnicianSelfScope && !isMciListRequest(message)) {
+        throw new Error('Por seguridad, solo puedes consultar tickets asignados a tu propio usuario como técnico.');
+      } else if (isMciListRequest(message) && !hasRequesterScope(message)) {
         args.mci_leader_name = args.mci_leader_name ||
           args.mci_leader ||
           args.leader_name ||
@@ -1178,7 +1204,7 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
     }
     delete args.requester_name;
     delete args.search_text;
-    if (isMciListRequest(message) && !hasAssignedTechnicianScope(message)) {
+    if ((isMciListRequest(message) && !hasAssignedTechnicianScope(message)) || (!isSupportAdmin(user) && !getSelfAssignedTechnicianScope(user, args, message))) {
       delete args.assigned_technician_name;
     }
     delete args.assigned_technician;
@@ -1511,6 +1537,34 @@ function hasRequesterScope(message) {
 
 function hasAssignedTechnicianScope(message) {
   return /\b(t[eé]cnico asignado|tecnico asignado|asignad[oa]s?\s+a|como t[eé]cnico asignado|como tecnico asignado)\b/i.test(String(message || ''));
+}
+
+function getSelfAssignedTechnicianScope(user, args = {}, message = '') {
+  if (!hasAssignedTechnicianScope(message)) return null;
+
+  const requestedTechnician = args.assigned_technician_name ||
+    args.assigned_technician ||
+    inferAssignedTechnicianNameFromMessage(message) ||
+    user?.name ||
+    user?.email;
+  const normalizedRequested = normalizeComparableText(requestedTechnician);
+  if (!normalizedRequested) return null;
+
+  const userCandidates = [
+    user?.name,
+    user?.email,
+    user?.displayName,
+    user?.mail,
+    user?.userPrincipalName
+  ].map(normalizeComparableText).filter(Boolean);
+
+  const matchesUser = userCandidates.some((candidate) => (
+    candidate === normalizedRequested ||
+    candidate.includes(normalizedRequested) ||
+    normalizedRequested.includes(candidate)
+  ));
+
+  return matchesUser ? requestedTechnician : null;
 }
 
 function getAdminPersonScopeClarification(message, user) {
