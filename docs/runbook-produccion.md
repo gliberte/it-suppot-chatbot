@@ -52,6 +52,19 @@ Genera:
 ```text
 reports/prod-monitor-latest.txt
 reports/prod-monitor-history.log
+reports/prod-monitor-alerts.log
+reports/prod-monitor-state.json
+```
+
+`prod-monitor-alerts.log` solo agrega una nueva linea cuando cambia la firma de problemas `WARN`/`FAIL`, para evitar ruido repetido cada 10 minutos. `prod-monitor-state.json` guarda el ultimo estado usado para deduplicar.
+
+Revision rapida:
+
+```bash
+cat reports/prod-monitor-latest.txt
+tail -n 80 reports/prod-monitor-history.log
+tail -n 40 reports/prod-monitor-alerts.log
+cat reports/prod-monitor-state.json
 ```
 
 Cron recomendado cada 10 minutos:

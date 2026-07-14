@@ -13,6 +13,8 @@ dist-ssr
 teams/generated
 reports/prod-monitor-latest.txt
 reports/prod-monitor-history.log
+reports/prod-monitor-alerts.log
+reports/prod-monitor-state.json
 data/rag-index.json
 data/runtime-state.json
 data/runtime-state.json.tmp

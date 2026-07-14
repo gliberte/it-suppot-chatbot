@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.1.4] - 2026-07-14
+
+### Ops
+- `prod:monitor:write` ahora registra alertas deduplicadas cuando cambia el estado WARN/FAIL.
+- Agregado estado persistente del monitor en `reports/prod-monitor-state.json`.
+- Agregado log de cambios de alerta en `reports/prod-monitor-alerts.log`.
+
 ## [0.1.3] - 2026-07-14
 
 ### Ops
