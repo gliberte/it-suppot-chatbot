@@ -2869,6 +2869,7 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
   const description = stripHtml(request.description || request.short_description || '');
   const resolution = stripHtml(getResolutionText(request.resolution));
   const notes = getRequestNotes(request);
+  const noteWarning = getNotesWarning(data, request);
 
   const body = [
     {
@@ -2902,6 +2903,8 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
 
   if (notes.length > 0) {
     body.push(createNotesDetailBlock(notes));
+  } else if (noteWarning) {
+    body.push(createDetailTextBlock('Seguimientos', noteWarning));
   }
 
   body.push(createDetailOptionsBlock(ticketId, request));
@@ -3020,11 +3023,7 @@ function getResolutionText(resolution) {
 }
 
 function getRequestNotes(request) {
-  const notes = Array.isArray(request?.notes)
-    ? request.notes
-    : Array.isArray(request?.request_notes)
-      ? request.request_notes
-      : [];
+  const notes = extractNotesFromRequestData(request);
 
   return notes
     .map((note) => ({
@@ -3036,6 +3035,33 @@ function getRequestNotes(request) {
     .slice(0, 5);
 }
 
+function extractNotesFromRequestData(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+
+  const directCandidates = [
+    value.notes,
+    value.request_notes,
+    value.conversations,
+    value.request_conversations,
+    value.data,
+    value.list
+  ];
+
+  for (const candidate of directCandidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  if (typeof value === 'object') {
+    for (const child of Object.values(value)) {
+      const nested = extractNotesFromRequestData(child);
+      if (nested.length > 0) return nested;
+    }
+  }
+
+  return [];
+}
+
 function getNoteText(note) {
   if (!note) return '';
   if (typeof note === 'string') return note;
@@ -3044,8 +3070,23 @@ function getNoteText(note) {
     note.text ||
     note.notes ||
     note.note_text ||
+    note.note?.description ||
+    note.note?.content ||
+    note.note?.text ||
     note.display_value ||
     '';
+}
+
+function getNotesWarning(data, request) {
+  const warnings = [
+    ...(Array.isArray(data?.sophia_warnings) ? data.sophia_warnings : []),
+    ...(Array.isArray(request?.sophia_warnings) ? request.sophia_warnings : [])
+  ].filter(Boolean);
+
+  const notesWarning = warnings.find((warning) => /nota|seguimiento/i.test(String(warning)));
+  if (notesWarning) return String(notesWarning);
+  if (request?.sophia_notes_checked) return 'No encontré seguimientos registrados para este ticket.';
+  return '';
 }
 
 function createNotesDetailBlock(notes) {
