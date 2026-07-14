@@ -1202,7 +1202,6 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
         'created_time',
         'due_by_time',
         'last_updated_time',
-        'updated_time',
         'category'
       ]);
     }
@@ -1210,6 +1209,7 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
     if (args.status) {
       delete args.filter_by;
     } else {
+      delete args.status;
       args.filter_by = args.filter_by || inferRequestFilterFromMessage(message) || 'All_Requests';
     }
   }
