@@ -2162,24 +2162,29 @@ function createTicketsAdaptiveCard(toolOutput) {
         getDisplayName(request.technician) || 'Sin asignar'
       ], { shade: index % 2 === 1 }));
 
-  const body = [
-    {
-      type: 'TextBlock',
-      text: isMciResult ? 'MCI encontradas' : 'Tickets encontrados',
-      weight: 'Bolder',
-      size: 'Medium',
-      wrap: true
-    },
-    {
-      type: 'TextBlock',
-      text: summaryText,
-      isSubtle: true,
-      spacing: 'Small',
-      wrap: true
-    },
-    ...(headerRow ? [headerRow] : []),
-    ...rows
-  ];
+  const body = isMciResult
+    ? [
+        createMciListHeaderBlock(summaryText),
+        ...rows
+      ]
+    : [
+        {
+          type: 'TextBlock',
+          text: 'Tickets encontrados',
+          weight: 'Bolder',
+          size: 'Medium',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: summaryText,
+          isSubtle: true,
+          spacing: 'Small',
+          wrap: true
+        },
+        ...(headerRow ? [headerRow] : []),
+        ...rows
+      ];
 
   if (isMciResult) {
     const commentLines = visibleRequests
@@ -2212,7 +2217,7 @@ function createTicketsAdaptiveCard(toolOutput) {
   body.push(createResultOptionsBlock({ isMciResult, hasResults: visibleRequests.length > 0 }));
 
   if (visibleRequests.length === 0) {
-    body.splice(2, 1, {
+    body.splice(isMciResult ? 1 : 2, 1, {
       type: 'TextBlock',
       text: isMciResult ? 'No encontré MCI para ese criterio.' : 'No encontré tickets para ese criterio.',
       wrap: true,
@@ -2639,6 +2644,57 @@ function createTicketTableRow(values, options = {}) {
   };
 }
 
+function createMciListHeaderBlock(summaryText) {
+  return {
+    type: 'Container',
+    style: 'emphasis',
+    bleed: true,
+    spacing: 'None',
+    items: [
+      {
+        type: 'ColumnSet',
+        columns: [
+          {
+            type: 'Column',
+            width: 'stretch',
+            items: [
+              {
+                type: 'TextBlock',
+                text: 'MCI encontradas',
+                weight: 'Bolder',
+                size: 'Medium',
+                wrap: true
+              },
+              {
+                type: 'TextBlock',
+                text: summaryText,
+                isSubtle: true,
+                spacing: 'None',
+                wrap: true
+              }
+            ]
+          },
+          {
+            type: 'Column',
+            width: 'auto',
+            verticalContentAlignment: 'Center',
+            items: [
+              {
+                type: 'TextBlock',
+                text: 'MCI',
+                color: 'Accent',
+                weight: 'Bolder',
+                size: 'Small',
+                wrap: false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+}
+
 function createMciListItemBlock(request, options = {}) {
   const mciId = `#${request.id || '-'}`;
   const subject = truncateText(request.subject || 'Sin asunto', 140);
@@ -2650,7 +2706,7 @@ function createMciListItemBlock(request, options = {}) {
   return {
     type: 'Container',
     style: options.shade ? 'accent' : 'default',
-    spacing: 'Small',
+    spacing: 'Medium',
     separator: true,
     items: [
       {
@@ -2664,6 +2720,7 @@ function createMciListItemBlock(request, options = {}) {
                 type: 'TextBlock',
                 text: mciId,
                 weight: 'Bolder',
+                color: 'Accent',
                 wrap: false,
                 size: 'Small'
               }
@@ -2681,6 +2738,22 @@ function createMciListItemBlock(request, options = {}) {
                 size: 'Small'
               }
             ]
+          },
+          {
+            type: 'Column',
+            width: 'auto',
+            verticalContentAlignment: 'Center',
+            items: [
+              {
+                type: 'TextBlock',
+                text: progress,
+                weight: 'Bolder',
+                color: getMciProgressColor(progress),
+                wrap: false,
+                size: 'Medium',
+                horizontalAlignment: 'Right'
+              }
+            ]
           }
         ]
       },
@@ -2689,7 +2762,6 @@ function createMciListItemBlock(request, options = {}) {
         spacing: 'Small',
         facts: [
           { title: 'Líder', value: leader },
-          { title: 'Avance', value: progress },
           { title: 'Actualización', value: updated }
         ]
       },
@@ -2703,6 +2775,14 @@ function createMciListItemBlock(request, options = {}) {
       }
     ]
   };
+}
+
+function getMciProgressColor(progress) {
+  const value = Number(String(progress || '').replace('%', '').trim());
+  if (Number.isNaN(value)) return 'Default';
+  if (value >= 90) return 'Good';
+  if (value >= 50) return 'Accent';
+  return 'Warning';
 }
 
 function getDisplayName(value) {
