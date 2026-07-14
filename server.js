@@ -1865,6 +1865,9 @@ async function runSupportTurn({
 
     let toolOutput = toolResult.content[0].text;
     if (aiDecision.tool_name === 'sdp_list_requests') {
+      toolOutput = await retryMciLeaderSearchAccentInsensitive(toolOutput, preparedArgs, message);
+    }
+    if (aiDecision.tool_name === 'sdp_list_requests') {
       toolOutput = scopeListToolOutputForUser(toolOutput, user, message);
     }
     if (aiDecision.tool_name === 'sdp_get_request_details') {
@@ -2267,6 +2270,63 @@ function scopeListToolOutputForUser(toolOutput, user, message = '') {
     },
     requests: scopedRequests
   }, null, 2);
+}
+
+async function retryMciLeaderSearchAccentInsensitive(toolOutput, preparedArgs = {}, message = '') {
+  if (!isMciListRequest(message) || !preparedArgs.mci_leader_name) return toolOutput;
+
+  let data;
+  try {
+    data = JSON.parse(toolOutput);
+  } catch {
+    return toolOutput;
+  }
+
+  const requests = Array.isArray(data?.requests) ? data.requests : [];
+  const rowCount = Number(data?.list_info?.row_count ?? requests.length);
+  if (requests.length > 0 || rowCount > 0) return toolOutput;
+
+  const targetLeader = normalizeComparableText(preparedArgs.mci_leader_name);
+  if (!targetLeader) return toolOutput;
+
+  const fallbackArgs = {
+    ...preparedArgs,
+    mci_only: true,
+    limit: Math.max(Number(preparedArgs.limit) || 0, 200)
+  };
+  delete fallbackArgs.mci_leader_name;
+
+  try {
+    console.warn(`[SDP] Reintentando búsqueda MCI sin sensibilidad a acentos para líder: ${preparedArgs.mci_leader_name}`);
+    const fallbackResult = await callMcpTool('sdp_list_requests', fallbackArgs);
+    const fallbackText = fallbackResult.content?.[0]?.text;
+    const fallbackData = JSON.parse(fallbackText);
+    const fallbackRequests = Array.isArray(fallbackData?.requests) ? fallbackData.requests : [];
+    const filteredRequests = fallbackRequests.filter((request) => {
+      const leader = normalizeComparableText(getMciLeaderValue(request));
+      return leader && (leader === targetLeader || leader.includes(targetLeader) || targetLeader.includes(leader));
+    });
+
+    return JSON.stringify({
+      ...fallbackData,
+      result_type: 'mci',
+      list_info: {
+        ...(fallbackData.list_info || {}),
+        row_count: filteredRequests.length,
+        has_more_rows: false,
+        sophia_accent_insensitive: true,
+        search_criteria: {
+          condition: 'normalized_contains',
+          field: 'udf_fields.udf_pick_1503',
+          value: preparedArgs.mci_leader_name
+        }
+      },
+      requests: filteredRequests
+    }, null, 2);
+  } catch (error) {
+    console.warn(`[SDP] No se pudo aplicar respaldo sin acentos para MCI: ${error.message}`);
+    return toolOutput;
+  }
 }
 
 function createResultOptionsBlock({ isMciResult, hasResults }) {
