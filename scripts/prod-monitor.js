@@ -131,13 +131,15 @@ async function checkTeamsAudit() {
   const cards = events.filter((event) => event.format === 'adaptive_card');
   const errors = events.filter((event) => String(event.outcome || '').includes('error'));
   const last = events.at(-1);
-  const status = errors.length ? 'warn' : received.length && replies.length ? 'ok' : 'warn';
+  const missingReplies = Math.max(0, received.length - replies.length);
+  const status = errors.length || missingReplies > 0 ? 'warn' : 'ok';
   const detail = [
     `window=${WINDOW_MINUTES}m`,
     `messages=${received.length}`,
     `replies=${replies.length}`,
     `cards=${cards.length}`,
     `errors=${errors.length}`,
+    `missingReplies=${missingReplies}`,
     last ? `last=${last.timestamp} ${last.outcome}` : 'last=n/a'
   ].join(' ');
   addCheck('Teams audit', status, detail);

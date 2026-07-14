@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.1.5] - 2026-07-14
+
+### Ops
+- `prod:monitor` ya no alerta cuando no hay actividad de Teams en la ventana revisada.
+- `Teams audit` ahora marca WARN solo si hay errores o mensajes recibidos sin respuesta registrada.
+
 ## [0.1.4] - 2026-07-14
 
 ### Ops
