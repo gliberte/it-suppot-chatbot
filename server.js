@@ -2385,6 +2385,19 @@ async function executeConfirmedAction(action, user, session = null) {
   }
 
   if (action.toolName === 'sdp_add_note' && confirmedArgs?.request_id) {
+    const noteVerification = getConfirmedNoteVerification(toolResult);
+    if (noteVerification?.checked && !noteVerification.found) {
+      return [
+        `ServiceDesk Plus aceptó la operación para el ticket #${confirmedArgs.request_id}, pero no pude verificar que el seguimiento aparezca al consultar las notas.`,
+        noteVerification.error ? `Detalle técnico: ${noteVerification.error}` : `Notas encontradas después de guardar: ${noteVerification.count || 0}.`,
+        '',
+        '**Opciones**',
+        `- Ver detalle del ticket #${confirmedArgs.request_id}`,
+        `- Intentar agregar el seguimiento nuevamente`,
+        '- Revisar configuración de notas en SDP'
+      ].join('\n');
+    }
+
     return [
       `Listo, agregué el seguimiento al ticket #${confirmedArgs.request_id}.`,
       '',
@@ -2396,6 +2409,15 @@ async function executeConfirmedAction(action, user, session = null) {
   }
 
   return summarizeToolOutput(toolResult.content[0].text);
+}
+
+function getConfirmedNoteVerification(toolResult) {
+  try {
+    const data = JSON.parse(toolResult?.content?.[0]?.text || '{}');
+    return data?.sophia_note_verification || null;
+  } catch {
+    return null;
+  }
 }
 
 function prepareConfirmedActionArgs(action) {
