@@ -2149,29 +2149,18 @@ function createTicketsAdaptiveCard(toolOutput) {
   const hasMoreRows = totalRows > 0 && (Boolean(data?.list_info?.has_more_rows) || requests.length > visibleRequests.length);
   const summaryText = `Encontré ${totalRows} ${itemLabel}${totalRows === 1 ? '' : 's'}.`;
 
-  const headerValues = isMciResult
-    ? ['MCI', 'Asunto', 'Líder', 'Avance', 'Predictiva', 'Actualización']
-    : ['Ticket', 'Asunto', 'Estado', 'Prioridad', 'Técnico'];
-  const headerRow = createTicketTableRow(headerValues, { isHeader: true });
-  const rows = visibleRequests.map((request, index) => {
-    const values = isMciResult
-      ? [
-          `#${request.id || '-'}`,
-          truncateText(request.subject || 'Sin asunto', 64),
-          getMciLeaderDisplayValue(request) || 'Sin asignar',
-          getMciProgressValue(request) || '-',
-          truncateText(getMciPredictiveValue(request) || '-', 24),
-          getLastUpdatedValue(request) || '-'
-        ]
-      : [
-          `#${request.id || '-'}`,
-          truncateText(request.subject || 'Sin asunto', 64),
-          getDisplayName(request.status) || '-',
-          getDisplayName(request.priority) || '-',
-          getDisplayName(request.technician) || 'Sin asignar'
-        ];
-    return createTicketTableRow(values, { shade: index % 2 === 1 });
-  });
+  const headerRow = isMciResult
+    ? null
+    : createTicketTableRow(['Ticket', 'Asunto', 'Estado', 'Prioridad', 'Técnico'], { isHeader: true });
+  const rows = isMciResult
+    ? visibleRequests.map((request, index) => createMciListItemBlock(request, { shade: index % 2 === 1 }))
+    : visibleRequests.map((request, index) => createTicketTableRow([
+        `#${request.id || '-'}`,
+        truncateText(request.subject || 'Sin asunto', 64),
+        getDisplayName(request.status) || '-',
+        getDisplayName(request.priority) || '-',
+        getDisplayName(request.technician) || 'Sin asignar'
+      ], { shade: index % 2 === 1 }));
 
   const body = [
     {
@@ -2188,7 +2177,7 @@ function createTicketsAdaptiveCard(toolOutput) {
       spacing: 'Small',
       wrap: true
     },
-    headerRow,
+    ...(headerRow ? [headerRow] : []),
     ...rows
   ];
 
@@ -2645,6 +2634,72 @@ function createTicketTableRow(values, options = {}) {
             }
           ]
         }))
+      }
+    ]
+  };
+}
+
+function createMciListItemBlock(request, options = {}) {
+  const mciId = `#${request.id || '-'}`;
+  const subject = truncateText(request.subject || 'Sin asunto', 140);
+  const leader = getMciLeaderDisplayValue(request) || 'Sin asignar';
+  const progress = getMciProgressValue(request) || '-';
+  const updated = getLastUpdatedValue(request) || '-';
+  const predictive = truncateText(getMciPredictiveValue(request) || '-', 160);
+
+  return {
+    type: 'Container',
+    style: options.shade ? 'accent' : 'default',
+    spacing: 'Small',
+    separator: true,
+    items: [
+      {
+        type: 'ColumnSet',
+        columns: [
+          {
+            type: 'Column',
+            width: 'auto',
+            items: [
+              {
+                type: 'TextBlock',
+                text: mciId,
+                weight: 'Bolder',
+                wrap: false,
+                size: 'Small'
+              }
+            ]
+          },
+          {
+            type: 'Column',
+            width: 'stretch',
+            items: [
+              {
+                type: 'TextBlock',
+                text: subject,
+                weight: 'Bolder',
+                wrap: true,
+                size: 'Small'
+              }
+            ]
+          }
+        ]
+      },
+      {
+        type: 'FactSet',
+        spacing: 'Small',
+        facts: [
+          { title: 'Líder', value: leader },
+          { title: 'Avance', value: progress },
+          { title: 'Actualización', value: updated }
+        ]
+      },
+      {
+        type: 'TextBlock',
+        text: `Predictiva: ${predictive}`,
+        wrap: true,
+        size: 'Small',
+        isSubtle: true,
+        spacing: 'Small'
       }
     ]
   };
