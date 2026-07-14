@@ -79,6 +79,35 @@ Con ventana personalizada:
 */10 * * * * cd /opt/sophia/it-support-chatbot && npm run prod:monitor:write -- --minutes 15 >/dev/null 2>&1
 ```
 
+## Reporte Diario
+
+Generar reporte diario manual:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:daily-report
+```
+
+Generar para una fecha especifica:
+
+```bash
+npm run prod:daily-report -- --date 2026-07-14
+```
+
+Salida:
+
+```text
+reports/daily/sophia-daily-YYYY-MM-DD.md
+```
+
+Cron recomendado todos los dias a las 7:30 a.m.:
+
+```cron
+30 7 * * * cd /opt/sophia/it-support-chatbot && npm run prod:daily-report >/dev/null 2>&1
+```
+
+El reporte resume actividad Teams, herramientas usadas, tickets creados, errores, confirmaciones y cambios de alerta del monitor.
+
 Tambien resume actividad reciente:
 
 - `Nginx Teams hits`: cuenta accesos recientes en Nginx a `/api/teams/messages` y `/api/teams/health`.

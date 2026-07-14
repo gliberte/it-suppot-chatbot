@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.2.0] - 2026-07-14
+
+### Added
+- Agregado `npm run prod:daily-report` para generar reportes diarios Markdown de Sophia.
+- El reporte resume actividad Teams, uso de herramientas, tickets creados, errores, confirmaciones y alertas operativas.
+- Los reportes diarios se generan en `reports/daily/` y quedan ignorados por git.
+
 ## [0.1.5] - 2026-07-14
 
 ### Ops

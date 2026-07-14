@@ -1,7 +1,7 @@
 {
   "name": "it-support-chatbot",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,7 @@
     "routing:check": "node scripts/check-routing.js",
     "prod:backup": "node scripts/prod-backup.js",
     "prod:check": "node scripts/prod-healthcheck.js",
+    "prod:daily-report": "node scripts/prod-daily-report.js",
     "prod:deploy-check": "node scripts/prod-deploy-check.js",
     "prod:monitor": "node scripts/prod-monitor.js",
     "prod:monitor:write": "node scripts/prod-monitor-write.js",
