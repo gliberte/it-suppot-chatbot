@@ -1470,6 +1470,145 @@ function sanitizeCreateRequestArgs(args) {
   delete args.urgency;
 }
 
+const SUPPORT_DIAGNOSTIC_PLAYBOOKS = [
+  {
+    routes: ['computer_monitor'],
+    label: 'monitor o pantalla',
+    signals: ['monitor', 'pantalla', 'display', 'lineas', 'líneas', 'rayas', 'sin imagen'],
+    evidence: ['cable', 'hdmi', 'displayport', 'vga', 'otro monitor', 'segunda pantalla', 'reinicie', 'reinicié', 'probé', 'probe', 'parpadea', 'lineas', 'líneas', 'rayas', 'sin imagen', 'ubicacion', 'ubicación'],
+    questions: [
+      '¿El monitor enciende o queda totalmente sin imagen?',
+      '¿Ya probaste otro cable/puerto o reiniciar el equipo?',
+      '¿Aparecen líneas, parpadeo o algún mensaje en pantalla?'
+    ]
+  },
+  {
+    routes: ['internet_access', 'internet_slow', 'network_wifi', 'network_local', 'network_vpn'],
+    label: 'red o internet',
+    signals: ['internet', 'wifi', 'wi fi', 'red', 'vpn', 'conexion', 'conexión', 'lento', 'lentitud'],
+    evidence: ['wifi', 'cable', 'vpn', 'ubicacion', 'ubicación', 'area', 'área', 'todos', 'varios', 'solo yo', 'solo mi', 'reinicie', 'reinicié', 'probé', 'probe', 'desde cuando', 'desde cuándo'],
+    questions: [
+      '¿Estás por WiFi, cable o VPN?',
+      '¿Le ocurre solo a tu equipo o también a otros usuarios del área?',
+      '¿Desde cuándo ocurre y en qué ubicación estás?'
+    ]
+  },
+  {
+    routes: ['printer'],
+    label: 'impresora',
+    signals: ['impresora', 'imprimir', 'zebra', 'honeywell', 'etiqueta', 'atascado'],
+    evidence: ['modelo', 'zebra', 'honeywell', 'atasco', 'papel', 'etiqueta', 'cola', 'error', 'luces', 'ubicacion', 'ubicación', 'probé', 'probe', 'reinicie', 'reinicié'],
+    questions: [
+      '¿Qué modelo o ubicación tiene la impresora?',
+      '¿Muestra algún error, luz o papel atascado?',
+      '¿El problema ocurre con todos los usuarios o solo desde tu equipo?'
+    ]
+  },
+  {
+    routes: ['sap_access', 'sap', 'sap_reporting'],
+    label: 'SAP',
+    signals: ['sap', 'business one', 'b1', 'query', 'reporte', 'informe'],
+    evidence: ['mensaje', 'error', 'modulo', 'módulo', 'usuario', 'ambiente', 'ruta', 'reporte', 'query', 'desde cuando', 'desde cuándo'],
+    questions: [
+      '¿Cuál es el mensaje de error exacto o la pantalla donde falla?',
+      '¿En qué módulo, reporte o ruta de SAP ocurre?',
+      '¿Te ocurre solo a ti o a más usuarios?'
+    ]
+  },
+  {
+    routes: ['peripheral_mouse', 'peripheral_keyboard', 'peripheral_audio', 'peripheral'],
+    label: 'accesorio o periférico',
+    signals: ['mouse', 'raton', 'ratón', 'teclado', 'audifono', 'audífono', 'headset', 'microfono', 'micrófono', 'periferico', 'periférico'],
+    evidence: ['usb', 'bluetooth', 'bateria', 'batería', 'otro puerto', 'otro equipo', 'probé', 'probe', 'funciona intermitente', 'no enciende', 'dañado', 'danado'],
+    questions: [
+      '¿Es USB, Bluetooth o integrado al equipo?',
+      '¿Ya probaste otro puerto o usarlo en otro equipo?',
+      '¿Falla totalmente o funciona de forma intermitente?'
+    ]
+  },
+  {
+    routes: ['mobile_device'],
+    label: 'celular corporativo',
+    signals: ['celular', 'telefono', 'teléfono', 'movil', 'móvil', 'iphone', 'android'],
+    evidence: ['modelo', 'pantalla', 'golpe', 'agua', 'no enciende', 'aplicacion', 'aplicación', 'linea', 'línea', 'sim', 'imei'],
+    questions: [
+      '¿Qué modelo de celular es?',
+      '¿La falla es física, de encendido, de línea/SIM o de una aplicación?',
+      '¿Hubo golpe, humedad o algún mensaje de error?'
+    ]
+  },
+  {
+    routes: ['password'],
+    label: 'cuenta o contraseña',
+    signals: ['contraseña', 'clave', 'password', 'bloqueada', 'bloqueado', 'login', 'iniciar sesion', 'iniciar sesión'],
+    evidence: ['windows', 'sap', 'correo', 'vpn', 'ad', 'mensaje', 'bloqueado', 'vencida', 'expirada', 'usuario'],
+    questions: [
+      '¿El problema es con Windows/AD, SAP, correo, VPN u otro sistema?',
+      '¿La cuenta aparece bloqueada, la contraseña venció o el sistema muestra otro mensaje?',
+      '¿Necesitas desbloqueo o restablecimiento de contraseña?'
+    ]
+  }
+];
+
+function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', history = [] }) {
+  if (toolName !== 'sdp_create_request') return null;
+
+  const text = [
+    message,
+    args.subject,
+    args.description
+  ].filter(Boolean).join(' ');
+
+  if (shouldBypassDiagnostic(text, history)) return null;
+
+  const routeName = args.sophia_classification?.routing || resolveTicketRouting(args).name;
+  const playbook = findDiagnosticPlaybook(routeName, text);
+  if (!playbook) return null;
+
+  if (hasEnoughDiagnosticEvidence(text, playbook)) return null;
+
+  return [
+    `Entiendo. Antes de crear el ticket de ${playbook.label}, necesito afinar un poco el diagnóstico para que llegue mejor clasificado y con datos útiles para el técnico.`,
+    '',
+    ...playbook.questions.map((question) => `- ${question}`),
+    '',
+    'Respóndeme con lo que sepas. Si el caso es urgente o prefieres registrarlo ya, dime **crear de todos modos** y preparo la solicitud con la información disponible.'
+  ].join('\n');
+}
+
+function findDiagnosticPlaybook(routeName, text) {
+  const normalizedText = normalizeRoutingText(text);
+  return SUPPORT_DIAGNOSTIC_PLAYBOOKS.find((playbook) => playbook.routes.includes(routeName))
+    || SUPPORT_DIAGNOSTIC_PLAYBOOKS.find((playbook) => playbook.signals.some((signal) => normalizedText.includes(normalizeRoutingText(signal))));
+}
+
+function hasEnoughDiagnosticEvidence(text, playbook) {
+  const normalizedText = normalizeRoutingText(text);
+  const wordCount = normalizedText.split(/\s+/).filter(Boolean).length;
+  const evidenceCount = playbook.evidence
+    .filter((signal) => normalizedText.includes(normalizeRoutingText(signal)))
+    .length;
+
+  return wordCount >= 28 || evidenceCount >= 2;
+}
+
+function shouldBypassDiagnostic(text, history = []) {
+  const normalizedText = normalizeRoutingText(text);
+  if (/\b(crear de todos modos|registralo ya|regístralo ya|abrelo ya|ábrelo ya|sin diagnostico|sin diagnóstico|urgente|prioridad alta)\b/i.test(text)) {
+    return true;
+  }
+
+  const recentAssistant = normalizeChatHistory(history)
+    .filter((entry) => entry.role === 'assistant')
+    .slice(-2)
+    .map((entry) => normalizeRoutingText(entry.content))
+    .join(' ');
+
+  return recentAssistant.includes('antes de crear el ticket') &&
+    recentAssistant.includes('crear de todos modos') &&
+    normalizedText.split(/\s+/).filter(Boolean).length >= 3;
+}
+
 function summarizeTicketClassificationForAudit(classification) {
   const evidence = classification?.evidence?.[0];
   return {
@@ -1827,6 +1966,18 @@ async function runSupportTurn({
     } catch (error) {
       await auditToolCall({ user, toolName: aiDecision.tool_name, args: preparedArgs, outcome: 'authorization_denied' });
       onText(error.message);
+      return;
+    }
+
+    const diagnosticPrompt = getCreateRequestDiagnosticPrompt({
+      toolName: aiDecision.tool_name,
+      args: preparedArgs,
+      message,
+      history
+    });
+    if (diagnosticPrompt) {
+      await auditToolCall({ user, toolName: aiDecision.tool_name, args: preparedArgs, outcome: 'diagnostic_requested' });
+      onText(diagnosticPrompt);
       return;
     }
 
