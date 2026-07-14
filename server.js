@@ -1865,7 +1865,7 @@ async function runSupportTurn({
 
     let toolOutput = toolResult.content[0].text;
     if (aiDecision.tool_name === 'sdp_list_requests') {
-      toolOutput = await retryMciLeaderSearchAccentInsensitive(toolOutput, preparedArgs, message);
+      toolOutput = await retryPersonSearchAccentInsensitive(toolOutput, preparedArgs, message);
     }
     if (aiDecision.tool_name === 'sdp_list_requests') {
       toolOutput = scopeListToolOutputForUser(toolOutput, user, message);
@@ -2272,8 +2272,9 @@ function scopeListToolOutputForUser(toolOutput, user, message = '') {
   }, null, 2);
 }
 
-async function retryMciLeaderSearchAccentInsensitive(toolOutput, preparedArgs = {}, message = '') {
-  if (!isMciListRequest(message) || !preparedArgs.mci_leader_name) return toolOutput;
+async function retryPersonSearchAccentInsensitive(toolOutput, preparedArgs = {}, message = '') {
+  const search = getAccentInsensitivePersonSearch(preparedArgs, message);
+  if (!search) return toolOutput;
 
   let data;
   try {
@@ -2286,30 +2287,33 @@ async function retryMciLeaderSearchAccentInsensitive(toolOutput, preparedArgs = 
   const rowCount = Number(data?.list_info?.row_count ?? requests.length);
   if (requests.length > 0 || rowCount > 0) return toolOutput;
 
-  const targetLeader = normalizeComparableText(preparedArgs.mci_leader_name);
-  if (!targetLeader) return toolOutput;
+  const targetName = normalizeComparableText(search.value);
+  if (!targetName) return toolOutput;
 
   const fallbackArgs = {
     ...preparedArgs,
-    mci_only: true,
     limit: Math.max(Number(preparedArgs.limit) || 0, 200)
   };
-  delete fallbackArgs.mci_leader_name;
+  delete fallbackArgs[search.argName];
 
   try {
-    console.warn(`[SDP] Reintentando búsqueda MCI sin sensibilidad a acentos para líder: ${preparedArgs.mci_leader_name}`);
+    console.warn(`[SDP] Reintentando búsqueda sin sensibilidad a acentos para ${search.label}: ${search.value}`);
     const fallbackResult = await callMcpTool('sdp_list_requests', fallbackArgs);
     const fallbackText = fallbackResult.content?.[0]?.text;
     const fallbackData = JSON.parse(fallbackText);
     const fallbackRequests = Array.isArray(fallbackData?.requests) ? fallbackData.requests : [];
     const filteredRequests = fallbackRequests.filter((request) => {
-      const leader = normalizeComparableText(getMciLeaderValue(request));
-      return leader && (leader === targetLeader || leader.includes(targetLeader) || targetLeader.includes(leader));
+      const candidateName = normalizeComparableText(search.getValue(request));
+      return candidateName && (
+        candidateName === targetName ||
+        candidateName.includes(targetName) ||
+        targetName.includes(candidateName)
+      );
     });
 
     return JSON.stringify({
       ...fallbackData,
-      result_type: 'mci',
+      result_type: isMciListRequest(message) ? 'mci' : fallbackData.result_type,
       list_info: {
         ...(fallbackData.list_info || {}),
         row_count: filteredRequests.length,
@@ -2317,16 +2321,44 @@ async function retryMciLeaderSearchAccentInsensitive(toolOutput, preparedArgs = 
         sophia_accent_insensitive: true,
         search_criteria: {
           condition: 'normalized_contains',
-          field: 'udf_fields.udf_pick_1503',
-          value: preparedArgs.mci_leader_name
+          field: search.field,
+          value: search.value
         }
       },
       requests: filteredRequests
     }, null, 2);
   } catch (error) {
-    console.warn(`[SDP] No se pudo aplicar respaldo sin acentos para MCI: ${error.message}`);
+    console.warn(`[SDP] No se pudo aplicar respaldo sin acentos: ${error.message}`);
     return toolOutput;
   }
+}
+
+function getAccentInsensitivePersonSearch(preparedArgs = {}, message = '') {
+  if (isMciListRequest(message) && preparedArgs.mci_leader_name) {
+    return {
+      argName: 'mci_leader_name',
+      field: 'udf_fields.udf_pick_1503',
+      label: 'Líder de MCI',
+      value: preparedArgs.mci_leader_name,
+      getValue: getMciLeaderValue
+    };
+  }
+
+  if (preparedArgs.assigned_technician_name) {
+    return {
+      argName: 'assigned_technician_name',
+      field: 'udf_fields.udf_pick_2701',
+      label: 'Técnico asignado',
+      value: preparedArgs.assigned_technician_name,
+      getValue: getAssignedTechnicianValue
+    };
+  }
+
+  return null;
+}
+
+function getAssignedTechnicianValue(request) {
+  return getDisplayName(request?.udf_fields?.udf_pick_2701) || getDisplayName(request?.technician);
 }
 
 function createResultOptionsBlock({ isMciResult, hasResults }) {
