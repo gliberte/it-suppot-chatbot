@@ -1069,7 +1069,7 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '') {
     args.requester = user.name;
     args.requester_id = getRequesterId(user);
     const classification = await classifyTicketWithKnowledge({ ...args, message }, user);
-    applyTicketClassificationToArgs(args, classification);
+    applyTicketClassificationToArgs(args, classification, message);
     sanitizeCreateRequestArgs(args);
   }
 
@@ -1451,18 +1451,36 @@ function createTicketClassificationReason(routing, topEvidence) {
   return `${parts.join('; ')}.`;
 }
 
-function applyTicketClassificationToArgs(args, classification) {
+function applyTicketClassificationToArgs(args, classification, originalMessage = '') {
   const suggestion = classification?.suggestion || {};
   args.subject = args.subject || suggestion.subject;
   args.category = suggestion.category;
   args.subcategory = suggestion.subcategory;
-  args.priority = inferPriorityFromText([args.subject, args.description].filter(Boolean).join(' ')) || suggestion.priority;
+  args.priority = resolveCreateRequestPriority(args, suggestion, originalMessage);
   args.request_type = suggestion.request_type;
   args.udf_fields = {
     ...(args.udf_fields || {}),
     ...(suggestion.udf_fields || {})
   };
   args.sophia_classification = summarizeTicketClassificationForAudit(classification);
+}
+
+function resolveCreateRequestPriority(args, suggestion, originalMessage = '') {
+  const explicitPriority = inferExplicitPriorityFromText(originalMessage);
+  if (explicitPriority) return explicitPriority;
+
+  const combinedText = [
+    originalMessage,
+    args.subject,
+    args.description
+  ].filter(Boolean).join(' ');
+
+  if (hasHighImpactPriorityEvidence(normalizeRoutingText(combinedText))) return 'Alta';
+
+  const candidate = normalizePriority(args.priority) || normalizePriority(suggestion.priority);
+  if (candidate === 'Alta') return 'Media';
+
+  return candidate || 'Media';
 }
 
 function sanitizeCreateRequestArgs(args) {
@@ -1559,9 +1577,9 @@ function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', h
     args.description
   ].filter(Boolean).join(' ');
 
-  if (shouldBypassDiagnostic(text, history)) return null;
+  if (shouldBypassDiagnostic(message, history)) return null;
 
-  const triagePrompt = getPriorityTriagePrompt(text, history);
+  const triagePrompt = getPriorityTriagePrompt({ message, preparedText: text, history });
   if (triagePrompt) return triagePrompt;
 
   const routeName = args.sophia_classification?.routing || resolveTicketRouting(args).name;
@@ -1579,9 +1597,10 @@ function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', h
   ].join('\n');
 }
 
-function getPriorityTriagePrompt(text, history = []) {
-  const normalizedText = normalizeRoutingText(text);
-  if (inferPriorityFromText(text) || hasPriorityTriageEvidence(normalizedText)) return null;
+function getPriorityTriagePrompt({ message = '', preparedText = '', history = [] }) {
+  const normalizedMessage = normalizeRoutingText(message);
+  const normalizedPreparedText = normalizeRoutingText(preparedText);
+  if (inferPriorityFromText(message) || hasHighImpactPriorityEvidence(normalizedMessage) || hasPriorityTriageEvidence(normalizedPreparedText)) return null;
 
   const recentAssistant = normalizeChatHistory(history)
     .filter((entry) => entry.role === 'assistant')
@@ -1720,11 +1739,18 @@ function normalizePriority(priority) {
 }
 
 function inferPriorityFromText(text) {
+  const explicitPriority = inferExplicitPriorityFromText(text);
+  if (explicitPriority) return explicitPriority;
+  const normalized = normalizeRoutingText(text);
+  if (hasHighImpactPriorityEvidence(normalized)) return 'Alta';
+  return undefined;
+}
+
+function inferExplicitPriorityFromText(text) {
   const normalized = normalizeRoutingText(text);
   if (/\b(prioridad alta|alta prioridad|urgente|critico|critica)\b/.test(normalized)) return 'Alta';
   if (/\b(prioridad baja|baja prioridad)\b/.test(normalized)) return 'Baja';
   if (/\b(prioridad media|media prioridad|prioridad normal|normal)\b/.test(normalized)) return 'Media';
-  if (hasHighImpactPriorityEvidence(normalized)) return 'Alta';
   return undefined;
 }
 
@@ -3798,7 +3824,7 @@ app.post('/api/create-ticket', requireAuth, async (req, res) => {
       requester_id: getRequesterId(req.user)
     };
     const classification = await classifyTicketWithKnowledge(createArgs, req.user);
-    applyTicketClassificationToArgs(createArgs, classification);
+    applyTicketClassificationToArgs(createArgs, classification, description || subject || '');
     sanitizeCreateRequestArgs(createArgs);
 
     const result = await mcpClient.request(

@@ -20,6 +20,9 @@ Formato recomendado:
 - La prioridad sugerida puede elevarse a `Alta` cuando el caso bloquea una operación crítica, afecta a varios usuarios o impacta ventas, despacho, producción o facturación.
 - La clasificación de tickets conserva prioridades explícitas indicadas por el usuario.
 
+### Fixed
+- Evita que una prioridad `Alta` inferida por la IA o por la ruta del catálogo salte el triage cuando el usuario no indicó impacto crítico.
+
 ## [0.2.0] - 2026-07-14
 
 ### Added
