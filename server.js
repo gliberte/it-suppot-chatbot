@@ -137,6 +137,7 @@ function serializeSession(session) {
   return {
     user: session.user,
     history: normalizeChatHistory(session.history || []),
+    operationalMemory: sanitizeOperationalMemory(session.operationalMemory),
     expiresAt: session.expiresAt,
     pendingActions: [...(session.pendingActions || new Map()).entries()].map(([id, action]) => ({
       id,
@@ -160,6 +161,7 @@ function deserializeSession(value) {
   return {
     user: withUserRole(value.user),
     history: normalizeChatHistory(value.history || []),
+    operationalMemory: sanitizeOperationalMemory(value.operationalMemory),
     pendingActions,
     expiresAt: value.expiresAt
   };
@@ -309,10 +311,92 @@ function createSession(user) {
   sessions.set(token, {
     user: normalizedUser,
     expiresAt: Date.now() + SESSION_TTL_MS,
+    operationalMemory: createEmptyOperationalMemory(),
     pendingActions: new Map()
   });
   scheduleRuntimeStateSave();
   return token;
+}
+
+function createEmptyOperationalMemory() {
+  return {
+    lastTicket: null
+  };
+}
+
+function sanitizeOperationalMemory(value = {}) {
+  return {
+    lastTicket: sanitizeTicketMemory(value.lastTicket)
+  };
+}
+
+function sanitizeTicketMemory(ticket) {
+  if (!ticket?.id) return null;
+  return {
+    id: String(ticket.id),
+    subject: truncateText(stripHtml(ticket.subject || ''), 160),
+    status: truncateText(getDisplayName(ticket.status) || ticket.status || '', 80),
+    priority: truncateText(getDisplayName(ticket.priority) || ticket.priority || '', 80),
+    requester: truncateText(getDisplayName(ticket.requester) || ticket.requester || '', 120),
+    technician: truncateText(getDisplayName(ticket.technician) || ticket.technician || '', 120),
+    source: truncateText(ticket.source || 'unknown', 40),
+    updatedAt: ticket.updatedAt || new Date().toISOString()
+  };
+}
+
+function rememberLastTicket(session, ticket, source = 'unknown') {
+  if (!session || !ticket?.id || isMciRequestData(ticket)) return;
+  session.operationalMemory = sanitizeOperationalMemory(session.operationalMemory);
+  session.operationalMemory.lastTicket = sanitizeTicketMemory({
+    id: ticket.id,
+    subject: ticket.subject,
+    status: ticket.status,
+    priority: ticket.priority,
+    requester: ticket.requester,
+    technician: ticket.technician,
+    source,
+    updatedAt: new Date().toISOString()
+  });
+  scheduleRuntimeStateSave();
+}
+
+function rememberLastTicketFromToolOutput(session, toolName, toolOutput) {
+  if (!session || !toolOutput) return;
+
+  let data;
+  try {
+    data = typeof toolOutput === 'string' ? JSON.parse(toolOutput) : toolOutput;
+  } catch {
+    return;
+  }
+
+  if (toolName === 'sdp_get_request_details') {
+    const request = data?.request || data;
+    rememberLastTicket(session, request, 'details');
+    return;
+  }
+
+  if (toolName === 'sdp_list_requests') {
+    const requests = Array.isArray(data?.requests) ? data.requests : [];
+    const firstTicket = requests.find((request) => request?.id && !isMciRequestData(request));
+    rememberLastTicket(session, firstTicket, 'list');
+    return;
+  }
+
+  if (toolName === 'sdp_create_request') {
+    const request = data?.request || data?.response?.request || data;
+    const requestId = request?.id || request?.request_id || data?.operation?.details?.request_id;
+    rememberLastTicket(session, { ...request, id: requestId }, 'created');
+  }
+}
+
+function hasTicketReference(message = '') {
+  const normalized = normalizeRoutingText(message);
+  return /\b(ticket anterior|ultimo ticket|ultima solicitud|solicitud anterior|ese ticket|este ticket|el ticket|ticket reciente|recien creado|creado anteriormente)\b/.test(normalized);
+}
+
+function getLastTicketId(session) {
+  return session?.operationalMemory?.lastTicket?.id || null;
 }
 
 function withUserRole(user) {
@@ -998,7 +1082,7 @@ function normalizeTicketToolDecision(aiDecision, message, user) {
   }
 }
 
-async function prepareToolArgs(toolName, toolArgs, user, message = '') {
+async function prepareToolArgs(toolName, toolArgs, user, message = '', session = null) {
   const args = { ...(toolArgs || {}) };
 
   if (toolName === 'sdp_list_requests') {
@@ -1078,6 +1162,10 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '') {
     applyRelativeMciDatesFromMessage(args.fields, message);
   }
 
+  if (isTicketScopedTool(toolName)) {
+    resolveTicketReferenceArgs(args, message, session);
+  }
+
   if (toolName === 'sdp_update_request' && args.status) {
     args.status = normalizeStatusValue(args.status);
   }
@@ -1087,6 +1175,26 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '') {
   }
 
   return args;
+}
+
+function isTicketScopedTool(toolName) {
+  return [
+    'sdp_get_request_details',
+    'sdp_add_note',
+    'sdp_resolve_request',
+    'sdp_assign_request',
+    'sdp_update_request'
+  ].includes(toolName);
+}
+
+function resolveTicketReferenceArgs(args, message = '', session = null) {
+  if (args.request_id) return;
+  if (!hasTicketReference(message)) return;
+
+  const lastTicketId = getLastTicketId(session);
+  if (lastTicketId) {
+    args.request_id = lastTicketId;
+  }
 }
 
 function normalizeMciUpdateFields(fields = {}) {
@@ -1997,6 +2105,7 @@ async function getRagContextForMessage(message, user) {
 async function runSupportTurn({
   message,
   user,
+  session = null,
   history,
   createPendingActionForUser,
   onStatus,
@@ -2016,7 +2125,11 @@ async function runSupportTurn({
   }
 
   const ragContext = await getRagContextForMessage(message, user);
-  const aiDecision = await AgentOrchestrator.processMessage(message, { user, ragContext }, normalizeChatHistory(history));
+  const aiDecision = await AgentOrchestrator.processMessage(message, {
+    user,
+    ragContext,
+    operationalMemory: sanitizeOperationalMemory(session?.operationalMemory)
+  }, normalizeChatHistory(history));
   normalizeTicketToolDecision(aiDecision, message, user);
   console.log(`[Bridge] IA decidió:`, JSON.stringify(aiDecision, null, 2));
 
@@ -2032,7 +2145,7 @@ async function runSupportTurn({
 
   let preparedArgs;
   try {
-    preparedArgs = await prepareToolArgs(aiDecision.tool_name, aiDecision.tool_args || {}, user, message);
+    preparedArgs = await prepareToolArgs(aiDecision.tool_name, aiDecision.tool_args || {}, user, message, session);
   } catch (error) {
     onText(error.message);
     return;
@@ -2111,6 +2224,7 @@ async function runSupportTurn({
         return;
       }
     }
+    rememberLastTicketFromToolOutput(session, aiDecision.tool_name, toolOutput);
 
     console.log(`[Bridge] Resultado técnico obtenido.`);
 
@@ -2193,7 +2307,7 @@ function pickWorkingMessage(seed, options) {
   return options[score % options.length];
 }
 
-async function executeConfirmedAction(action, user) {
+async function executeConfirmedAction(action, user, session = null) {
   const confirmedArgs = prepareConfirmedActionArgs(action);
   await assertToolAllowedForUser(action.toolName, confirmedArgs, user);
   const toolResult = await callMcpTool(action.toolName, confirmedArgs);
@@ -2206,6 +2320,10 @@ async function executeConfirmedAction(action, user) {
     args: createdRequestId ? { ...confirmedArgs, request_id: createdRequestId } : confirmedArgs,
     outcome: 'confirmed_success'
   });
+  rememberLastTicketFromToolOutput(session, action.toolName, toolResult.content?.[0]?.text);
+  if (action.toolName !== 'sdp_update_mci' && confirmedArgs?.request_id) {
+    rememberLastTicket(session, { id: confirmedArgs.request_id }, action.toolName);
+  }
 
   if (action.toolName === 'sdp_update_mci' && confirmedArgs?.request_id) {
     const details = await callMcpTool('sdp_get_request_details', { request_id: confirmedArgs.request_id });
@@ -3206,6 +3324,7 @@ function getTeamsSession(activity, user) {
   const session = {
     user,
     history: [],
+    operationalMemory: createEmptyOperationalMemory(),
     pendingActions: new Map(),
     expiresAt: Date.now() + SESSION_TTL_MS
   };
@@ -3506,7 +3625,7 @@ async function handleTeamsMessage(context) {
     }
 
     try {
-      const summary = await executeConfirmedAction(action, user);
+      const summary = await executeConfirmedAction(action, user, session);
       session.history = pushChatHistory(session.history, 'assistant', summary?.summaryText || summary);
       scheduleRuntimeStateSave();
       await sendTeamsReply(context, summary);
@@ -3533,7 +3652,7 @@ async function handleTeamsMessage(context) {
     }
 
     try {
-      const summary = await executeConfirmedAction(action, user);
+      const summary = await executeConfirmedAction(action, user, session);
       session.history = pushChatHistory(session.history, 'assistant', summary?.summaryText || summary);
       scheduleRuntimeStateSave();
       await sendTeamsReply(context, summary);
@@ -3557,6 +3676,7 @@ async function handleTeamsMessage(context) {
   await runSupportTurn({
     message: text,
     user,
+    session,
     history: session.history,
     createPendingActionForUser: (action) => createPendingAction(session, action),
     onStatus: () => {},
@@ -3848,6 +3968,7 @@ app.post('/api/create-ticket', requireAuth, async (req, res) => {
       args: createdRequestId ? { ...createArgs, request_id: createdRequestId } : createArgs,
       outcome: 'success'
     });
+    rememberLastTicketFromToolOutput(req.session, 'sdp_create_request', result.content?.[0]?.text);
     res.json(data);
   } catch (error) {
     console.error("Error creando ticket via MCP:", error);
@@ -3875,7 +3996,7 @@ app.post('/api/confirm-action', requireAuth, async (req, res) => {
   }
 
   try {
-    const summary = await executeConfirmedAction(action, req.user);
+    const summary = await executeConfirmedAction(action, req.user, req.session);
     res.json({ success: true, message: summary });
   } catch (error) {
     await auditToolCall({ user: req.user, toolName: action.toolName, args: action.args, outcome: 'confirmed_error', error });
@@ -3907,6 +4028,7 @@ app.post('/api/chat', async (req, res) => {
     await runSupportTurn({
       message,
       user: userContext,
+      session: auth.session,
       history,
       createPendingActionForUser: (action) => createPendingAction(auth.session, action),
       onStatus: (statusMessage) => sendEvent('status', { message: statusMessage }),

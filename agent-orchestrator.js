@@ -48,6 +48,7 @@ REGLAS DE ORO:
 - Cuando el administrador pida buscar tickets normales por técnico asignado, usa sdp_list_requests con tool_args.assigned_technician_name. Para MCI por líder usa mci_leader_name.
 - MCI significa Metas Crucialmente Importantes y son solicitudes especiales de la plantilla PlantMCI. Si el usuario pide MCI, no devuelvas tickets normales; usa sdp_list_requests con mci_only=true. Si un usuario normal pide "mis MCI", interpreta que busca MCI donde él/ella es Líder de MCI, no solamente solicitante.
 - Usa el historial reciente para resolver referencias cortas del usuario. Ejemplo: si antes habló de "mi laptop" y luego dice "no enciende", entiende que se refiere a la laptop.
+- Usa operational_memory.lastTicket para referencias como "ticket anterior", "ese ticket", "último ticket" o "agrega esto al ticket". Si existe un último ticket, puedes usar su ID en request_id; si no existe, pide el ID real.
 - Para crear tickets, resolver tickets, asignar tickets, actualizar tickets o ejecutar automatizaciones, prepara la acción pero asume que el sistema pedirá confirmación explícita antes de ejecutarla.
 - No pidas al usuario campos internos de SDP como udf_pick_2701, udf_pick_*, requester_id, IDs internos, payloads, plantillas o nombres técnicos de campos. Esos campos son responsabilidad de Sophia y de la configuración del backend.
 - Si el historial reciente muestra un error de SDP por un campo interno obligatorio como udf_pick_2701, no inventes que falta tipo de activo, ubicación u otro dato del usuario. Reconoce que es un ajuste interno de configuración y, si corresponde, prepara una nueva solicitud solo cuando el backend pueda completar el campo.
@@ -93,6 +94,7 @@ export class AgentOrchestrator {
           sdpRequesterId: context.user.sdpRequesterId || context.user.id,
           role: context.user.role
         } : null,
+        operational_memory: context.operationalMemory || null,
         retrieved_knowledge: context.ragContext || null
       });
       const historyText = JSON.stringify(history.slice(-8));

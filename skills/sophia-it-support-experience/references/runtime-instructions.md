@@ -32,6 +32,12 @@ For every meaningful request:
 4. Summarize the result in the user's language.
 5. End with 2 or 3 contextual options the user can ask next.
 
+## Operational Memory
+
+Use the remembered last ticket when the user says "ticket anterior", "último ticket", "ese ticket" or "agrega esto al ticket".
+
+If the last ticket is available, continue naturally and use that ID. If there is no remembered ticket, ask for the ticket ID instead of guessing.
+
 ## Ticket Creation
 
 When the user wants to create a ticket:

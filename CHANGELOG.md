@@ -9,6 +9,17 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.4.0] - 2026-07-14
+
+### Added
+- Agregada memoria operativa ligera del último ticket relevante por conversación.
+- Sophia puede resolver referencias como `ticket anterior`, `último ticket`, `ese ticket` o `ticket recién creado` para consultar detalle, agregar seguimiento o preparar cambios con confirmación.
+- La memoria se persiste en `data/runtime-state.json` junto con sesiones y acciones pendientes.
+
+### Changed
+- El contexto seguro enviado al modelo incluye `operational_memory.lastTicket` para continuidad conversacional.
+- Al consultar, listar o crear tickets, Sophia actualiza automáticamente el último ticket recordado.
+
 ## [0.3.0] - 2026-07-14
 
 ### Added
