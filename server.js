@@ -2502,6 +2502,7 @@ function getSummarySystemInstruction(options = {}) {
     ? [
         'Para detalle de ticket, no escribas tablas Markdown en una sola línea. Usa secciones breves: **Resumen**, **Detalle**, **Descripción** y **Opciones**.',
         'En **Detalle**, usa viñetas cortas de una línea por campo si el canal no garantiza tablas. Ejemplo: "- Estado: En Proceso".',
+        'Si el resultado incluye notas o seguimientos, agrega una sección **Seguimientos** con las notas más recientes, sin exceder 5 entradas.',
         'Las opciones deben orientar a ver resolución, agregar seguimiento, crear una solicitud relacionada o consultar tickets similares si aplica.'
       ]
     : toolName === 'sdp_search_user'
@@ -2867,6 +2868,7 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
   ];
   const description = stripHtml(request.description || request.short_description || '');
   const resolution = stripHtml(getResolutionText(request.resolution));
+  const notes = getRequestNotes(request);
 
   const body = [
     {
@@ -2896,6 +2898,10 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
 
   if (resolution) {
     body.push(createDetailTextBlock('Resolución', resolution));
+  }
+
+  if (notes.length > 0) {
+    body.push(createNotesDetailBlock(notes));
   }
 
   body.push(createDetailOptionsBlock(ticketId, request));
@@ -3011,6 +3017,65 @@ function getResolutionText(resolution) {
     || resolution.display_value
     || resolution.name
     || '';
+}
+
+function getRequestNotes(request) {
+  const notes = Array.isArray(request?.notes)
+    ? request.notes
+    : Array.isArray(request?.request_notes)
+      ? request.request_notes
+      : [];
+
+  return notes
+    .map((note) => ({
+      text: stripHtml(getNoteText(note)),
+      author: getDisplayName(note?.created_by || note?.added_by || note?.owner || note?.user),
+      created: getDisplayDate(note?.created_time || note?.added_time || note?.created_at)
+    }))
+    .filter((note) => note.text)
+    .slice(0, 5);
+}
+
+function getNoteText(note) {
+  if (!note) return '';
+  if (typeof note === 'string') return note;
+  return note.description ||
+    note.content ||
+    note.text ||
+    note.notes ||
+    note.note_text ||
+    note.display_value ||
+    '';
+}
+
+function createNotesDetailBlock(notes) {
+  const text = notes
+    .map((note) => {
+      const meta = [note.created, note.author].filter(Boolean).join(' - ');
+      return `${meta ? `${meta}: ` : ''}${truncateText(redactSensitiveText(note.text), 280)}`;
+    })
+    .map((line) => `- ${line}`)
+    .join('\n');
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Seguimientos',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text,
+        wrap: true,
+        spacing: 'Small'
+      }
+    ]
+  };
 }
 
 function createDetailFactRow(label, value) {

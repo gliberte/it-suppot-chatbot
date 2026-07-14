@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.4.1] - 2026-07-14
+
+### Added
+- El detalle de tickets en Teams muestra la sección `Seguimientos` cuando SDP devuelve notas del ticket.
+
 ## [0.4.0] - 2026-07-14
 
 ### Added
