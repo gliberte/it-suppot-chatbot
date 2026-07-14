@@ -1608,7 +1608,9 @@ function getPriorityTriagePrompt({ message = '', preparedText = '', history = []
     .map((entry) => normalizeRoutingText(entry.content))
     .join(' ');
 
-  if (recentAssistant.includes('para calcular la prioridad')) return null;
+  if (recentAssistant.includes('calcular mejor la prioridad') || recentAssistant.includes('afecta solo a una persona')) {
+    return null;
+  }
 
   return [
     'Entiendo. Antes de preparar el ticket, necesito calcular mejor la prioridad para que soporte lo atienda con el nivel correcto.',
@@ -1644,10 +1646,10 @@ function hasPriorityTriageEvidence(normalizedText) {
 
 function countPriorityTriageSignals(normalizedText) {
   return [
-    /\b(solo yo|solo mi|una persona|un usuario|varios usuarios|todos|todo el area|toda el area|area completa|departamento completo|planta completa)\b/,
-    /\b(bloquea|bloqueado|no puedo trabajar|no podemos trabajar|detenido|parado|fuera de servicio|sin operar)\b/,
+    /\b(solo yo|solo mi|solo a mi|solo mi equipo|mi equipo|una persona|un usuario|varios usuarios|todos|todo el area|toda el area|area completa|departamento completo|planta completa)\b/,
+    /\b(bloquea|bloqueado|no puedo trabajar|no podemos trabajar|puedo seguir trabajando|seguir trabajando parcialmente|trabajando parcialmente|parcialmente|detenido|parado|fuera de servicio|sin operar)\b/,
     /\b(ventas|despacho|produccion|facturacion|caja|bodega|operacion|planta)\b/,
-    /\b(desde hoy|desde ayer|desde hace|hace [0-9]+|esta manana|ayer|hoy)\b/
+    /\b(desde hoy|desde ayer|desde hace|hace [0-9]+|esta manana|hoy en la manana|empezo hoy|inicio hoy|ayer|hoy)\b/
   ].filter((pattern) => pattern.test(normalizedText)).length;
 }
 

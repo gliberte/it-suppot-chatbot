@@ -22,6 +22,7 @@ Formato recomendado:
 
 ### Fixed
 - Evita que una prioridad `Alta` inferida por la IA o por la ruta del catálogo salte el triage cuando el usuario no indicó impacto crítico.
+- Evita repetir el triage cuando el usuario ya respondió alcance, bloqueo parcial o fecha de inicio con frases naturales.
 
 ## [0.2.0] - 2026-07-14
 
