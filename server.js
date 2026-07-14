@@ -1456,7 +1456,7 @@ function applyTicketClassificationToArgs(args, classification) {
   args.subject = args.subject || suggestion.subject;
   args.category = suggestion.category;
   args.subcategory = suggestion.subcategory;
-  args.priority = suggestion.priority;
+  args.priority = inferPriorityFromText([args.subject, args.description].filter(Boolean).join(' ')) || suggestion.priority;
   args.request_type = suggestion.request_type;
   args.udf_fields = {
     ...(args.udf_fields || {}),
@@ -1561,6 +1561,9 @@ function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', h
 
   if (shouldBypassDiagnostic(text, history)) return null;
 
+  const triagePrompt = getPriorityTriagePrompt(text, history);
+  if (triagePrompt) return triagePrompt;
+
   const routeName = args.sophia_classification?.routing || resolveTicketRouting(args).name;
   const playbook = findDiagnosticPlaybook(routeName, text);
   if (!playbook) return null;
@@ -1573,6 +1576,30 @@ function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', h
     ...playbook.questions.map((question) => `- ${question}`),
     '',
     'Respóndeme con lo que sepas. Si el caso es urgente o prefieres registrarlo ya, dime **crear de todos modos** y preparo la solicitud con la información disponible.'
+  ].join('\n');
+}
+
+function getPriorityTriagePrompt(text, history = []) {
+  const normalizedText = normalizeRoutingText(text);
+  if (inferPriorityFromText(text) || hasPriorityTriageEvidence(normalizedText)) return null;
+
+  const recentAssistant = normalizeChatHistory(history)
+    .filter((entry) => entry.role === 'assistant')
+    .slice(-2)
+    .map((entry) => normalizeRoutingText(entry.content))
+    .join(' ');
+
+  if (recentAssistant.includes('para calcular la prioridad')) return null;
+
+  return [
+    'Entiendo. Antes de preparar el ticket, necesito calcular mejor la prioridad para que soporte lo atienda con el nivel correcto.',
+    '',
+    '- ¿Afecta solo a una persona, a varios usuarios o a un área completa?',
+    '- ¿Bloquea la operación o puedes seguir trabajando parcialmente?',
+    '- ¿Impacta ventas, despacho, producción, facturación u otra operación crítica?',
+    '- ¿Desde cuándo ocurre?',
+    '',
+    'Respóndeme con lo que sepas. Si quieres registrarlo ya, dime **crear de todos modos**.'
   ].join('\n');
 }
 
@@ -1589,7 +1616,20 @@ function hasEnoughDiagnosticEvidence(text, playbook) {
     .filter((signal) => normalizedText.includes(normalizeRoutingText(signal)))
     .length;
 
-  return wordCount >= 28 || evidenceCount >= 2;
+  return wordCount >= 28 || evidenceCount >= 2 || hasPriorityTriageEvidence(normalizedText);
+}
+
+function hasPriorityTriageEvidence(normalizedText) {
+  return countPriorityTriageSignals(normalizedText) >= 2;
+}
+
+function countPriorityTriageSignals(normalizedText) {
+  return [
+    /\b(solo yo|solo mi|una persona|un usuario|varios usuarios|todos|todo el area|toda el area|area completa|departamento completo|planta completa)\b/,
+    /\b(bloquea|bloqueado|no puedo trabajar|no podemos trabajar|detenido|parado|fuera de servicio|sin operar)\b/,
+    /\b(ventas|despacho|produccion|facturacion|caja|bodega|operacion|planta)\b/,
+    /\b(desde hoy|desde ayer|desde hace|hace [0-9]+|esta manana|ayer|hoy)\b/
+  ].filter((pattern) => pattern.test(normalizedText)).length;
 }
 
 function shouldBypassDiagnostic(text, history = []) {
@@ -1681,10 +1721,20 @@ function normalizePriority(priority) {
 
 function inferPriorityFromText(text) {
   const normalized = normalizeRoutingText(text);
-  if (/\b(prioridad alta|alta prioridad|urgente|critico|critica|crítico|crítica)\b/.test(normalized)) return 'Alta';
+  if (/\b(prioridad alta|alta prioridad|urgente|critico|critica)\b/.test(normalized)) return 'Alta';
   if (/\b(prioridad baja|baja prioridad)\b/.test(normalized)) return 'Baja';
   if (/\b(prioridad media|media prioridad|prioridad normal|normal)\b/.test(normalized)) return 'Media';
+  if (hasHighImpactPriorityEvidence(normalized)) return 'Alta';
   return undefined;
+}
+
+function hasHighImpactPriorityEvidence(normalizedText) {
+  const broadScope = /\b(varios usuarios|todos|todo el area|toda el area|area completa|departamento completo|planta completa)\b/.test(normalizedText);
+  const operationBlocked = /\b(bloquea|bloqueado|no podemos trabajar|detenido|parado|fuera de servicio|sin operar|no funciona nada)\b/.test(normalizedText);
+  const criticalOperation = /\b(ventas|despacho|produccion|facturacion|caja|bodega|operacion|planta)\b/.test(normalizedText);
+  const explicitCriticalImpact = /\b(no podemos facturar|no puedo facturar|no podemos despachar|no puedo despachar|no podemos vender|no puedo vender|produccion detenida|produccion parada|facturacion detenida|despacho detenido)\b/.test(normalizedText);
+
+  return explicitCriticalImpact || (operationBlocked && (broadScope || criticalOperation)) || (broadScope && criticalOperation);
 }
 
 function resolveTicketRouting(args) {

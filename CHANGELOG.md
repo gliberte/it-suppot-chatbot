@@ -9,6 +9,17 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.3.0] - 2026-07-14
+
+### Added
+- Agregado modo triage para priorización antes de preparar tickets sin impacto claro.
+- Sophia ahora pregunta alcance, bloqueo operativo, impacto en procesos críticos y tiempo de ocurrencia para sugerir prioridad más confiable.
+- Agregado playbook RAG `knowledge/playbooks/triage-prioridad.md`.
+
+### Changed
+- La prioridad sugerida puede elevarse a `Alta` cuando el caso bloquea una operación crítica, afecta a varios usuarios o impacta ventas, despacho, producción o facturación.
+- La clasificación de tickets conserva prioridades explícitas indicadas por el usuario.
+
 ## [0.2.0] - 2026-07-14
 
 ### Added

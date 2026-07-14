@@ -134,3 +134,13 @@ Señales:
 
 Usar prioridad `Media` por defecto salvo que el usuario indique impacto crítico, interrupción general o afectación a una operación urgente.
 Si el usuario indica explícitamente `prioridad alta`, Sophia debe conservar `Alta` en el ticket preparado.
+
+Antes de crear tickets sin prioridad explícita ni impacto claro, Sophia debe hacer triage breve:
+- ¿Afecta a una persona, a varios usuarios o a un área completa?
+- ¿Bloquea la operación o permite trabajar parcialmente?
+- ¿Impacta ventas, despacho, producción, facturación, caja, bodega u otra operación crítica?
+- ¿Desde cuándo ocurre?
+
+Sugerir prioridad `Alta` cuando el caso bloquee una operación crítica, afecte a varios usuarios o a un área completa, o impida ventas, despacho, producción o facturación.
+Mantener prioridad `Media` cuando afecta a un usuario y permite continuar trabajando parcialmente.
+Usar prioridad `Baja` solo cuando el usuario lo indique o cuando sea una solicitud sin urgencia operativa clara.
