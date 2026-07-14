@@ -3082,10 +3082,10 @@ function getRequestNotes(request) {
   return notes
     .map((note) => ({
       text: stripHtml(getNoteText(note)),
-      author: getDisplayName(note?.created_by || note?.added_by || note?.owner || note?.user),
-      created: getDisplayDate(note?.created_time || note?.added_time || note?.created_at)
+      author: getDisplayName(note?.created_by || note?.added_by || note?.owner || note?.user || note?.note?.created_by),
+      created: getDisplayDate(note?.created_time || note?.added_time || note?.created_at || note?.note?.created_time)
     }))
-    .filter((note) => note.text)
+    .filter((note) => note.text && note.text !== '[object Object]')
     .slice(0, 5);
 }
 
@@ -3119,16 +3119,51 @@ function extractNotesFromRequestData(value) {
 function getNoteText(note) {
   if (!note) return '';
   if (typeof note === 'string') return note;
-  return note.description ||
-    note.content ||
-    note.text ||
-    note.notes ||
-    note.note_text ||
-    note.note?.description ||
-    note.note?.content ||
-    note.note?.text ||
-    note.display_value ||
-    '';
+  return getNestedTextValue([
+    note.description,
+    note.content,
+    note.text,
+    note.notes,
+    note.note_text,
+    note.display_value,
+    note.value,
+    note.note?.description,
+    note.note?.content,
+    note.note?.text,
+    note.note?.display_value,
+    note.note?.value
+  ]);
+}
+
+function getNestedTextValue(candidates) {
+  for (const candidate of candidates) {
+    const value = coerceTextValue(candidate);
+    if (value) return value;
+  }
+  return '';
+}
+
+function coerceTextValue(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    return value.map(coerceTextValue).filter(Boolean).join(' ');
+  }
+  if (typeof value === 'object') {
+    return getNestedTextValue([
+      value.content,
+      value.description,
+      value.text,
+      value.value,
+      value.display_value,
+      value.name,
+      value.html,
+      value.plain_text,
+      value.note_text
+    ]);
+  }
+  return '';
 }
 
 function getNotesWarning(data, request) {
