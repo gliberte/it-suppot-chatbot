@@ -1059,6 +1059,15 @@ function escapeMarkdownTableValue(value) {
 }
 
 function normalizeTicketToolDecision(aiDecision, message, user) {
+  if (isStaleTicketsRequest(message) && aiDecision?.action !== 'call_tool') {
+    aiDecision.action = 'call_tool';
+    aiDecision.tool_name = 'sdp_list_requests';
+    aiDecision.tool_args = {
+      filter_by: 'Open_Requests'
+    };
+    aiDecision.content = 'Claro, reviso los tickets abiertos y te marco cuáles llevan más tiempo sin actualización.';
+  }
+
   if (shouldConvertUpdateRequestToNote(aiDecision, message)) {
     const toolArgs = aiDecision.tool_args || {};
     aiDecision.tool_name = 'sdp_add_note';
@@ -1178,6 +1187,24 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
     delete args.leader;
     if (isMciListRequest(message)) {
       args.mci_only = true;
+    }
+    if (isStaleTicketsRequest(message)) {
+      args.filter_by = 'Open_Requests';
+      args.stale_only = true;
+      args.stale_days = inferStaleDaysFromMessage(message) || Number(process.env.SOPHIA_STALE_TICKET_DAYS || 3);
+      args.limit = Math.max(Number(args.limit) || 0, Number(process.env.SOPHIA_STALE_TICKET_LIMIT || 20));
+      args.fields_required = mergeFieldsRequired(args.fields_required, [
+        'subject',
+        'status',
+        'priority',
+        'technician',
+        'requester',
+        'created_time',
+        'due_by_time',
+        'last_updated_time',
+        'updated_time',
+        'category'
+      ]);
     }
     args.status = args.status || inferRequestStatusFromMessage(message);
     if (args.status) {
@@ -1381,6 +1408,25 @@ function inferRequestFilterFromMessage(message) {
   if (/\b(cerrad|resuelt|closed|resolved)\w*/i.test(text)) return 'Closed_Requests';
   if (/\b(abiert|pendient|open|progreso|progress)\w*/i.test(text)) return 'Open_Requests';
   return null;
+}
+
+function isStaleTicketsRequest(message = '') {
+  const text = normalizeComparableText(message);
+  return /\b(sin avance|sin actualizacion|sin movimiento|sin seguimiento|rezagad|estancad|necesitan seguimiento|requieren seguimiento|pendientes de seguimiento|sin cambios|sin novedad)\b/.test(text);
+}
+
+function inferStaleDaysFromMessage(message = '') {
+  const text = normalizeComparableText(message);
+  const explicit = text.match(/\b(?:mas de|mayor a|desde hace|hace)\s+(\d{1,2})\s+dias?\b/);
+  if (explicit) return Number(explicit[1]);
+  const plain = text.match(/\b(\d{1,2})\s+dias?\b/);
+  if (plain) return Number(plain[1]);
+  return null;
+}
+
+function mergeFieldsRequired(currentFields, requiredFields) {
+  const fields = Array.isArray(currentFields) ? currentFields : [];
+  return [...new Set([...fields, ...requiredFields])];
 }
 
 function inferRequestStatusFromMessage(message) {
@@ -2262,6 +2308,9 @@ async function runSupportTurn({
     if (aiDecision.tool_name === 'sdp_list_requests') {
       toolOutput = scopeListToolOutputForUser(toolOutput, user, message);
     }
+    if (aiDecision.tool_name === 'sdp_list_requests' && isStaleTicketsRequest(message)) {
+      toolOutput = filterStaleTicketsToolOutput(toolOutput, preparedArgs, message);
+    }
     if (aiDecision.tool_name === 'sdp_get_request_details') {
       const requestData = JSON.parse(toolOutput);
       if (!userCanReadRequest(user, requestData)) {
@@ -2591,6 +2640,10 @@ function createTicketsAdaptiveCard(toolOutput) {
     return null;
   }
 
+  if (data?.result_type === 'stale_tickets') {
+    return createStaleTicketsAdaptiveCard(data);
+  }
+
   const requests = Array.isArray(data?.requests) ? data.requests : [];
   const totalRows = Number(data?.list_info?.row_count || requests.length || 0);
   const isMciResult = data?.result_type === 'mci';
@@ -2685,6 +2738,265 @@ function createTicketsAdaptiveCard(toolOutput) {
       body
     }
   };
+}
+
+function filterStaleTicketsToolOutput(toolOutput, preparedArgs = {}, message = '') {
+  let data;
+  try {
+    data = JSON.parse(toolOutput);
+  } catch {
+    return toolOutput;
+  }
+
+  if (!Array.isArray(data?.requests)) return toolOutput;
+
+  const thresholdDays = Number(preparedArgs.stale_days || inferStaleDaysFromMessage(message) || process.env.SOPHIA_STALE_TICKET_DAYS || 3);
+  const now = Date.now();
+  const requests = data.requests
+    .map((request) => {
+      const updatedAt = getRequestUpdatedTimestamp(request) || getRequestCreatedTimestamp(request);
+      const staleDays = updatedAt ? Math.max(0, Math.floor((now - updatedAt) / (24 * 60 * 60 * 1000))) : null;
+      return {
+        ...request,
+        sophia_stale_days: staleDays,
+        sophia_last_activity: getRequestLastActivityDisplay(request),
+        sophia_followup_suggestion: createStaleTicketSuggestion(request, staleDays)
+      };
+    })
+    .filter((request) => request.sophia_stale_days === null || request.sophia_stale_days >= thresholdDays)
+    .sort((a, b) => (b.sophia_stale_days ?? -1) - (a.sophia_stale_days ?? -1));
+
+  return JSON.stringify({
+    ...data,
+    result_type: 'stale_tickets',
+    sophia_stale_threshold_days: thresholdDays,
+    list_info: {
+      ...(data.list_info || {}),
+      row_count: requests.length,
+      has_more_rows: false
+    },
+    requests
+  }, null, 2);
+}
+
+function createStaleTicketsAdaptiveCard(data) {
+  const requests = Array.isArray(data?.requests) ? data.requests : [];
+  const thresholdDays = Number(data?.sophia_stale_threshold_days || 3);
+  const visibleRequests = requests.slice(0, 8);
+  const summaryText = requests.length
+    ? `Encontré ${requests.length} ticket${requests.length === 1 ? '' : 's'} abierto${requests.length === 1 ? '' : 's'} con ${thresholdDays}+ días sin actualización.`
+    : `No encontré tickets abiertos con ${thresholdDays}+ días sin actualización.`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: 'Tickets que necesitan seguimiento',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: summaryText,
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    }
+  ];
+
+  if (visibleRequests.length > 0) {
+    body.push(...visibleRequests.map((request, index) => createStaleTicketItemBlock(request, { shade: index % 2 === 1 })));
+  } else {
+    body.push({
+      type: 'TextBlock',
+      text: 'No hay tickets que superen el umbral configurado. Puedes pedirme un rango mayor, por ejemplo: tickets sin avance en 1 día.',
+      wrap: true,
+      spacing: 'Medium'
+    });
+  }
+
+  if (requests.length > visibleRequests.length) {
+    body.push({
+      type: 'TextBlock',
+      text: `Mostré 8 de ${requests.length}. Puedes pedirme filtrar por técnico, prioridad o solicitante.`,
+      isSubtle: true,
+      wrap: true,
+      spacing: 'Medium'
+    });
+  }
+
+  body.push({
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Opciones',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: [
+          'Ver detalle del ticket #12345',
+          'Agregar seguimiento al ticket #12345',
+          'Filtrar por Técnico asignado o prioridad'
+        ].map((option) => `- ${option}`).join('\n'),
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
+  });
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createStaleTicketItemBlock(request, options = {}) {
+  const ticketId = `#${request.id || '-'}`;
+  const staleDays = request.sophia_stale_days === null ? 'Sin fecha' : `${request.sophia_stale_days} día${request.sophia_stale_days === 1 ? '' : 's'}`;
+  const suggestion = request.sophia_followup_suggestion || 'Agregar seguimiento solicitando actualización.';
+
+  return {
+    type: 'Container',
+    style: options.shade ? 'accent' : 'default',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'ColumnSet',
+        columns: [
+          {
+            type: 'Column',
+            width: 'auto',
+            items: [
+              {
+                type: 'TextBlock',
+                text: ticketId,
+                weight: 'Bolder',
+                color: 'Accent',
+                wrap: false,
+                size: 'Small'
+              }
+            ]
+          },
+          {
+            type: 'Column',
+            width: 'stretch',
+            items: [
+              {
+                type: 'TextBlock',
+                text: truncateText(request.subject || 'Sin asunto', 120),
+                weight: 'Bolder',
+                wrap: true,
+                size: 'Small'
+              }
+            ]
+          },
+          {
+            type: 'Column',
+            width: 'auto',
+            verticalContentAlignment: 'Center',
+            items: [
+              {
+                type: 'TextBlock',
+                text: staleDays,
+                weight: 'Bolder',
+                color: getStaleDaysColor(request.sophia_stale_days),
+                wrap: false,
+                size: 'Small',
+                horizontalAlignment: 'Right'
+              }
+            ]
+          }
+        ]
+      },
+      {
+        type: 'FactSet',
+        spacing: 'Small',
+        facts: [
+          { title: 'Estado', value: getDisplayName(request.status) || '-' },
+          { title: 'Prioridad', value: getDisplayName(request.priority) || '-' },
+          { title: 'Técnico', value: getDisplayName(request.technician) || getAssignedTechnicianValue(request) || 'Sin asignar' },
+          { title: 'Última actualización', value: request.sophia_last_activity || '-' }
+        ]
+      },
+      {
+        type: 'TextBlock',
+        text: `Sugerencia: ${suggestion}`,
+        wrap: true,
+        size: 'Small',
+        isSubtle: true,
+        spacing: 'Small'
+      }
+    ]
+  };
+}
+
+function createStaleTicketSuggestion(request, staleDays) {
+  const priority = normalizeComparableText(getDisplayName(request.priority));
+  const technician = getDisplayName(request.technician) || getAssignedTechnicianValue(request);
+  if (!technician) return 'Asignar técnico o agregar seguimiento solicitando asignación.';
+  if (priority.includes('alta') || priority.includes('high') || Number(staleDays) >= 5) {
+    return 'Agregar seguimiento pidiendo actualización y validar si requiere escalamiento.';
+  }
+  return 'Agregar seguimiento solicitando estado actual y próximo paso.';
+}
+
+function getStaleDaysColor(days) {
+  if (days === null || days === undefined) return 'Warning';
+  if (Number(days) >= 7) return 'Attention';
+  if (Number(days) >= 3) return 'Warning';
+  return 'Accent';
+}
+
+function getRequestUpdatedTimestamp(request) {
+  return getSdpTimestamp(
+    request?.last_updated_time ||
+    request?.updated_time ||
+    request?.last_update_time ||
+    request?.modified_time ||
+    request?.edit_time
+  );
+}
+
+function getRequestCreatedTimestamp(request) {
+  return getSdpTimestamp(request?.created_time);
+}
+
+function getRequestLastActivityDisplay(request) {
+  return getDisplayDate(
+    request?.last_updated_time ||
+    request?.updated_time ||
+    request?.last_update_time ||
+    request?.modified_time ||
+    request?.edit_time ||
+    request?.created_time
+  );
+}
+
+function getSdpTimestamp(value) {
+  if (!value) return null;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    if (/^\d+$/.test(value)) return Number(value);
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === 'object') {
+    return getSdpTimestamp(value.value || value.display_value || value.name);
+  }
+  return null;
 }
 
 function scopeListToolOutputForUser(toolOutput, user, message = '') {
