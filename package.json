@@ -1,7 +1,7 @@
 {
   "name": "it-support-chatbot",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "prod:backup": "node scripts/prod-backup.js",
     "prod:check": "node scripts/prod-healthcheck.js",
     "prod:deploy-check": "node scripts/prod-deploy-check.js",
+    "prod:monitor": "node scripts/prod-monitor.js",
     "prod:version": "node scripts/prod-version.js",
     "pm2:start": "pm2 start ecosystem.config.cjs",
     "pm2:restart": "pm2 restart sophia --update-env",

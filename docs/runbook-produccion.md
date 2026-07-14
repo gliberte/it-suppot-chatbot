@@ -26,6 +26,21 @@ npm run prod:check
 
 Este comando revisa Sophia en PM2 o systemd durante la transicion, `nginx`, puerto `443`, health checks HTTP/HTTPS, variables principales de Teams y archivos de auditoria/runtime. No reinicia servicios ni modifica archivos.
 
+Monitor operativo de señales recientes:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:monitor
+```
+
+Ventana personalizada:
+
+```bash
+npm run prod:monitor -- --minutes 15
+```
+
+`prod:monitor` resume PM2, health local, actividad Teams, auditoria de herramientas, posibles errores SDP y hits Nginx. Es util despues de pruebas piloto, reinicios o reportes de que Sophia no responde.
+
 Tambien resume actividad reciente:
 
 - `Nginx Teams hits`: cuenta accesos recientes en Nginx a `/api/teams/messages` y `/api/teams/health`.

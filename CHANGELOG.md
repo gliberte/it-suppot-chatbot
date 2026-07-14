@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.1.2] - 2026-07-14
+
+### Ops
+- Agregado `npm run prod:monitor` para revisar señales operativas recientes en una sola vista.
+- El monitor resume PM2, health local, auditoría Teams, auditoría de herramientas, SDP debug y tráfico Nginx.
+- El monitor acepta ventana configurable con `-- --minutes <n>` o `SOPHIA_MONITOR_WINDOW_MINUTES`.
+
 ## [0.1.1] - 2026-07-14
 
 ### Ops
