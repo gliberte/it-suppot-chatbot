@@ -2364,10 +2364,26 @@ async function executeConfirmedAction(action, user, session = null) {
   const createdRequestId = action.toolName === 'sdp_create_request'
     ? extractRequestIdFromToolResult(toolResult)
     : null;
+  const confirmedNoteVerification = action.toolName === 'sdp_add_note'
+    ? getConfirmedNoteVerification(toolResult)
+    : null;
+  const auditArgs = createdRequestId
+    ? { ...confirmedArgs, request_id: createdRequestId }
+    : { ...confirmedArgs };
+  if (confirmedNoteVerification) {
+    auditArgs.sophia_note_verification = {
+      checked: Boolean(confirmedNoteVerification.checked),
+      found: Boolean(confirmedNoteVerification.found),
+      count: confirmedNoteVerification.count || 0,
+      source: confirmedNoteVerification.source || null,
+      warning: confirmedNoteVerification.warning || null,
+      error: confirmedNoteVerification.error || null
+    };
+  }
   await auditToolCall({
     user,
     toolName: action.toolName,
-    args: createdRequestId ? { ...confirmedArgs, request_id: createdRequestId } : confirmedArgs,
+    args: auditArgs,
     outcome: 'confirmed_success'
   });
   rememberLastTicketFromToolOutput(session, action.toolName, toolResult.content?.[0]?.text);
@@ -2385,11 +2401,11 @@ async function executeConfirmedAction(action, user, session = null) {
   }
 
   if (action.toolName === 'sdp_add_note' && confirmedArgs?.request_id) {
-    const noteVerification = getConfirmedNoteVerification(toolResult);
+    const noteVerification = confirmedNoteVerification;
     if (noteVerification?.checked && !noteVerification.found) {
       return [
         `ServiceDesk Plus aceptó la operación para el ticket #${confirmedArgs.request_id}, pero no pude verificar que el seguimiento aparezca al consultar las notas.`,
-        noteVerification.error ? `Detalle técnico: ${noteVerification.error}` : `Notas encontradas después de guardar: ${noteVerification.count || 0}.`,
+        noteVerification.error ? `Detalle técnico: ${noteVerification.error}` : `Notas encontradas después de guardar: ${noteVerification.count || 0}. Fuente: ${noteVerification.source || 'no identificada'}.`,
         '',
         '**Opciones**',
         `- Ver detalle del ticket #${confirmedArgs.request_id}`,
