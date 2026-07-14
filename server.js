@@ -2384,6 +2384,17 @@ async function executeConfirmedAction(action, user, session = null) {
     }
   }
 
+  if (action.toolName === 'sdp_add_note' && confirmedArgs?.request_id) {
+    return [
+      `Listo, agregué el seguimiento al ticket #${confirmedArgs.request_id}.`,
+      '',
+      '**Opciones**',
+      `- Ver detalle del ticket #${confirmedArgs.request_id}`,
+      `- Agregar otro seguimiento al ticket #${confirmedArgs.request_id}`,
+      '- Consultar mis tickets abiertos'
+    ].join('\n');
+  }
+
   return summarizeToolOutput(toolResult.content[0].text);
 }
 
