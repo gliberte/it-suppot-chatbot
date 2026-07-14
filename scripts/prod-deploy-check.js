@@ -79,7 +79,7 @@ async function main() {
   console.log('  git pull');
   console.log('  npm install');
   console.log('  npm run build');
-  console.log('  sudo systemctl restart sophia');
+  console.log('  npm run pm2:restart');
   console.log('  npm run prod:check');
   console.log('  npm run prod:version');
   console.log('');

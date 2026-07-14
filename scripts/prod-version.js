@@ -40,6 +40,25 @@ async function serviceState(name) {
   return result.ok && result.stdout ? result.stdout : 'inactive/unavailable';
 }
 
+async function pm2AppState(name) {
+  if (!(await commandExists('pm2'))) return 'pm2 no disponible';
+  const result = await run('pm2', ['jlist'], { timeout: 10000, maxBuffer: 5 * 1024 * 1024 });
+  if (!result.ok || !result.stdout) return 'pm2 no disponible';
+
+  try {
+    const apps = JSON.parse(result.stdout);
+    const app = apps.find((candidate) => candidate.name === name);
+    if (!app) return 'no encontrado en pm2';
+    return [
+      app.pm2_env?.status || 'unknown',
+      `pid=${app.pid || 'n/a'}`,
+      `restarts=${app.pm2_env?.restart_time ?? 'n/a'}`
+    ].join(' ');
+  } catch (error) {
+    return `pm2 parse error: ${error.message}`;
+  }
+}
+
 async function latestBackup() {
   try {
     const entries = await readdir(BACKUP_ROOT);
@@ -94,6 +113,7 @@ async function main() {
     commitDate,
     commitSubject,
     workingTree,
+    sophiaPm2State,
     sophiaState,
     nginxState,
     backup,
@@ -105,6 +125,7 @@ async function main() {
     gitValue(['show', '-s', '--format=%cI', 'HEAD']),
     gitValue(['show', '-s', '--format=%s', 'HEAD']),
     gitValue(['status', '--short']),
+    pm2AppState('sophia'),
     serviceState('sophia'),
     serviceState('nginx'),
     latestBackup(),
@@ -124,7 +145,8 @@ async function main() {
   if (workingTree) {
     console.log(workingTree);
   }
-  console.log(`Servicio sophia: ${sophiaState}`);
+  console.log(`PM2 sophia: ${sophiaPm2State}`);
+  console.log(`Servicio sophia systemd: ${sophiaState}`);
   console.log(`Servicio nginx: ${nginxState}`);
   console.log(`Ultimo backup: ${backup}`);
   console.log('');

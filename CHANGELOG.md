@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.1.1] - 2026-07-14
+
+### Ops
+- Agregada configuración PM2 versionada en `ecosystem.config.cjs`.
+- Agregados scripts npm para operar Sophia con PM2: `pm2:start`, `pm2:restart`, `pm2:status` y `pm2:logs`.
+- `prod:check` ahora valida Sophia en PM2 y conserva compatibilidad temporal con `sophia.service`.
+- `prod:version` reporta estado PM2 además del estado systemd legado.
+- Runbook actualizado con instalación, migración, operación diaria y rollback temporal de PM2.
+- Backup operativo incluye `ecosystem.config.cjs` y dump PM2 cuando existe.
+
 ## [0.1.0] - 2026-07-14
 
 ### Added

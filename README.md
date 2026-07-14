@@ -22,6 +22,9 @@ npm run dev:server   # bridge Express
 npm run teams:check   # valida variables minimas para piloto Teams
 npm run teams:package # genera teams/generated/soporte-it-teams.zip
 npm run rag:ingest    # genera data/rag-index.json desde knowledge/
+npm run pm2:start     # inicia Sophia con PM2 en produccion
+npm run pm2:restart   # reinicia Sophia en PM2 usando variables actualizadas
+npm run pm2:status    # muestra estado PM2 de Sophia
 npm run build        # typecheck + build frontend
 npm run lint         # eslint
 ```

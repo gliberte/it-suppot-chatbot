@@ -20,6 +20,8 @@ const candidates = [
   ['audit.log', 'logs/audit.log'],
   ['teams-audit.log', 'logs/teams-audit.log'],
   ['sdp-debug.log', 'logs/sdp-debug.log'],
+  ['ecosystem.config.cjs', 'pm2/ecosystem.config.cjs'],
+  [join(process.env.HOME || '', '.pm2/dump.pm2'), 'pm2/dump.pm2'],
   ['/etc/systemd/system/sophia.service', 'systemd/sophia.service'],
   ['/etc/nginx/sites-enabled/sophia', 'nginx/sites-enabled/sophia'],
   ['/etc/nginx/sites-available/sophia', 'nginx/sites-available/sophia'],

@@ -24,7 +24,7 @@ cd /opt/sophia/it-support-chatbot
 npm run prod:check
 ```
 
-Este comando revisa `sophia.service`, `nginx`, puerto `443`, health checks HTTP/HTTPS, variables principales de Teams y archivos de auditoria/runtime. No reinicia servicios ni modifica archivos.
+Este comando revisa Sophia en PM2 o systemd durante la transicion, `nginx`, puerto `443`, health checks HTTP/HTTPS, variables principales de Teams y archivos de auditoria/runtime. No reinicia servicios ni modifica archivos.
 
 Tambien resume actividad reciente:
 
@@ -32,7 +32,7 @@ Tambien resume actividad reciente:
 - `Teams audit reciente`: resume eventos recientes de `teams-audit.log`, incluyendo mensajes recibidos, respuestas enviadas y errores.
 
 ```bash
-sudo systemctl status sophia --no-pager
+npm run pm2:status
 sudo systemctl status nginx --no-pager
 ```
 
@@ -85,7 +85,7 @@ sudo tail -f /var/log/nginx/access.log /var/log/nginx/error.log
 Abrir otra sesion para Sophia:
 
 ```bash
-sudo journalctl -u sophia -f
+npm run pm2:logs
 ```
 
 Luego enviar en Teams:
@@ -180,7 +180,99 @@ sudo logrotate -f /etc/logrotate.d/sophia
 
 La politica rota diariamente, conserva 14 archivos, comprime historicos y usa `copytruncate` para no requerir reinicio de Sophia. Incluye `su lsolano lsolano` porque el directorio del proyecto pertenece al usuario de despliegue; sin esa directiva logrotate puede rechazar la rotacion por permisos del directorio padre.
 
-## Servicio Sophia
+## Servicio Sophia Con PM2
+
+PM2 es el gestor recomendado para ejecutar Sophia en produccion. La configuracion versionada esta en:
+
+```text
+ecosystem.config.cjs
+```
+
+### Instalacion Inicial De PM2
+
+Ejecutar una sola vez en el servidor:
+
+```bash
+sudo npm install -g pm2
+pm2 -v
+```
+
+Entrar al proyecto:
+
+```bash
+cd /opt/sophia/it-support-chatbot
+```
+
+Si `sophia.service` de systemd esta activo, detenerlo para evitar conflicto por el puerto `3001`:
+
+```bash
+sudo systemctl stop sophia
+sudo systemctl disable sophia
+```
+
+Arrancar Sophia con PM2:
+
+```bash
+npm run pm2:start
+pm2 status sophia
+curl http://localhost:3001/api/teams/health
+```
+
+Persistir PM2 para reinicio automatico del servidor:
+
+```bash
+pm2 save
+pm2 startup systemd -u lsolano --hp /home/lsolano
+```
+
+El comando `pm2 startup` imprime una instruccion `sudo ...`. Copiarla y ejecutarla exactamente. Luego confirmar:
+
+```bash
+pm2 save
+systemctl status pm2-lsolano --no-pager
+```
+
+### Operacion Diaria Con PM2
+
+Estado:
+
+```bash
+npm run pm2:status
+```
+
+Reiniciar despues de cambios:
+
+```bash
+npm run pm2:restart
+```
+
+Logs:
+
+```bash
+npm run pm2:logs
+```
+
+Ver detalle tecnico:
+
+```bash
+pm2 describe sophia
+pm2 monit
+```
+
+### Rollback Temporal A Systemd
+
+Solo si PM2 falla y se necesita volver al servicio anterior:
+
+```bash
+pm2 stop sophia
+sudo systemctl enable sophia
+sudo systemctl restart sophia
+npm run prod:check
+```
+
+## Servicio Sophia Con Systemd Legado
+
+Esta seccion queda como referencia mientras termina la migracion a PM2.
 
 Reiniciar:
 
@@ -229,6 +321,7 @@ El respaldo intenta incluir:
 - `teams/generated/soporte-it-teams.zip`
 - logs locales si existen
 - `/etc/systemd/system/sophia.service`
+- configuracion PM2 guardada para el usuario de despliegue, si existe
 - configuracion Nginx `sophia`
 - `/etc/logrotate.d/sophia`
 
@@ -312,7 +405,7 @@ npm run prod:backup
 git pull
 npm install
 npm run build
-sudo systemctl restart sophia
+npm run pm2:restart
 npm run prod:check
 npm run prod:version
 ```

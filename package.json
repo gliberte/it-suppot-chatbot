@@ -1,7 +1,7 @@
 {
   "name": "it-support-chatbot",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,10 @@
     "prod:check": "node scripts/prod-healthcheck.js",
     "prod:deploy-check": "node scripts/prod-deploy-check.js",
     "prod:version": "node scripts/prod-version.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart sophia --update-env",
+    "pm2:logs": "pm2 logs sophia --lines 120",
+    "pm2:status": "pm2 status sophia",
     "teams:package": "node scripts/build-teams-package.js",
     "teams:check": "node scripts/check-teams-pilot.js",
     "build": "tsc -b && vite build",

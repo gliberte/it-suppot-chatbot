@@ -119,6 +119,52 @@ async function checkSystemdService(name) {
   addCheck(`Servicio ${name}`, 'fail', detail || 'No activo o no encontrado');
 }
 
+async function getPm2App(name) {
+  if (!(await commandExists('pm2'))) return null;
+
+  const result = await run('pm2', ['jlist'], { timeout: 10000, maxBuffer: 5 * 1024 * 1024 });
+  if (!result.ok || !result.stdout) return null;
+
+  try {
+    const apps = JSON.parse(result.stdout);
+    return apps.find((app) => app.name === name) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function getSystemdServiceState(name) {
+  if (!(await commandExists('systemctl'))) return 'unavailable';
+  const active = await run('systemctl', ['is-active', name]);
+  return active.ok && active.stdout === 'active' ? 'active' : 'inactive';
+}
+
+async function checkSophiaProcess() {
+  const pm2App = await getPm2App('sophia');
+  if (pm2App) {
+    const status = pm2App.pm2_env?.status || 'unknown';
+    const restarts = pm2App.pm2_env?.restart_time ?? 'n/a';
+    const uptimeMs = pm2App.pm2_env?.pm_uptime ? Date.now() - pm2App.pm2_env.pm_uptime : 0;
+    const detail = [
+      `pm2=${status}`,
+      `pid=${pm2App.pid || 'n/a'}`,
+      `restarts=${restarts}`,
+      uptimeMs ? `uptimeMin=${Math.floor(uptimeMs / 60000)}` : ''
+    ].filter(Boolean).join(' ');
+
+    addCheck('Proceso Sophia', status === 'online' ? 'ok' : 'fail', detail);
+    return;
+  }
+
+  const systemdState = await getSystemdServiceState('sophia');
+  if (systemdState === 'active') {
+    addCheck('Proceso Sophia', 'ok', 'systemd=sophia active');
+    return;
+  }
+
+  addCheck('Proceso Sophia', 'fail', 'No se encontro Sophia activa en PM2 ni systemd');
+}
+
 async function checkPort443() {
   if (!(await commandExists('ss'))) {
     addCheck('Puerto 443', 'warn', 'ss no disponible en este entorno');
@@ -390,7 +436,7 @@ async function main() {
   console.log(`Fecha: ${new Date().toISOString()}`);
   console.log('');
 
-  await checkSystemdService('sophia');
+  await checkSophiaProcess();
   await checkSystemdService('nginx');
   await checkNginxConfig();
   await checkPort443();
@@ -417,7 +463,8 @@ async function main() {
   if (failed.length) {
     console.log('');
     console.log('Siguiente paso sugerido: revisar los checks FAIL y luego ejecutar:');
-    console.log('  sudo journalctl -u sophia -n 120 --no-pager');
+    console.log('  pm2 logs sophia --lines 120');
+    console.log('  sudo journalctl -u sophia -n 120 --no-pager  # solo si aun usas systemd legado');
     console.log('  sudo tail -n 80 /var/log/nginx/error.log');
     process.exitCode = 1;
   }
