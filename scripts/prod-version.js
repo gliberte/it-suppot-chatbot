@@ -1,10 +1,12 @@
-import { readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const BACKUP_ROOT = process.env.SOPHIA_BACKUP_DIR || '/opt/sophia/backups';
+const CHANGELOG_PATH = 'CHANGELOG.md';
+const PACKAGE_JSON_PATH = 'package.json';
 
 async function run(command, args = [], options = {}) {
   try {
@@ -57,8 +59,36 @@ async function latestBackup() {
   }
 }
 
+async function packageVersion() {
+  try {
+    const pkg = JSON.parse(await readFile(PACKAGE_JSON_PATH, 'utf8'));
+    return pkg.version || 'n/a';
+  } catch (error) {
+    return `no disponible: ${error.message}`;
+  }
+}
+
+async function latestChangelogEntry() {
+  try {
+    const changelog = await readFile(CHANGELOG_PATH, 'utf8');
+    const lines = changelog.split('\n');
+    const start = lines.findIndex((line) => /^##\s+\[[^\]]+\]/.test(line));
+    if (start === -1) return 'no hay entrada de changelog';
+    const rest = lines.slice(start + 1);
+    const next = rest.findIndex((line) => /^##\s+\[[^\]]+\]/.test(line));
+    const entryLines = lines.slice(start, next === -1 ? lines.length : start + 1 + next);
+    return entryLines
+      .slice(0, 24)
+      .join('\n')
+      .trim();
+  } catch (error) {
+    return `no disponible: ${error.message}`;
+  }
+}
+
 async function main() {
   const [
+    version,
     branch,
     commit,
     commitDate,
@@ -67,7 +97,9 @@ async function main() {
     sophiaState,
     nginxState,
     backup,
+    changelog,
   ] = await Promise.all([
+    packageVersion(),
     gitValue(['branch', '--show-current']),
     gitValue(['rev-parse', '--short', 'HEAD']),
     gitValue(['show', '-s', '--format=%cI', 'HEAD']),
@@ -76,12 +108,14 @@ async function main() {
     serviceState('sophia'),
     serviceState('nginx'),
     latestBackup(),
+    latestChangelogEntry(),
   ]);
 
   console.log('Sophia production version');
   console.log(`Directorio: ${process.cwd()}`);
   console.log(`Fecha: ${new Date().toISOString()}`);
   console.log('');
+  console.log(`Version Sophia: ${version}`);
   console.log(`Rama: ${branch || 'n/a'}`);
   console.log(`Commit: ${commit}`);
   console.log(`Fecha commit: ${commitDate}`);
@@ -93,6 +127,9 @@ async function main() {
   console.log(`Servicio sophia: ${sophiaState}`);
   console.log(`Servicio nginx: ${nginxState}`);
   console.log(`Ultimo backup: ${backup}`);
+  console.log('');
+  console.log('Ultima entrada de changelog:');
+  console.log(changelog);
 }
 
 main().catch((error) => {

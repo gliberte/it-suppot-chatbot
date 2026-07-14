@@ -249,6 +249,21 @@ tar -xzf /opt/sophia/backups/sophia-backup-YYYYMMDD-HHMMSS.tar.gz -C /tmp/sophia
 
 ## Version Y Rollback
 
+Sophia usa versionado progresivo basado en `package.json` y `CHANGELOG.md`.
+
+Regla recomendada:
+
+- `PATCH` (`0.1.1`): correcciones pequeñas, prompts, formatos, ajustes de clasificación sin nueva capacidad grande.
+- `MINOR` (`0.2.0`): nuevas capacidades visibles, playbooks, nuevas acciones, nuevos flujos de agente.
+- `MAJOR` (`1.0.0`): cambios incompatibles, rediseño profundo de permisos, API, arquitectura o despliegue.
+
+Antes de cada despliegue:
+
+1. Actualizar `version` en `package.json` y `package-lock.json`.
+2. Registrar la entrega en `CHANGELOG.md`.
+3. Ejecutar validaciones locales.
+4. Hacer commit y desplegar.
+
 Antes y despues de cada despliegue, registrar version activa:
 
 ```bash
