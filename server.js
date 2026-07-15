@@ -1079,6 +1079,15 @@ function escapeMarkdownTableValue(value) {
 }
 
 function normalizeTicketToolDecision(aiDecision, message, user) {
+  if (isPersonalKeywordTicketSearchRequest(message) && aiDecision?.action !== 'call_tool') {
+    aiDecision.action = 'call_tool';
+    aiDecision.tool_name = 'sdp_list_requests';
+    aiDecision.tool_args = {
+      filter_by: 'All_Requests'
+    };
+    aiDecision.content = 'Claro, busco en tus tickets por esa palabra clave y te muestro los primeros resultados en orden cronológico.';
+  }
+
   if (isStaleTicketsRequest(message) && aiDecision?.action !== 'call_tool') {
     aiDecision.action = 'call_tool';
     aiDecision.tool_name = 'sdp_list_requests';
@@ -1213,6 +1222,23 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
     delete args.leader;
     if (isMciListRequest(message)) {
       args.mci_only = true;
+    }
+    if (isPersonalKeywordTicketSearchRequest(message)) {
+      args.filter_by = 'All_Requests';
+      args.personal_keyword_search = true;
+      args.keyword = extractTicketKeywordFromMessage(message);
+      args.limit = Math.max(Number(args.limit) || 0, Number(process.env.SOPHIA_KEYWORD_TICKET_SEARCH_LIMIT || 50));
+      args.fields_required = mergeFieldsRequired(args.fields_required, [
+        'subject',
+        'status',
+        'priority',
+        'technician',
+        'requester',
+        'created_time',
+        'due_by_time',
+        'category',
+        'subcategory'
+      ]);
     }
     if (isStaleTicketsRequest(message)) {
       args.filter_by = 'Open_Requests';
@@ -1453,6 +1479,40 @@ function inferStaleDaysFromMessage(message = '') {
 function mergeFieldsRequired(currentFields, requiredFields) {
   const fields = Array.isArray(currentFields) ? currentFields : [];
   return [...new Set([...fields, ...requiredFields])];
+}
+
+function isPersonalKeywordTicketSearchRequest(message = '') {
+  const text = normalizeComparableText(message);
+  if (!/\btickets?\b|\bsolicitudes?\b/.test(text)) return false;
+  if (!/\b(mis|mios|mias|propios|propias|mi)\b/.test(text)) return false;
+  return /\b(busca|buscar|buscame|encuentra|encontrar|filtra|filtrar|contengan|contiene|con la palabra|palabra clave|asunto|relacionad[oa]s? con)\b/.test(text);
+}
+
+function extractTicketKeywordFromMessage(message = '') {
+  const raw = String(message || '').trim();
+  const quoted = raw.match(/["'“”‘’]([^"'“”‘’]{2,80})["'“”‘’]/);
+  if (quoted?.[1]) return quoted[1].trim();
+
+  const patterns = [
+    /\b(?:palabra clave|palabra|asunto)\s+(.+?)(?:\s+ordenad[oa]|\s+cronol[oó]gic|\s+primeros?\b|\s+ultimos?\b|$)/i,
+    /\b(?:contengan|contiene|relacionad[oa]s?\s+con|sobre|de)\s+(.+?)(?:\s+ordenad[oa]|\s+cronol[oó]gic|\s+primeros?\b|\s+ultimos?\b|$)/i,
+    /\b(?:busca|buscar|b[uú]scame|encuentra|encontrar|filtra|filtrar)\b.*?\b(?:mis\s+)?tickets?\b\s+(.+?)(?:\s+ordenad[oa]|\s+cronol[oó]gic|\s+primeros?\b|\s+ultimos?\b|$)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match?.[1]) return cleanTicketKeyword(match[1]);
+  }
+
+  return '';
+}
+
+function cleanTicketKeyword(value) {
+  return String(value || '')
+    .replace(/\b(?:por|basad[oa]s?\s+en|con|que|tengan|tiene|el|la|los|las|un|una|mis|mios|mías|mias|tickets?|solicitudes?|asunto|palabra|clave)\b/gi, ' ')
+    .replace(/[?.!,;:]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function inferRequestStatusFromMessage(message) {
@@ -2362,6 +2422,9 @@ async function runSupportTurn({
     if (aiDecision.tool_name === 'sdp_list_requests') {
       toolOutput = scopeListToolOutputForUser(toolOutput, user, message);
     }
+    if (aiDecision.tool_name === 'sdp_list_requests' && isPersonalKeywordTicketSearchRequest(message)) {
+      toolOutput = filterPersonalKeywordTicketsToolOutput(toolOutput, preparedArgs, message);
+    }
     if (aiDecision.tool_name === 'sdp_list_requests' && isStaleTicketsRequest(message)) {
       toolOutput = filterStaleTicketsToolOutput(toolOutput, preparedArgs, message);
     }
@@ -2698,6 +2761,10 @@ function createTicketsAdaptiveCard(toolOutput) {
     return createStaleTicketsAdaptiveCard(data);
   }
 
+  if (data?.result_type === 'personal_keyword_tickets') {
+    return createPersonalKeywordTicketsAdaptiveCard(data);
+  }
+
   const requests = Array.isArray(data?.requests) ? data.requests : [];
   const totalRows = Number(data?.list_info?.row_count || requests.length || 0);
   const isMciResult = data?.result_type === 'mci';
@@ -2781,6 +2848,127 @@ function createTicketsAdaptiveCard(toolOutput) {
       spacing: 'Medium'
     });
   }
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function filterPersonalKeywordTicketsToolOutput(toolOutput, preparedArgs = {}, message = '') {
+  let data;
+  try {
+    data = JSON.parse(toolOutput);
+  } catch {
+    return toolOutput;
+  }
+
+  if (!Array.isArray(data?.requests)) return toolOutput;
+
+  const keyword = String(preparedArgs.keyword || extractTicketKeywordFromMessage(message) || '').trim();
+  const normalizedKeyword = normalizeComparableText(keyword);
+  const limit = Math.min(Number(process.env.SOPHIA_KEYWORD_TICKET_SEARCH_RESULTS || 10), 10);
+  const requests = data.requests
+    .filter((request) => {
+      if (!normalizedKeyword) return true;
+      const haystack = normalizeComparableText([
+        request.subject,
+        getDisplayName(request.category),
+        getDisplayName(request.subcategory),
+        getDisplayName(request.status),
+        getDisplayName(request.technician)
+      ].filter(Boolean).join(' '));
+      return haystack.includes(normalizedKeyword);
+    })
+    .sort((a, b) => (getRequestCreatedTimestamp(a) || 0) - (getRequestCreatedTimestamp(b) || 0))
+    .slice(0, limit);
+
+  return JSON.stringify({
+    ...data,
+    result_type: 'personal_keyword_tickets',
+    sophia_keyword: keyword,
+    list_info: {
+      ...(data.list_info || {}),
+      row_count: requests.length,
+      has_more_rows: false,
+      sophia_sorted_by: 'created_time_asc',
+      sophia_limit: limit
+    },
+    requests
+  }, null, 2);
+}
+
+function createPersonalKeywordTicketsAdaptiveCard(data) {
+  const requests = Array.isArray(data?.requests) ? data.requests : [];
+  const keyword = data?.sophia_keyword || 'criterio indicado';
+  const summaryText = requests.length
+    ? `Encontré ${requests.length} de tus tickets relacionados con "${keyword}", ordenados del más antiguo al más reciente.`
+    : `No encontré tickets propios relacionados con "${keyword}".`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: 'Búsqueda en tus tickets',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: summaryText,
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    }
+  ];
+
+  if (requests.length > 0) {
+    body.push(createTicketTableRow(['Ticket', 'Asunto', 'Estado', 'Creado'], { isHeader: true }));
+    body.push(...requests.map((request, index) => createTicketTableRow([
+      `#${request.id || '-'}`,
+      truncateText(request.subject || 'Sin asunto', 70),
+      getDisplayName(request.status) || '-',
+      getDisplayDate(request.created_time) || '-'
+    ], { shade: index % 2 === 1 })));
+  } else {
+    body.push({
+      type: 'TextBlock',
+      text: 'Puedes probar con una palabra más corta, parte del asunto, categoría o síntoma principal.',
+      wrap: true,
+      spacing: 'Medium'
+    });
+  }
+
+  body.push({
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Opciones',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: [
+          'Ver detalle del ticket #12345',
+          'Buscar otra palabra en mis tickets',
+          'Filtrar mis tickets por estado'
+        ].map((option) => `- ${option}`).join('\n'),
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
+  });
 
   return {
     type: 'adaptive_card',
