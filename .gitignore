@@ -21,6 +21,7 @@ data/runtime-state.json
 data/runtime-state.json.tmp
 data/active-situations.json
 data/active-situations.json.tmp
+data/knowledge-candidates.json
 *.local
 .env
 .env.local
