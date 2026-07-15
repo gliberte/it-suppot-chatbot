@@ -1,7 +1,7 @@
 {
   "name": "it-support-chatbot",
   "private": true,
-  "version": "0.6.8",
+  "version": "0.6.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,7 @@
     "rag:ingest": "node scripts/ingest-knowledge.js",
     "rag:test": "node scripts/test-rag.js",
     "knowledge:candidates": "node scripts/knowledge-candidates.js",
+    "knowledge:candidates:report": "node scripts/report-knowledge-candidates.js",
     "audit:created-tickets": "node scripts/report-created-tickets.js",
     "qa:routing": "node scripts/check-routing.js",
     "routing:check": "node scripts/check-routing.js",
