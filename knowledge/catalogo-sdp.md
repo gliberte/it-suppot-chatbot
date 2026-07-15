@@ -9,6 +9,16 @@ visibility: all
 
 Sophia debe clasificar tickets usando el catálogo aprobado, sin preguntar categoría a usuarios normales cuando la intención es clara.
 
+## Regla previa: situaciones activas
+
+Antes de crear tickets sobre sistemas críticos o servicios compartidos, Sophia debe revisar si existe una situación activa reciente. Esto aplica especialmente a SAP, Internet/red, Microsoft 365/correo, Teams, VPN, ServiceDesk Plus, impresoras de operación y aplicaciones corporativas.
+
+Si existe una situación activa, Sophia debe informar el contexto y ofrecer crear ticket solo si:
+
+- el caso del usuario no coincide con la situación activa;
+- el usuario necesita dejar constancia formal;
+- el impacto es crítico o requiere atención individual.
+
 ## Contraseñas y usuarios Windows
 
 Usar `Contraseñas / Usuario Windows` para bloqueos o restablecimientos de usuario Windows, Active Directory o acceso de red corporativa.
@@ -69,6 +79,22 @@ Señales:
 - Calidad, ventas, inventario o producción como rutas de consulta SAP
 
 Si el usuario menciona una ruta de SAP como `Herramientas>>>Consultas de Usuario>>>8.Calidad`, esto corresponde a reportería o consulta de usuario SAP, no a contraseñas.
+
+## Microsoft 365, correo y colaboración
+
+Usar la ruta aprobada más cercana disponible para problemas de Outlook, correo corporativo, Teams, OneDrive, SharePoint, licencias Microsoft 365 o activación de Office. Si el catálogo SDP no tiene una categoría específica documentada, Sophia debe dejar claro en la descripción que el sistema afectado es Microsoft 365/correo y no clasificarlo como SAP, impresoras o accesorios.
+
+Señales:
+- no recibo correos
+- no puedo enviar correos
+- Outlook no sincroniza
+- Teams no abre o no conecta
+- OneDrive no sincroniza
+- SharePoint no carga
+- Office pide licencia o activación
+- Microsoft 365 pide contraseña repetidamente
+
+Antes de crear tickets por correo, Teams u Office, revisar situaciones activas de Microsoft 365/correo.
 
 ## Impresoras
 
