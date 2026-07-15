@@ -2600,6 +2600,81 @@ function formatListedTicketFollowUpReviewText({ checked, skipped = [], userAdded
   return lines.join('\n');
 }
 
+async function enrichListToolOutputWithRecentFollowUps(toolOutput, user) {
+  let data;
+  try {
+    data = JSON.parse(toolOutput);
+  } catch {
+    return toolOutput;
+  }
+
+  if (!Array.isArray(data?.requests) || data.requests.length === 0 || data?.result_type === 'mci') {
+    return toolOutput;
+  }
+
+  const limit = Math.min(Number(process.env.SOPHIA_RECENT_FOLLOWUP_SCAN_LIMIT || 8), 10);
+  const candidates = data.requests
+    .filter((request) => request?.id && !isMciRequestData(request))
+    .slice(0, limit);
+
+  if (candidates.length === 0) return toolOutput;
+
+  const followUpsById = new Map();
+
+  for (const request of candidates) {
+    try {
+      const result = await callMcpTool('sdp_get_request_details', { request_id: request.id });
+      const details = JSON.parse(result.content?.[0]?.text || '{}');
+      const detailedRequest = details?.request || details;
+      if (!userCanReadRequest(user, detailedRequest)) continue;
+
+      const recentNotes = getRecentRequestNotes(detailedRequest);
+      if (recentNotes.length === 0) continue;
+
+      followUpsById.set(String(request.id), {
+        count: recentNotes.length,
+        latest: recentNotes[0],
+        accessReason: getRequestAccessReason(user, detailedRequest)
+      });
+    } catch (error) {
+      console.warn(`[Sophia] No se pudo revisar seguimientos recientes del ticket ${request.id}:`, error.message);
+    }
+  }
+
+  if (followUpsById.size === 0) return toolOutput;
+
+  const requests = data.requests.map((request) => {
+    const followUp = followUpsById.get(String(request.id));
+    if (!followUp) return request;
+    return {
+      ...request,
+      sophia_recent_followups: followUp
+    };
+  });
+
+  return JSON.stringify({
+    ...data,
+    list_info: {
+      ...(data.list_info || {}),
+      sophia_recent_followups_count: followUpsById.size,
+      sophia_recent_followups_days: getRecentFollowUpDays()
+    },
+    requests
+  }, null, 2);
+}
+
+function getRecentRequestNotes(request) {
+  const thresholdMs = Date.now() - (getRecentFollowUpDays() * 24 * 60 * 60 * 1000);
+  return getRequestNotes(request)
+    .filter((note) => note.createdTimestamp && note.createdTimestamp >= thresholdMs)
+    .sort((a, b) => (b.createdTimestamp || 0) - (a.createdTimestamp || 0));
+}
+
+function getRecentFollowUpDays() {
+  const days = Number(process.env.SOPHIA_RECENT_FOLLOWUP_DAYS || 7);
+  return Number.isFinite(days) && days > 0 ? Math.min(days, 30) : 7;
+}
+
 async function runSupportTurn({
   message,
   user,
@@ -2728,6 +2803,9 @@ async function runSupportTurn({
     }
     if (aiDecision.tool_name === 'sdp_list_requests' && isStaleTicketsRequest(message)) {
       toolOutput = filterStaleTicketsToolOutput(toolOutput, preparedArgs, message);
+    }
+    if (aiDecision.tool_name === 'sdp_list_requests') {
+      toolOutput = await enrichListToolOutputWithRecentFollowUps(toolOutput, user);
     }
     if (aiDecision.tool_name === 'sdp_get_request_details') {
       const requestData = JSON.parse(toolOutput);
@@ -3131,6 +3209,8 @@ function createTicketsAdaptiveCard(toolOutput) {
   } else if (visibleRequests.length > 0) {
     const attentionBlock = createTicketAttentionBlock(visibleRequests);
     if (attentionBlock) body.push(attentionBlock);
+    const recentFollowUpsBlock = createRecentFollowUpsHighlightBlock(visibleRequests);
+    if (recentFollowUpsBlock) body.push(recentFollowUpsBlock);
   }
 
   if (hasMoreRows) {
@@ -3241,6 +3321,8 @@ function createPersonalKeywordTicketsAdaptiveCard(data) {
       getDisplayName(request.status) || '-',
       getDisplayDate(request.created_time) || '-'
     ], { shade: index % 2 === 1 })));
+    const recentFollowUpsBlock = createRecentFollowUpsHighlightBlock(requests);
+    if (recentFollowUpsBlock) body.push(recentFollowUpsBlock);
   } else {
     body.push({
       type: 'TextBlock',
@@ -3424,6 +3506,51 @@ function createTicketAttentionSuggestion({ priority, status, dueTimestamp, updat
   return 'abrir el detalle para confirmar si requiere seguimiento.';
 }
 
+function createRecentFollowUpsHighlightBlock(requests) {
+  const entries = requests
+    .filter((request) => request?.sophia_recent_followups?.latest?.text)
+    .slice(0, 3);
+
+  if (entries.length === 0) return null;
+
+  const days = getRecentFollowUpDays();
+  const lines = entries.map((request) => {
+    const followUp = request.sophia_recent_followups;
+    const latest = followUp.latest;
+    const meta = [latest.created, latest.author].filter(Boolean).join(' - ');
+    return `#${request.id}: ${truncateText(request.subject || 'Sin asunto', 70)}\n${meta ? `${meta}: ` : ''}${truncateText(redactSensitiveText(latest.text), 170)}`;
+  });
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    style: 'emphasis',
+    items: [
+      {
+        type: 'TextBlock',
+        text: `Seguimientos recientes (${days} días)`,
+        weight: 'Bolder',
+        color: 'Accent',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: lines.map((line) => `- ${line}`).join('\n'),
+        wrap: true,
+        spacing: 'Small'
+      },
+      {
+        type: 'TextBlock',
+        text: 'Puedes pedirme el detalle de cualquiera de estos tickets o que agregue un seguimiento de respuesta.',
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
+  };
+}
+
 function filterStaleTicketsToolOutput(toolOutput, preparedArgs = {}, message = '') {
   let data;
   try {
@@ -3490,6 +3617,8 @@ function createStaleTicketsAdaptiveCard(data) {
 
   if (visibleRequests.length > 0) {
     body.push(...visibleRequests.map((request, index) => createStaleTicketItemBlock(request, { shade: index % 2 === 1 })));
+    const recentFollowUpsBlock = createRecentFollowUpsHighlightBlock(visibleRequests);
+    if (recentFollowUpsBlock) body.push(recentFollowUpsBlock);
   } else {
     body.push({
       type: 'TextBlock',
@@ -4076,11 +4205,15 @@ function getRequestNotes(request) {
   const notes = extractNotesFromRequestData(request);
 
   return notes
-    .map((note) => ({
-      text: stripHtml(getNoteText(note)),
-      author: getDisplayName(note?.created_by || note?.added_by || note?.owner || note?.user || note?.note?.created_by),
-      created: getDisplayDate(note?.created_time || note?.added_time || note?.created_at || note?.note?.created_time)
-    }))
+    .map((note) => {
+      const createdValue = note?.created_time || note?.added_time || note?.created_at || note?.note?.created_time;
+      return {
+        text: stripHtml(getNoteText(note)),
+        author: getDisplayName(note?.created_by || note?.added_by || note?.owner || note?.user || note?.note?.created_by),
+        created: getDisplayDate(createdValue),
+        createdTimestamp: getSdpTimestamp(createdValue)
+      };
+    })
     .filter((note) => note.text && note.text !== '[object Object]')
     .slice(0, 5);
 }
