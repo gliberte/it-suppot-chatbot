@@ -320,13 +320,15 @@ function createSession(user) {
 
 function createEmptyOperationalMemory() {
   return {
-    lastTicket: null
+    lastTicket: null,
+    lastTicketList: null
   };
 }
 
 function sanitizeOperationalMemory(value = {}) {
   return {
-    lastTicket: sanitizeTicketMemory(value.lastTicket)
+    lastTicket: sanitizeTicketMemory(value.lastTicket),
+    lastTicketList: sanitizeTicketListMemory(value.lastTicketList)
   };
 }
 
@@ -360,6 +362,49 @@ function rememberLastTicket(session, ticket, source = 'unknown') {
   scheduleRuntimeStateSave();
 }
 
+function sanitizeTicketListMemory(value) {
+  if (!value || !Array.isArray(value.tickets)) return null;
+  const tickets = value.tickets
+    .map((ticket) => sanitizeTicketMemory(ticket))
+    .filter(Boolean)
+    .slice(0, 10);
+
+  if (tickets.length === 0) return null;
+
+  return {
+    tickets,
+    source: truncateText(value.source || 'list', 40),
+    updatedAt: value.updatedAt || new Date().toISOString()
+  };
+}
+
+function rememberLastTicketList(session, requests, source = 'list') {
+  if (!session || !Array.isArray(requests)) return;
+  const tickets = requests
+    .filter((request) => request?.id && !isMciRequestData(request))
+    .slice(0, 10)
+    .map((request) => ({
+      id: request.id,
+      subject: request.subject,
+      status: request.status,
+      priority: request.priority,
+      requester: request.requester,
+      technician: request.technician,
+      source,
+      updatedAt: new Date().toISOString()
+    }));
+
+  if (tickets.length === 0) return;
+
+  session.operationalMemory = sanitizeOperationalMemory(session.operationalMemory);
+  session.operationalMemory.lastTicketList = sanitizeTicketListMemory({
+    tickets,
+    source,
+    updatedAt: new Date().toISOString()
+  });
+  scheduleRuntimeStateSave();
+}
+
 function rememberLastTicketFromToolOutput(session, toolName, toolOutput) {
   if (!session || !toolOutput) return;
 
@@ -380,6 +425,7 @@ function rememberLastTicketFromToolOutput(session, toolName, toolOutput) {
     const requests = Array.isArray(data?.requests) ? data.requests : [];
     const firstTicket = requests.find((request) => request?.id && !isMciRequestData(request));
     rememberLastTicket(session, firstTicket, 'list');
+    rememberLastTicketList(session, requests, data?.result_type || 'list');
     return;
   }
 
@@ -2312,6 +2358,248 @@ async function getRagContextForMessage(message, user) {
   }
 }
 
+function isListedTicketFollowUpReviewRequest(message = '') {
+  const normalized = normalizeComparableText(message);
+  if (!normalized) return false;
+
+  const mentionsFollowUps = /\b(seguimiento|seguimientos|nota|notas|comentario|comentarios|actualizacion|actualizaciones)\b/.test(normalized);
+  const mentionsTickets = /\b(ticket|tickets|solicitud|solicitudes|listado|listados|anteriores|estos|esos|alguno|algun|hay|tienen|tenga)\b/.test(normalized);
+  const asksReview = /\b(hay|tienen|tenga|revisa|revisar|muestra|mostrar|indica|indicame|dime|cuales|cuantos|verifica|verificar)\b/.test(normalized);
+
+  return mentionsFollowUps && mentionsTickets && asksReview && !/\b(agrega|agregar|anade|anadir|poner|coloca|registrar|registra)\b/.test(normalized);
+}
+
+async function handleListedTicketFollowUpReview({
+  message,
+  user,
+  session,
+  onText,
+  onCard,
+  onWorking,
+  responseChannel
+}) {
+  const ticketList = session?.operationalMemory?.lastTicketList?.tickets || [];
+  if (ticketList.length === 0) {
+    onText('Puedo hacerlo, pero primero necesito un listado reciente de tickets o que me indiques los IDs. Por ejemplo: “muéstrame mis tickets abiertos” y luego “¿cuáles tienen seguimientos?”');
+    return;
+  }
+
+  await Promise.resolve(onWorking?.('Claro, reviso los tickets del último listado y separo cuáles tienen seguimientos visibles para ti.'));
+
+  const wantsUserAddedNotesOnly = /\b(usuario|usuarios|solicitante|persona)\b/.test(normalizeComparableText(message));
+  const ticketsToCheck = ticketList.slice(0, 10);
+  const checked = [];
+  const skipped = [];
+
+  for (const ticket of ticketsToCheck) {
+    try {
+      const result = await callMcpTool('sdp_get_request_details', { request_id: ticket.id });
+      await auditToolCall({ user, toolName: 'sdp_get_request_details', args: { request_id: ticket.id }, outcome: 'success' });
+      const details = JSON.parse(result.content?.[0]?.text || '{}');
+      const request = details?.request || details;
+
+      if (!userCanReadRequest(user, request)) {
+        skipped.push({ id: ticket.id, reason: 'sin permiso para ver el detalle' });
+        continue;
+      }
+
+      const allNotes = getRequestNotes(request);
+      const notes = wantsUserAddedNotesOnly ? allNotes.filter(isUserAddedNote) : allNotes;
+      checked.push({
+        request,
+        notes,
+        allNotesCount: allNotes.length,
+        accessReason: getRequestAccessReason(user, request)
+      });
+    } catch (error) {
+      await auditToolCall({ user, toolName: 'sdp_get_request_details', args: { request_id: ticket.id }, outcome: 'error', error });
+      skipped.push({ id: ticket.id, reason: error.message || 'error consultando detalle' });
+    }
+  }
+
+  const card = createListedTicketFollowUpReviewCard({
+    checked,
+    skipped,
+    userAddedOnly: wantsUserAddedNotesOnly
+  });
+
+  if (responseChannel === 'teams' && card) {
+    onCard?.(card);
+    return;
+  }
+
+  onText(formatListedTicketFollowUpReviewText({
+    checked,
+    skipped,
+    userAddedOnly: wantsUserAddedNotesOnly
+  }));
+}
+
+function isUserAddedNote(note) {
+  const author = normalizeComparableText(note?.author || '');
+  if (!author) return true;
+  return !/\b(sophia|chatbot|bot|system|sistema|servicedesk|service desk|sdp|administrator|admin)\b/.test(author);
+}
+
+function getRequestAccessReason(user, data) {
+  if (isSupportAdmin(user)) return 'administrador';
+  if (userCanAccessRequest(user, data)) return 'solicitante';
+  if (userMatchesAssignedTechnician(user, data)) return 'técnico asignado';
+  if (isMciRequestData(data) && userMatchesMciLeader(user, data)) return 'líder de MCI';
+  return 'acceso autorizado';
+}
+
+function createListedTicketFollowUpReviewCard({ checked, skipped = [], userAddedOnly = false }) {
+  const withNotes = checked.filter((entry) => entry.notes.length > 0);
+  const withoutNotes = checked.filter((entry) => entry.notes.length === 0);
+  const summaryText = withNotes.length > 0
+    ? `Encontré ${withNotes.length} ticket${withNotes.length === 1 ? '' : 's'} con seguimiento${withNotes.length === 1 ? '' : 's'}${userAddedOnly ? ' agregado(s) por usuario' : ''}.`
+    : `No encontré seguimientos${userAddedOnly ? ' agregados por usuario' : ''} en los tickets revisados.`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: 'Seguimientos en tickets listados',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: summaryText,
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    }
+  ];
+
+  if (withNotes.length > 0) {
+    body.push(...withNotes.slice(0, 8).map((entry, index) => createFollowUpReviewItemBlock(entry, { shade: index % 2 === 1 })));
+  } else {
+    body.push({
+      type: 'TextBlock',
+      text: 'Puedes pedirme ver el detalle de un ticket específico o agregar un seguimiento al que necesite más contexto.',
+      wrap: true,
+      spacing: 'Medium'
+    });
+  }
+
+  if (withoutNotes.length > 0) {
+    body.push({
+      type: 'TextBlock',
+      text: `Sin seguimientos visibles: ${withoutNotes.slice(0, 8).map((entry) => `#${entry.request.id}`).join(', ')}`,
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    });
+  }
+
+  if (skipped.length > 0) {
+    body.push({
+      type: 'TextBlock',
+      text: `No pude revisar: ${skipped.slice(0, 5).map((entry) => `#${entry.id} (${truncateText(entry.reason, 60)})`).join(', ')}`,
+      wrap: true,
+      spacing: 'Small',
+      isSubtle: true
+    });
+  }
+
+  body.push({
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Opciones',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: [
+          'Ver detalle del ticket #12345',
+          'Agregar seguimiento al ticket #12345',
+          'Listar tickets que requieren más atención'
+        ].map((option) => `- ${option}`).join('\n'),
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
+  });
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createFollowUpReviewItemBlock(entry, options = {}) {
+  const request = entry.request;
+  const latestNote = entry.notes[0];
+  const noteMeta = [latestNote.created, latestNote.author].filter(Boolean).join(' - ') || 'Seguimiento registrado';
+
+  return {
+    type: 'Container',
+    style: options.shade ? 'accent' : 'default',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: `#${request.id} - ${truncateText(request.subject || 'Sin asunto', 120)}`,
+        weight: 'Bolder',
+        color: 'Accent',
+        wrap: true
+      },
+      {
+        type: 'FactSet',
+        spacing: 'Small',
+        facts: [
+          { title: 'Estado', value: getDisplayName(request.status) || '-' },
+          { title: 'Prioridad', value: getDisplayName(request.priority) || '-' },
+          { title: 'Acceso', value: entry.accessReason || '-' },
+          { title: 'Seguimientos', value: String(entry.notes.length) }
+        ]
+      },
+      {
+        type: 'TextBlock',
+        text: `${noteMeta}: ${truncateText(redactSensitiveText(latestNote.text), 260)}`,
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
+  };
+}
+
+function formatListedTicketFollowUpReviewText({ checked, skipped = [], userAddedOnly = false }) {
+  const withNotes = checked.filter((entry) => entry.notes.length > 0);
+  const lines = [
+    withNotes.length > 0
+      ? `Encontré ${withNotes.length} ticket(s) con seguimientos${userAddedOnly ? ' agregados por usuario' : ''}.`
+      : `No encontré seguimientos${userAddedOnly ? ' agregados por usuario' : ''} en los tickets revisados.`
+  ];
+
+  for (const entry of withNotes.slice(0, 8)) {
+    const latestNote = entry.notes[0];
+    lines.push(`- #${entry.request.id}: ${truncateText(entry.request.subject || 'Sin asunto', 90)} | ${entry.accessReason} | ${entry.notes.length} seguimiento(s) | ${truncateText(redactSensitiveText(latestNote.text), 160)}`);
+  }
+
+  if (skipped.length > 0) {
+    lines.push(`No pude revisar: ${skipped.map((entry) => `#${entry.id}`).join(', ')}.`);
+  }
+
+  return lines.join('\n');
+}
+
 async function runSupportTurn({
   message,
   user,
@@ -2327,6 +2615,19 @@ async function runSupportTurn({
   responseChannel = 'web'
 }) {
   onStatus?.('Sophia está analizando tu solicitud...');
+
+  if (isListedTicketFollowUpReviewRequest(message)) {
+    await handleListedTicketFollowUpReview({
+      message,
+      user,
+      session,
+      onText,
+      onCard,
+      onWorking,
+      responseChannel
+    });
+    return;
+  }
 
   const clarification = getAdminPersonScopeClarification(message, user);
   if (clarification) {
@@ -2827,6 +3128,9 @@ function createTicketsAdaptiveCard(toolOutput) {
         isSubtle: true
       });
     }
+  } else if (visibleRequests.length > 0) {
+    const attentionBlock = createTicketAttentionBlock(visibleRequests);
+    if (attentionBlock) body.push(attentionBlock);
   }
 
   if (hasMoreRows) {
@@ -2981,6 +3285,143 @@ function createPersonalKeywordTicketsAdaptiveCard(data) {
       body
     }
   };
+}
+
+function createTicketAttentionBlock(requests) {
+  const ranked = requests
+    .map((request) => ({
+      request,
+      attention: scoreTicketAttention(request)
+    }))
+    .filter((entry) => entry.attention.score > 0)
+    .sort((a, b) => b.attention.score - a.attention.score);
+
+  if (ranked.length === 0) return null;
+
+  const { request, attention } = ranked[0];
+  const ticketId = `#${request.id || '-'}`;
+  const reasons = attention.reasons.slice(0, 3).join('; ');
+  const suggestion = attention.suggestion || 'Conviene revisar el detalle y decidir si requiere seguimiento.';
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    style: 'emphasis',
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Requiere más atención',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: `${ticketId} - ${truncateText(request.subject || 'Sin asunto', 120)}`,
+        weight: 'Bolder',
+        color: 'Attention',
+        wrap: true,
+        spacing: 'Small'
+      },
+      {
+        type: 'TextBlock',
+        text: `Motivo: ${reasons}.`,
+        wrap: true,
+        spacing: 'Small'
+      },
+      {
+        type: 'TextBlock',
+        text: `Siguiente paso sugerido: ${suggestion}`,
+        wrap: true,
+        isSubtle: true,
+        spacing: 'Small'
+      }
+    ]
+  };
+}
+
+function scoreTicketAttention(request) {
+  const reasons = [];
+  let score = 0;
+
+  const priority = normalizeComparableText(getDisplayName(request.priority));
+  const status = normalizeComparableText(getDisplayName(request.status));
+  const technician = getDisplayName(request.technician) || getAssignedTechnicianValue(request);
+  const dueTimestamp = getSdpTimestamp(request?.due_by_time);
+  const updatedTimestamp = getRequestUpdatedTimestamp(request) || getRequestCreatedTimestamp(request);
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  if (priority.includes('alta') || priority.includes('high') || priority.includes('urgente')) {
+    score += 45;
+    reasons.push('prioridad alta');
+  } else if (priority.includes('media') || priority.includes('medium')) {
+    score += 18;
+    reasons.push('prioridad media');
+  }
+
+  if (status.includes('espera') || status.includes('hold')) {
+    score += 30;
+    reasons.push('está en espera');
+  } else if (status.includes('suspend')) {
+    score += 24;
+    reasons.push('está suspendido');
+  } else if (status.includes('proceso') || status.includes('progress')) {
+    score += 16;
+    reasons.push('está en proceso');
+  } else if (status.includes('abiert') || status.includes('open')) {
+    score += 12;
+    reasons.push('sigue abierto');
+  }
+
+  if (dueTimestamp) {
+    const daysToDue = Math.ceil((dueTimestamp - now) / dayMs);
+    if (daysToDue < 0) {
+      score += 40;
+      reasons.push(`venció hace ${Math.abs(daysToDue)} día${Math.abs(daysToDue) === 1 ? '' : 's'}`);
+    } else if (daysToDue <= 1) {
+      score += 25;
+      reasons.push('vence pronto');
+    } else if (daysToDue <= 3) {
+      score += 12;
+      reasons.push('vence en pocos días');
+    }
+  }
+
+  if (updatedTimestamp) {
+    const staleDays = Math.floor((now - updatedTimestamp) / dayMs);
+    if (staleDays >= 7) {
+      score += 28;
+      reasons.push(`sin actualización en ${staleDays} días`);
+    } else if (staleDays >= 3) {
+      score += 18;
+      reasons.push(`sin actualización en ${staleDays} días`);
+    }
+  }
+
+  if (!technician) {
+    score += 14;
+    reasons.push('no tiene técnico asignado');
+  }
+
+  return {
+    score,
+    reasons: reasons.length > 0 ? reasons : ['conviene revisar su estado'],
+    suggestion: createTicketAttentionSuggestion({ priority, status, dueTimestamp, updatedTimestamp, technician })
+  };
+}
+
+function createTicketAttentionSuggestion({ priority, status, dueTimestamp, updatedTimestamp, technician }) {
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const staleDays = updatedTimestamp ? Math.floor((now - updatedTimestamp) / dayMs) : 0;
+  const overdue = dueTimestamp ? dueTimestamp < now : false;
+
+  if (!technician) return 'validar asignación o agregar un seguimiento solicitando responsable.';
+  if (overdue || priority.includes('alta') || priority.includes('high')) return 'abrir el detalle y agregar seguimiento para confirmar avance o escalamiento.';
+  if (status.includes('espera') || status.includes('hold')) return 'revisar qué información falta y agregar un seguimiento concreto.';
+  if (staleDays >= 3) return 'agregar seguimiento preguntando estado actual y próximo paso.';
+  return 'abrir el detalle para confirmar si requiere seguimiento.';
 }
 
 function filterStaleTicketsToolOutput(toolOutput, preparedArgs = {}, message = '') {
