@@ -26,6 +26,7 @@ const PENDING_ACTION_TTL_MS = Number(process.env.PENDING_ACTION_TTL_MS || 5 * 60
 const GEMINI_SUMMARY_MODEL = process.env.GEMINI_SUMMARY_MODEL || 'gemini-2.5-flash';
 const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
 const RUNTIME_STATE_PATH = process.env.RUNTIME_STATE_PATH || path.join(__dirname, 'data', 'runtime-state.json');
+const ACTIVE_SITUATIONS_PATH = process.env.ACTIVE_SITUATIONS_PATH || path.join(__dirname, 'data', 'active-situations.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsUserCache = new Map();
@@ -2675,6 +2676,534 @@ function getRecentFollowUpDays() {
   return Number.isFinite(days) && days > 0 ? Math.min(days, 30) : 7;
 }
 
+async function handleActiveSituationTurn({ message, user, onText, onCard, responseChannel }) {
+  const adminCommand = parseActiveSituationAdminCommand(message);
+  if (adminCommand) {
+    if (!isSupportAdmin(user)) {
+      onText('Puedo consultar situaciones activas, pero solo administradores de soporte pueden registrarlas, actualizarlas o cerrarlas.');
+      return true;
+    }
+
+    const result = await applyActiveSituationAdminCommand(adminCommand, user);
+    const card = createActiveSituationAdminResultCard(result);
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      onText(formatActiveSituationAdminResultText(result));
+    }
+    return true;
+  }
+
+  if (isActiveSituationsListRequest(message)) {
+    const situations = await getActiveSituations();
+    const card = createActiveSituationsListCard(situations);
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      onText(formatActiveSituationsListText(situations));
+    }
+    return true;
+  }
+
+  const matchingSituations = await findMatchingActiveSituations(message);
+  if (matchingSituations.length === 0) return false;
+
+  const card = createActiveSituationUserCard(matchingSituations, message);
+  if (responseChannel === 'teams' && card) {
+    onCard?.(card);
+  } else {
+    onText(formatActiveSituationUserText(matchingSituations));
+  }
+  return true;
+}
+
+function parseActiveSituationAdminCommand(message = '') {
+  const normalized = normalizeComparableText(message);
+  const isRegister = /\b(registra|registrar|crea|crear|nueva|abrir|abre)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
+  const isUpdate = /\b(actualiza|actualizar|modifica|modificar)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
+  const isClose = /\b(cierra|cerrar|resuelve|resolver|finaliza|finalizar)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
+  if (!isRegister && !isUpdate && !isClose) return null;
+
+  const system = extractSituationSystem(message);
+  if (!system) {
+    return {
+      type: 'invalid',
+      error: 'Necesito el sistema afectado. Puedes escribir, por ejemplo: “registra situación activa de SAP: intermitencia de acceso desde las 8:30 AM”.'
+    };
+  }
+
+  return {
+    type: isClose ? 'close' : (isUpdate ? 'update' : 'register'),
+    system,
+    status: inferSituationStatus(message),
+    severity: inferSituationSeverity(message),
+    summary: extractSituationSummary(message, system),
+    expiresAt: inferSituationExpiry(message)
+  };
+}
+
+function extractSituationSystem(message = '') {
+  const text = String(message || '').trim();
+  const explicit = text.match(/\b(?:de|del|para|sobre|en)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9._-]{2,}(?:\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9._-]{2,}){0,3})\s*:?/i);
+  if (explicit) {
+    return cleanupSituationSystem(explicit[1]);
+  }
+
+  const knownSystems = getKnownSituationSystems();
+  const normalized = normalizeComparableText(text);
+  const found = knownSystems.find((system) => normalized.includes(normalizeComparableText(system)));
+  return found || '';
+}
+
+function cleanupSituationSystem(value = '') {
+  return String(value || '')
+    .replace(/\b(tiene|presenta|esta|está|con|por|intermitencia|incidente|falla|situacion|situación|anomalia|anomalía)\b.*$/i, '')
+    .replace(/[:.,;]+$/g, '')
+    .trim();
+}
+
+function getKnownSituationSystems() {
+  return [
+    'SAP',
+    'Barraza Móvil',
+    'Barraza Movil',
+    'Internet',
+    'Correo',
+    'Office 365',
+    'Microsoft 365',
+    'Teams',
+    'ServiceDesk Plus',
+    'SDP',
+    'Impresoras',
+    'VPN',
+    'LDAP',
+    'Active Directory',
+    'Windows'
+  ];
+}
+
+function extractSituationSummary(message = '', system = '') {
+  let text = String(message || '').trim();
+  text = text.replace(/^.*?\b(?:situacion|situación|incidente|falla|anomalia|anomalía|alerta)\b\s*(?:activa)?\s*(?:de|del|para|sobre|en)?\s*/i, '');
+  if (system) {
+    text = text.replace(new RegExp(`^${escapeRegExp(system)}\\s*:?\\s*`, 'i'), '');
+  }
+  text = text.replace(/^[:\-–\s]+/, '').trim();
+  return truncateText(text || `Situación activa reportada para ${system}.`, 900);
+}
+
+function inferSituationStatus(message = '') {
+  const normalized = normalizeComparableText(message);
+  if (/\b(caido|caida|no disponible|fuera de servicio|indisponible)\b/.test(normalized)) return 'No disponible';
+  if (/\b(intermitente|intermitencia|lento|lentitud|degradado|degradacion)\b/.test(normalized)) return 'Intermitente';
+  if (/\b(monitor|monitoreo|observacion|observacion)\b/.test(normalized)) return 'En monitoreo';
+  if (/\b(resuelto|normalizado|restablecido)\b/.test(normalized)) return 'Resuelto';
+  return 'Activo';
+}
+
+function inferSituationSeverity(message = '') {
+  const normalized = normalizeComparableText(message);
+  if (/\b(critica|critico|alta|urgente|general|masivo|produccion|facturacion|despacho|ventas)\b/.test(normalized)) return 'Alta';
+  if (/\b(media|intermitente|varios|area)\b/.test(normalized)) return 'Media';
+  if (/\b(baja|menor|parcial)\b/.test(normalized)) return 'Baja';
+  return 'Media';
+}
+
+function inferSituationExpiry(message = '') {
+  const hoursMatch = String(message || '').match(/\b(?:por|durante|vence en|vigente por)\s+(\d{1,2})\s*(?:h|hora|horas)\b/i);
+  const hours = hoursMatch ? Number(hoursMatch[1]) : Number(process.env.SOPHIA_ACTIVE_SITUATION_DEFAULT_HOURS || 24);
+  const safeHours = Number.isFinite(hours) && hours > 0 ? Math.min(hours, 168) : 24;
+  return new Date(Date.now() + safeHours * 60 * 60 * 1000).toISOString();
+}
+
+async function applyActiveSituationAdminCommand(command, user) {
+  if (command.type === 'invalid') {
+    return { ok: false, action: 'invalid', message: command.error };
+  }
+
+  const store = await readActiveSituationsStore();
+  const now = new Date().toISOString();
+  const normalizedSystem = normalizeComparableText(command.system);
+  const existing = store.situations.find((situation) => (
+    situation.state === 'active' &&
+    normalizeComparableText(situation.system) === normalizedSystem
+  ));
+
+  let situation;
+  if (command.type === 'close') {
+    if (!existing) {
+      return { ok: false, action: 'close', message: `No encontré una situación activa para ${command.system}.` };
+    }
+    existing.state = 'closed';
+    existing.status = 'Resuelto';
+    existing.closedAt = now;
+    existing.updatedAt = now;
+    existing.closedBy = getAuditUserSummary(user);
+    existing.history = [...(existing.history || []), createSituationHistoryEntry('closed', command.summary, user)];
+    situation = existing;
+  } else if (existing) {
+    existing.status = command.status || existing.status;
+    existing.severity = command.severity || existing.severity;
+    existing.summary = command.summary || existing.summary;
+    existing.expiresAt = command.expiresAt || existing.expiresAt;
+    existing.updatedAt = now;
+    existing.updatedBy = getAuditUserSummary(user);
+    existing.history = [...(existing.history || []), createSituationHistoryEntry('updated', command.summary, user)];
+    situation = existing;
+  } else {
+    situation = {
+      id: randomUUID(),
+      system: command.system,
+      status: command.status || 'Activo',
+      severity: command.severity || 'Media',
+      summary: command.summary,
+      state: 'active',
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: command.expiresAt,
+      createdBy: getAuditUserSummary(user),
+      history: [createSituationHistoryEntry('created', command.summary, user)]
+    };
+    store.situations.push(situation);
+  }
+
+  await writeActiveSituationsStore(store);
+  await auditActiveSituation({ user, action: command.type, situation });
+
+  return {
+    ok: true,
+    action: command.type,
+    situation
+  };
+}
+
+function createSituationHistoryEntry(action, summary, user) {
+  return {
+    action,
+    summary: truncateText(redactSensitiveText(stripHtml(summary || '')), 900),
+    at: new Date().toISOString(),
+    by: getAuditUserSummary(user)
+  };
+}
+
+function getAuditUserSummary(user) {
+  return {
+    name: user?.name,
+    email: user?.email,
+    aadObjectId: user?.aadObjectId,
+    sdpRequesterId: user?.sdpRequesterId || user?.id
+  };
+}
+
+async function readActiveSituationsStore() {
+  try {
+    const text = await readFile(ACTIVE_SITUATIONS_PATH, 'utf8');
+    const data = JSON.parse(text);
+    return {
+      version: 1,
+      situations: Array.isArray(data?.situations) ? data.situations : []
+    };
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Situations] No se pudo leer active-situations.json:', error.message);
+    }
+    return { version: 1, situations: [] };
+  }
+}
+
+async function writeActiveSituationsStore(store) {
+  const tmpPath = `${ACTIVE_SITUATIONS_PATH}.tmp`;
+  await mkdir(path.dirname(ACTIVE_SITUATIONS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify({
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    situations: store.situations || []
+  }, null, 2));
+  await rename(tmpPath, ACTIVE_SITUATIONS_PATH);
+}
+
+async function auditActiveSituation({ user, action, situation }) {
+  const record = {
+    timestamp: new Date().toISOString(),
+    action,
+    system: situation?.system,
+    situationId: situation?.id,
+    user: getAuditUserSummary(user)
+  };
+  try {
+    await appendFile(path.join(__dirname, 'active-situations-audit.log'), `${JSON.stringify(record)}\n`);
+  } catch (error) {
+    console.warn('[Situations] No se pudo escribir active-situations-audit.log:', error.message);
+  }
+}
+
+async function getActiveSituations() {
+  const store = await readActiveSituationsStore();
+  const now = Date.now();
+  return store.situations
+    .filter((situation) => situation?.state === 'active')
+    .filter((situation) => !situation.expiresAt || Date.parse(situation.expiresAt) > now)
+    .sort((a, b) => Date.parse(b.updatedAt || b.createdAt || 0) - Date.parse(a.updatedAt || a.createdAt || 0));
+}
+
+function isActiveSituationsListRequest(message = '') {
+  const normalized = normalizeComparableText(message);
+  return /\b(situaciones|incidentes|fallas|anomalias|alertas)\b/.test(normalized) &&
+    /\b(activas|actuales|recientes|hay|listar|lista|muestra|estado)\b/.test(normalized);
+}
+
+async function findMatchingActiveSituations(message = '') {
+  if (!isSituationAwarenessRequest(message)) return [];
+  const situations = await getActiveSituations();
+  const normalizedMessage = normalizeComparableText(message);
+
+  return situations.filter((situation) => {
+    const system = normalizeComparableText(situation.system);
+    if (system && normalizedMessage.includes(system)) return true;
+    const words = system.split(' ').filter((word) => word.length >= 3);
+    return words.some((word) => normalizedMessage.includes(word));
+  });
+}
+
+function isSituationAwarenessRequest(message = '') {
+  const normalized = normalizeComparableText(message);
+  const asksStatus = /\b(ocurre|pasa|hay|estado|situacion|incidente|falla|caido|caida|intermitencia|intermitente|problema|anomalia)\b/.test(normalized);
+  const reportsSymptom = /\b(no puedo|no deja|no logro|falla|error|lento|no conecta|conectarme|entrar|acceder|abrir)\b/.test(normalized);
+  const knownSystemMentioned = getKnownSituationSystems().some((system) => normalized.includes(normalizeComparableText(system)));
+  return knownSystemMentioned && (asksStatus || reportsSymptom) && !isCreateTicketIntent(message);
+}
+
+function createActiveSituationAdminResultCard(result) {
+  const summaryText = result.ok
+    ? `Situación ${result.action === 'close' ? 'cerrada' : 'registrada/actualizada'} para ${result.situation.system}.`
+    : result.message;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: result.ok ? 'Situación operativa actualizada' : 'No pude registrar la situación',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: summaryText,
+      wrap: true,
+      spacing: 'Small'
+    }
+  ];
+
+  if (result.ok) {
+    body.push(createSituationFactSet(result.situation));
+  }
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createActiveSituationsListCard(situations) {
+  const summaryText = situations.length
+    ? `Hay ${situations.length} situación${situations.length === 1 ? '' : 'es'} activa${situations.length === 1 ? '' : 's'}.`
+    : 'No hay situaciones activas registradas.';
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: 'Situaciones activas',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: summaryText,
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    }
+  ];
+
+  if (situations.length > 0) {
+    body.push(...situations.slice(0, 8).map((situation, index) => ({
+      type: 'Container',
+      style: index % 2 === 1 ? 'accent' : 'default',
+      spacing: 'Medium',
+      separator: true,
+      items: [
+        {
+          type: 'TextBlock',
+          text: situation.system,
+          weight: 'Bolder',
+          color: 'Accent',
+          wrap: true
+        },
+        createSituationFactSet(situation),
+        {
+          type: 'TextBlock',
+          text: truncateText(redactSensitiveText(stripHtml(situation.summary || '')), 350),
+          wrap: true,
+          spacing: 'Small'
+        }
+      ]
+    })));
+  }
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createActiveSituationUserCard(situations) {
+  const primary = situations[0];
+  const summaryText = `Sí, hay una situación activa relacionada con ${primary.system}.`;
+  const body = [
+    {
+      type: 'TextBlock',
+      text: `Situación activa: ${primary.system}`,
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: 'Encontré contexto operativo reciente que puede explicar lo que estás viendo.',
+      wrap: true,
+      spacing: 'Small'
+    },
+    createSituationFactSet(primary),
+    {
+      type: 'TextBlock',
+      text: truncateText(redactSensitiveText(stripHtml(primary.summary || '')), 600),
+      wrap: true,
+      spacing: 'Medium'
+    },
+    {
+      type: 'TextBlock',
+      text: 'Si tu caso coincide con esta situación, puedo ayudarte a revisar si ya tienes un ticket relacionado o crear uno asociado si necesitas dejar constancia.',
+      wrap: true,
+      spacing: 'Small',
+      isSubtle: true
+    },
+    {
+      type: 'Container',
+      spacing: 'Medium',
+      separator: true,
+      items: [
+        {
+          type: 'TextBlock',
+          text: 'Opciones',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: [
+            `Crear ticket relacionado con ${primary.system}`,
+            `Ver mis tickets de ${primary.system}`,
+            'Mostrar situaciones activas'
+          ].map((option) => `- ${option}`).join('\n'),
+          wrap: true,
+          spacing: 'Small',
+          isSubtle: true
+        }
+      ]
+    }
+  ];
+
+  if (situations.length > 1) {
+    body.splice(4, 0, {
+      type: 'TextBlock',
+      text: `También encontré: ${situations.slice(1, 4).map((situation) => situation.system).join(', ')}.`,
+      wrap: true,
+      spacing: 'Small',
+      isSubtle: true
+    });
+  }
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createSituationFactSet(situation) {
+  return {
+    type: 'FactSet',
+    spacing: 'Small',
+    facts: [
+      { title: 'Estado', value: situation.status || 'Activo' },
+      { title: 'Severidad', value: situation.severity || 'Media' },
+      { title: 'Actualizado', value: formatIsoDateTime(situation.updatedAt || situation.createdAt) || '-' },
+      { title: 'Vigente hasta', value: formatIsoDateTime(situation.expiresAt) || '-' }
+    ]
+  };
+}
+
+function formatActiveSituationAdminResultText(result) {
+  if (!result.ok) return result.message;
+  return [
+    `Situación ${result.action === 'close' ? 'cerrada' : 'registrada/actualizada'} para ${result.situation.system}.`,
+    `Estado: ${result.situation.status}`,
+    `Severidad: ${result.situation.severity}`,
+    `Resumen: ${result.situation.summary}`
+  ].join('\n');
+}
+
+function formatActiveSituationsListText(situations) {
+  if (situations.length === 0) return 'No hay situaciones activas registradas.';
+  return [
+    `Hay ${situations.length} situación(es) activa(s):`,
+    ...situations.slice(0, 8).map((situation) => `- ${situation.system}: ${situation.status} | ${truncateText(situation.summary, 180)}`)
+  ].join('\n');
+}
+
+function formatActiveSituationUserText(situations) {
+  const primary = situations[0];
+  return [
+    `Sí, hay una situación activa relacionada con ${primary.system}.`,
+    `Estado: ${primary.status}. Severidad: ${primary.severity}.`,
+    primary.summary,
+    'Si tu caso coincide, puedo ayudarte a revisar tus tickets relacionados o crear uno asociado.'
+  ].join('\n');
+}
+
+function formatIsoDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('es-PA', {
+    timeZone: 'America/Panama',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 async function runSupportTurn({
   message,
   user,
@@ -2690,6 +3219,16 @@ async function runSupportTurn({
   responseChannel = 'web'
 }) {
   onStatus?.('Sophia está analizando tu solicitud...');
+
+  if (await handleActiveSituationTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
 
   if (isListedTicketFollowUpReviewRequest(message)) {
     await handleListedTicketFollowUpReview({

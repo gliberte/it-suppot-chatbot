@@ -19,6 +19,8 @@ reports/daily/
 data/rag-index.json
 data/runtime-state.json
 data/runtime-state.json.tmp
+data/active-situations.json
+data/active-situations.json.tmp
 *.local
 .env
 .env.local
