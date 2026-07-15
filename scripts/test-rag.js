@@ -89,6 +89,27 @@ const cases = [
     role: 'support_admin',
     expectedArea: 'admin',
     expectedTerms: ['status: "En Espera"', 'filtros genéricos']
+  },
+  {
+    name: 'Error SDP técnico asignado obligatorio',
+    query: 'ServiceDesk Plus pide udf_pick_2701 obligatorio al crear ticket',
+    role: 'support_admin',
+    expectedArea: 'sdp',
+    expectedTerms: ['Técnico asignado', 'SDP_DEFAULT_UDF_PICK_2701', 'No pedir al usuario']
+  },
+  {
+    name: 'Error SDP subcategoría obligatoria mouse',
+    query: 'error mandatory subcategory al crear ticket por falla de mouse',
+    role: 'support_admin',
+    expectedArea: 'sdp',
+    expectedTerms: ['Accesorio / Mouse', 'subcategory', 'No pedir al usuario']
+  },
+  {
+    name: 'Seguimientos usan sdp_add_note',
+    query: 'agregar seguimiento a ticket falló con fields notes',
+    role: 'support_admin',
+    expectedArea: 'sdp',
+    expectedTerms: ['sdp_add_note', 'note_text', 'No usar `sdp_update_request`']
   }
 ];
 
