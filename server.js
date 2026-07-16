@@ -838,13 +838,15 @@ async function analyzeTeamsImageAttachments(context, userText = '') {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: GEMINI_IMAGE_MODEL });
   const prompt = [
-    'Analiza las capturas adjuntas como evidencia para soporte IT.',
-    'Extrae texto visible, mensajes de error, códigos, sistemas afectados, nombres de usuario, fechas, tickets y cualquier dato operativo útil.',
+    'Analiza las capturas adjuntas como evidencia general para soporte IT.',
+    'La imagen puede contener errores, mensajes, conversaciones, pantallas de estado, datos para crear una descripción, información para una nota de seguimiento, evidencia de avance o contexto operativo.',
+    'Extrae texto visible, mensajes, códigos, sistemas afectados, nombres de usuario, fechas, tickets, acuerdos, solicitudes y cualquier dato útil para documentar o continuar el caso.',
     'No inventes datos que no se vean. Si algo no es legible, indícalo.',
     'Devuelve un resumen breve en español con estas secciones:',
     '- Texto visible relevante',
-    '- Señales técnicas',
+    '- Información útil para soporte',
     '- Posible clasificación SDP',
+    '- Uso sugerido: respuesta, descripción de ticket, nota de seguimiento, evidencia o aclaración',
     '- Preguntas útiles para continuar',
     '',
     `Texto escrito por el usuario: ${userText || 'Sin texto adicional.'}`

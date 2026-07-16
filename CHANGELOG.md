@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.1] - 2026-07-16
+
+### Changed
+- El análisis de imágenes en Teams se interpreta como evidencia general de soporte, no solo como reporte de errores.
+- Sophia puede usar capturas para enriquecer descripciones, notas de seguimiento, contexto operativo, acuerdos visibles o evidencia de avance.
+
 ## [0.8.0] - 2026-07-16
 
 ### Added
