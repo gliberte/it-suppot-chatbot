@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.3] - 2026-07-16
+
+### Fixed
+- Sophia no trata errores históricos de permisos o configuración al agregar seguimientos como definitivos si el usuario vuelve a pedir la acción con ticket y nota disponibles.
+- Los reintentos de seguimientos vuelven a pasar por `sdp_add_note` para que el backend actual valide permisos y ejecute con la configuración vigente.
+
 ## [0.8.2] - 2026-07-16
 
 ### Fixed
