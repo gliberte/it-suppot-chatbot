@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.2] - 2026-07-16
+
+### Fixed
+- Los administradores de soporte pueden agregar seguimientos a tickets generales luego de validar que el ticket existe en ServiceDesk Plus.
+- Los técnicos asignados pueden agregar seguimientos a tickets donde figuran como responsables.
+
 ## [0.8.1] - 2026-07-16
 
 ### Changed

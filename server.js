@@ -6182,6 +6182,10 @@ async function assertToolAllowedForUser(toolName, args, user) {
     return;
   }
 
+  if (isSupportAdmin(user)) return;
+
+  if (toolName === 'sdp_add_note' && userMatchesAssignedTechnician(user, data)) return;
+
   if (!userCanAccessRequest(user, data)) {
     throw new Error('No tienes permiso para modificar ese ticket.');
   }
