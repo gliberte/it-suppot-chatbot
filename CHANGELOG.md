@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.8] - 2026-07-16
+
+### Added
+- `knowledge:review` permite marcar candidatos como `applied_to_knowledge` con `--applied kc_xxxxx --target knowledge/<archivo>.md`.
+
+### Ops
+- El ciclo de aprendizaje queda trazado como pendiente, aprobado, exportado manualmente y aplicado a la base de conocimiento.
+
 ## [0.8.7] - 2026-07-16
 
 ### Added

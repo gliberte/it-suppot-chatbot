@@ -8,15 +8,30 @@ const LIMIT = Number(getArgValue('--limit') || process.env.KNOWLEDGE_REVIEW_LIMI
 const DETAIL_ID = getArgValue('--id');
 const APPROVE_ID = getArgValue('--approve');
 const REJECT_ID = getArgValue('--reject');
+const APPLIED_ID = getArgValue('--applied');
+const APPLIED_TARGET = getArgValue('--target');
 
 const store = readStore(STORE_PATH);
 
-if (APPROVE_ID || REJECT_ID) {
-  updateCandidateStatus(APPROVE_ID || REJECT_ID, APPROVE_ID ? 'approved' : 'rejected');
+if (APPROVE_ID || REJECT_ID || APPLIED_ID) {
+  if (APPLIED_ID && !APPLIED_TARGET) {
+    console.error('Para marcar como aplicado debes indicar el destino: --target knowledge/<archivo>.md');
+    process.exit(1);
+  }
+  updateCandidateStatus(APPROVE_ID || REJECT_ID || APPLIED_ID, getRequestedStatus(), {
+    target: APPLIED_TARGET
+  });
 } else if (DETAIL_ID) {
   renderCandidateDetail(DETAIL_ID);
 } else {
   renderCandidateList();
+}
+
+function getRequestedStatus() {
+  if (APPROVE_ID) return 'approved';
+  if (REJECT_ID) return 'rejected';
+  if (APPLIED_ID) return 'applied_to_knowledge';
+  return STATUS;
 }
 
 function readStore(path) {
@@ -52,13 +67,14 @@ function renderCandidateList() {
   const candidates = getFilteredCandidates(STATUS).slice(0, LIMIT);
   const pendingCount = countByStatus('pending_review');
   const approvedCount = countByStatus('approved');
+  const appliedCount = countByStatus('applied_to_knowledge');
   const rejectedCount = countByStatus('rejected');
 
   console.log('Sophia knowledge review');
   console.log(`Archivo: ${relativePath(STORE_PATH)}`);
   console.log(`Actualizado: ${store.updatedAt || 'n/a'}`);
   console.log(`Estado filtrado: ${STATUS}`);
-  console.log(`Pendientes: ${pendingCount} | Aprobados: ${approvedCount} | Descartados: ${rejectedCount}`);
+  console.log(`Pendientes: ${pendingCount} | Aprobados: ${approvedCount} | Aplicados: ${appliedCount} | Descartados: ${rejectedCount}`);
   console.log('');
 
   if (!candidates.length) {
@@ -86,7 +102,9 @@ function renderCandidateList() {
   console.log('  npm run knowledge:review -- --id kc_xxxxx');
   console.log('  npm run knowledge:review -- --approve kc_xxxxx');
   console.log('  npm run knowledge:review -- --reject kc_xxxxx');
+  console.log('  npm run knowledge:review -- --applied kc_xxxxx --target knowledge/catalogo-sdp.md');
   console.log('  npm run knowledge:review -- --status approved');
+  console.log('  npm run knowledge:review -- --status applied_to_knowledge');
   console.log('');
   console.log('Nota: aprobar un candidato no lo incorpora automaticamente al RAG.');
   console.log('Despues de aprobar, convierte el aprendizaje en un cambio dentro de knowledge/ y ejecuta npm run rag:ingest.');
@@ -108,6 +126,8 @@ function renderCandidateDetail(id) {
   console.log(`Creado: ${candidate.createdAt || 'n/a'}`);
   if (candidate.reviewedAt) console.log(`Revisado: ${candidate.reviewedAt}`);
   if (candidate.reviewedBy?.name) console.log(`Revisado por: ${candidate.reviewedBy.name}`);
+  if (candidate.appliedAt) console.log(`Aplicado: ${candidate.appliedAt}`);
+  if (candidate.appliedTarget) console.log(`Destino aplicado: ${candidate.appliedTarget}`);
   console.log('');
   console.log('Evidencia');
   console.log('---------');
@@ -140,9 +160,10 @@ function renderCandidateDetail(id) {
   console.log('--------');
   console.log(`  npm run knowledge:review -- --approve ${candidate.id}`);
   console.log(`  npm run knowledge:review -- --reject ${candidate.id}`);
+  console.log(`  npm run knowledge:review -- --applied ${candidate.id} --target knowledge/<archivo>.md`);
 }
 
-function updateCandidateStatus(id, status) {
+function updateCandidateStatus(id, status, options = {}) {
   const candidate = findCandidate(id);
   if (!candidate) {
     console.error(`No encontre el candidato ${id}.`);
@@ -151,11 +172,16 @@ function updateCandidateStatus(id, status) {
 
   candidate.status = status;
   candidate.reviewedAt = new Date().toISOString();
-  candidate.reviewAction = status === 'approved' ? 'approve' : 'reject';
+  candidate.reviewAction = getReviewAction(status);
   candidate.reviewedBy = {
     name: process.env.USER || process.env.LOGNAME || 'cli',
     source: 'knowledge:review'
   };
+
+  if (status === 'applied_to_knowledge') {
+    candidate.appliedAt = new Date().toISOString();
+    candidate.appliedTarget = options.target;
+  }
 
   writeStore(store);
   appendAuditRecord(candidate);
@@ -166,9 +192,21 @@ function updateCandidateStatus(id, status) {
     console.log('Aprobado no significa incorporado al RAG todavia.');
     console.log('Ahora convierte el aprendizaje en un cambio dentro de knowledge/ y ejecuta:');
     console.log('  npm run rag:ingest');
+  } else if (status === 'applied_to_knowledge') {
+    console.log(`Aplicado en: ${candidate.appliedTarget}`);
+    console.log('Si aun no lo hiciste, regenera y valida el RAG:');
+    console.log('  npm run rag:ingest');
+    console.log('  npm run rag:test');
   } else {
     console.log('El candidato fue descartado y queda trazable en auditoria.');
   }
+}
+
+function getReviewAction(status) {
+  if (status === 'approved') return 'approve';
+  if (status === 'rejected') return 'reject';
+  if (status === 'applied_to_knowledge') return 'applied';
+  return status;
 }
 
 function appendAuditRecord(candidate) {
@@ -179,6 +217,7 @@ function appendAuditRecord(candidate) {
     candidateType: candidate.type,
     candidateTitle: candidate.title,
     status: candidate.status,
+    appliedTarget: candidate.appliedTarget,
     user: candidate.reviewedBy
   };
 
