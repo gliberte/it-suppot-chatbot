@@ -792,7 +792,7 @@ function createTeamsActivityPreview(activity) {
 function createAdaptiveCardPreview(card) {
   const texts = [];
   const visit = (value) => {
-    if (!value || texts.length >= 12) return;
+    if (!value || texts.length >= 24) return;
     if (Array.isArray(value)) {
       value.forEach(visit);
       return;
@@ -805,7 +805,31 @@ function createAdaptiveCardPreview(card) {
     }
   };
   visit(card?.body || card);
-  return createAuditTextPreview(texts.join('\n'), 800);
+  return createAuditTextPreview(texts.join('\n'), 1400);
+}
+
+function createAdaptiveCardAuditSignals(card) {
+  const texts = [];
+  const visit = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === 'object') {
+      if (value.type === 'TextBlock' && value.text) texts.push(String(value.text));
+      Object.values(value).forEach(visit);
+    }
+  };
+  visit(card?.body || card);
+  const joined = normalizeComparableText(texts.join(' '));
+  return {
+    textBlockCount: texts.length,
+    hasSeguimientos: joined.includes('seguimientos') || joined.includes('seguimiento'),
+    hasHistorial: joined.includes('historial'),
+    hasCorreo: joined.includes('correo'),
+    hasNota: joined.includes('nota')
+  };
 }
 
 function prunePendingActions(session, persist = true) {
@@ -2490,6 +2514,7 @@ function getRequestAccessReason(user, data) {
 function createListedTicketFollowUpReviewCard({ checked, skipped = [], userAddedOnly = false }) {
   const withNotes = checked.filter((entry) => entry.notes.length > 0);
   const withoutNotes = checked.filter((entry) => entry.notes.length === 0);
+  const firstTicketId = withNotes[0]?.request?.id || checked[0]?.request?.id;
   const summaryText = withNotes.length > 0
     ? `Encontré ${withNotes.length} ticket${withNotes.length === 1 ? '' : 's'} con seguimiento${withNotes.length === 1 ? '' : 's'}${userAddedOnly ? ' agregado(s) por usuario' : ''}.`
     : `No encontré seguimientos${userAddedOnly ? ' agregados por usuario' : ''} en los tickets revisados.`;
@@ -2556,8 +2581,8 @@ function createListedTicketFollowUpReviewCard({ checked, skipped = [], userAdded
       {
         type: 'TextBlock',
         text: [
-          'Ver detalle del ticket #12345',
-          'Agregar seguimiento al ticket #12345',
+          firstTicketId ? `Ver detalle del ticket #${firstTicketId}` : 'Ver detalle de un ticket revisado',
+          firstTicketId ? `Agregar seguimiento al ticket #${firstTicketId}` : 'Agregar seguimiento a un ticket revisado',
           'Listar tickets que requieren más atención'
         ].map((option) => `- ${option}`).join('\n'),
         wrap: true,
@@ -4514,6 +4539,7 @@ function filterPersonalKeywordTicketsToolOutput(toolOutput, preparedArgs = {}, m
 function createPersonalKeywordTicketsAdaptiveCard(data) {
   const requests = Array.isArray(data?.requests) ? data.requests : [];
   const keyword = data?.sophia_keyword || 'criterio indicado';
+  const firstTicketId = requests[0]?.id;
   const summaryText = requests.length
     ? `Encontré ${requests.length} de tus tickets relacionados con "${keyword}", ordenados del más antiguo al más reciente.`
     : `No encontré tickets propios relacionados con "${keyword}".`;
@@ -4568,7 +4594,7 @@ function createPersonalKeywordTicketsAdaptiveCard(data) {
       {
         type: 'TextBlock',
         text: [
-          'Ver detalle del ticket #12345',
+          firstTicketId ? `Ver detalle del ticket #${firstTicketId}` : 'Ver detalle de un ticket encontrado',
           'Buscar otra palabra en mis tickets',
           'Filtrar mis tickets por estado'
         ].map((option) => `- ${option}`).join('\n'),
@@ -4816,6 +4842,7 @@ function createStaleTicketsAdaptiveCard(data) {
   const requests = Array.isArray(data?.requests) ? data.requests : [];
   const thresholdDays = Number(data?.sophia_stale_threshold_days || 3);
   const visibleRequests = requests.slice(0, 8);
+  const firstTicketId = visibleRequests[0]?.id || requests[0]?.id;
   const summaryText = requests.length
     ? `Encontré ${requests.length} ticket${requests.length === 1 ? '' : 's'} abierto${requests.length === 1 ? '' : 's'} con ${thresholdDays}+ días sin actualización.`
     : `No encontré tickets abiertos con ${thresholdDays}+ días sin actualización.`;
@@ -4874,8 +4901,8 @@ function createStaleTicketsAdaptiveCard(data) {
       {
         type: 'TextBlock',
         text: [
-          'Ver detalle del ticket #12345',
-          'Agregar seguimiento al ticket #12345',
+          firstTicketId ? `Ver detalle del ticket #${firstTicketId}` : 'Ver detalle de un ticket listado',
+          firstTicketId ? `Agregar seguimiento al ticket #${firstTicketId}` : 'Agregar seguimiento a un ticket listado',
           'Filtrar por Técnico asignado o prioridad'
         ].map((option) => `- ${option}`).join('\n'),
         wrap: true,
@@ -6227,6 +6254,7 @@ async function sendTeamsReply(context, text) {
         replyLength: text.summaryText?.length || 0,
         replyPreview: createAuditTextPreview(text.summaryText || 'Resultado de Sophia'),
         cardPreview: createAdaptiveCardPreview(card),
+        cardSignals: createAdaptiveCardAuditSignals(card),
         resourceId: result?.id,
         format: 'adaptive_card'
       });
@@ -6236,6 +6264,7 @@ async function sendTeamsReply(context, text) {
       await auditTeamsEvent(context.activity, 'reply_error', {
         error: truncateText(error.message, 300),
         cardPreview: createAdaptiveCardPreview(card),
+        cardSignals: createAdaptiveCardAuditSignals(card),
         format: 'adaptive_card'
       });
       throw error;

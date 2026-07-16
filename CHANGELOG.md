@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.7.5] - 2026-07-16
+
+### Fixed
+- Las tarjetas de seguimiento dejan de sugerir comandos con el ID de ejemplo `#12345` y usan el ticket real cuando está disponible.
+
+### Ops
+- La auditoría de tarjetas Teams registra señales sobre secciones de seguimiento, historial, correo y notas para facilitar diagnóstico en producción.
+
 ## [0.7.4] - 2026-07-16
 
 ### Changed
