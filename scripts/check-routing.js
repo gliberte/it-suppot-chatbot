@@ -55,6 +55,10 @@ function validateRoutingBehavior() {
       expectedRoute: 'mobile_device'
     },
     {
+      text: 'Barraza Móvil no sincroniza rutas asignadas ni cobertura de ventas',
+      expectedRoute: 'mobile_device'
+    },
+    {
       text: 'No puedo acceder a SAP',
       expectedRoute: 'sap_access'
     },

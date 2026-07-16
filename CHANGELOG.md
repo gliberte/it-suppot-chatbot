@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.4] - 2026-07-16
+
+### Added
+- Se agrega conocimiento RAG sobre Barraza Movil: app Android de vendedores para rutas, clientes, cobertura, No Ventas, mapas, GPS, fotos de fachada y operación comercial en campo.
+
+### Changed
+- Las solicitudes sobre Barraza Móvil se clasifican como casos de app móvil en la ruta `Teléfonos / Celulares` cuando no exista una categoría más específica.
+- El enrutamiento determinístico reconoce señales como Barraza Móvil, rutas asignadas, cobertura de ventas, No Ventas, foto de fachada y coordenadas GPS.
+
 ## [0.8.3] - 2026-07-16
 
 ### Fixed

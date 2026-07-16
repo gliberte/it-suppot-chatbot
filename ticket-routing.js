@@ -191,6 +191,15 @@ export function getTicketRoutingMap(env = process.env) {
     {
       name: 'mobile_device',
       keywords: [
+        'barraza movil',
+        'barraza móvil',
+        'app barraza movil',
+        'app barraza móvil',
+        'rutas asignadas',
+        'cobertura de ventas',
+        'no ventas',
+        'foto de fachada',
+        'coordenadas gps',
         'celular',
         'teléfono',
         'telefono',

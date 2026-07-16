@@ -156,6 +156,27 @@ Señales:
 - no enciende
 - falla de aplicación móvil
 
+## Barraza Móvil
+
+Barraza Móvil es una aplicación móvil Android usada por vendedores en calle para gestionar clientes, rutas, cobertura comercial, fotos de fachada, coordenadas GPS, mapas y navegación hacia clientes.
+
+Usar la ruta más cercana disponible `Teléfonos / Celulares` para fallas de Barraza Móvil cuando el problema esté relacionado con la app móvil, Android, rutas, cobertura, clientes, mapa, GPS, fotos, sincronización o trabajo en campo.
+
+Señales:
+- Barraza Móvil o Barraza Movil
+- app móvil de vendedores
+- rutas asignadas
+- cobertura de ventas
+- No Ventas
+- clientes en mapa
+- coordenadas GPS
+- foto de fachada
+- Waze
+- clientes no compraron
+- cobertura por marca
+
+Una falla de Barraza Móvil no corresponde a `Contraseñas / Usuario Windows`, salvo que el caso sea explícitamente un bloqueo o restablecimiento de usuario Windows. Si el problema es acceso a Barraza Móvil, Sophia debe dejar claro en la descripción que el sistema afectado es Barraza Móvil.
+
 ## Prioridad inicial
 
 Usar prioridad `Media` por defecto salvo que el usuario indique impacto crítico, interrupción general o afectación a una operación urgente.
