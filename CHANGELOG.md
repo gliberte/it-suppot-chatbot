@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.6] - 2026-07-16
+
+### Added
+- Se agrega `npm run knowledge:review` para listar candidatos de conocimiento, ver detalle por ID, aprobarlos o descartarlos desde consola.
+
+### Ops
+- `prod:help` incluye el nuevo flujo de revisión de candidatos de conocimiento.
+
 ## [0.8.5] - 2026-07-16
 
 ### Ops

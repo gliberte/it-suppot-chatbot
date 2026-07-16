@@ -79,6 +79,10 @@ const COMMANDS = [
       {
         name: 'knowledge:candidates:report',
         description: 'Genera reporte legible de candidatos de conocimiento.'
+      },
+      {
+        name: 'knowledge:review',
+        description: 'Lista, revisa, aprueba o descarta candidatos de conocimiento.'
       }
     ]
   },
