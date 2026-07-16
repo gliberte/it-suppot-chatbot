@@ -5425,46 +5425,87 @@ function getResolutionText(resolution) {
 
 function getRequestNotes(request) {
   const notes = extractNotesFromRequestData(request);
+  const seen = new Set();
 
   return notes
     .map((note) => {
-      const createdValue = note?.created_time || note?.added_time || note?.created_at || note?.note?.created_time;
+      const createdValue = note?.created_time
+        || note?.added_time
+        || note?.created_at
+        || note?.sent_time
+        || note?.last_updated_time
+        || note?.performed_time
+        || note?.conversation?.created_time
+        || note?.conversation?.sent_time
+        || note?.note?.created_time;
       return {
         text: stripHtml(getNoteText(note)),
-        author: getDisplayName(note?.created_by || note?.added_by || note?.owner || note?.user || note?.note?.created_by),
+        source: getFollowUpSource(note),
+        author: getDisplayName(note?.created_by
+          || note?.added_by
+          || note?.from
+          || note?.sender
+          || note?.sent_by
+          || note?.owner
+          || note?.user
+          || note?.conversation?.created_by
+          || note?.conversation?.from
+          || note?.note?.created_by),
         created: getDisplayDate(createdValue),
         createdTimestamp: getSdpTimestamp(createdValue)
       };
     })
     .filter((note) => note.text && note.text !== '[object Object]')
+    .filter((note) => {
+      const key = `${note.createdTimestamp || note.created || ''}|${normalizeComparableText(note.author || '')}|${normalizeComparableText(note.text)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => (b.createdTimestamp || 0) - (a.createdTimestamp || 0))
     .slice(0, 5);
 }
 
-function extractNotesFromRequestData(value) {
+function extractNotesFromRequestData(value, visited = new Set()) {
   if (!value) return [];
   if (Array.isArray(value)) return value;
+  if (typeof value !== 'object') return [];
+  if (visited.has(value)) return [];
+  visited.add(value);
 
-  const directCandidates = [
-    value.notes,
-    value.request_notes,
-    value.conversations,
-    value.request_conversations,
-    value.data,
-    value.list
+  const collections = [];
+  const directKeys = [
+    'notes',
+    'request_notes',
+    'conversations',
+    'request_conversations',
+    'email_conversations',
+    'emailConversations',
+    'conversation_threads',
+    'conversationThreads',
+    'messages',
+    'replies',
+    'data',
+    'list'
   ];
 
-  for (const candidate of directCandidates) {
-    if (Array.isArray(candidate)) return candidate;
+  for (const key of directKeys) {
+    const candidate = value[key];
+    if (Array.isArray(candidate)) collections.push(...candidate);
   }
 
-  if (typeof value === 'object') {
-    for (const child of Object.values(value)) {
-      const nested = extractNotesFromRequestData(child);
-      if (nested.length > 0) return nested;
-    }
+  const singleKeys = ['note', 'request_note', 'conversation', 'message', 'reply'];
+  for (const key of singleKeys) {
+    const candidate = value[key];
+    if (candidate && typeof candidate === 'object') collections.push(candidate);
   }
 
-  return [];
+  for (const key of ['request', 'result', 'response']) {
+    const nested = extractNotesFromRequestData(value[key], visited);
+    if (nested.length > 0) collections.push(...nested);
+  }
+
+  return collections;
 }
 
 function getNoteText(note) {
@@ -5474,16 +5515,60 @@ function getNoteText(note) {
     note.description,
     note.content,
     note.text,
+    note.message,
+    note.body,
+    note.html,
+    note.plain_text,
     note.notes,
     note.note_text,
+    note.email_body,
+    note.mail_body,
     note.display_value,
     note.value,
+    note.conversation?.description,
+    note.conversation?.content,
+    note.conversation?.text,
+    note.conversation?.message,
+    note.conversation?.body,
+    note.conversation?.html,
+    note.conversation?.plain_text,
     note.note?.description,
     note.note?.content,
     note.note?.text,
+    note.note?.message,
+    note.note?.body,
     note.note?.display_value,
     note.note?.value
   ]);
+}
+
+function getFollowUpSource(note) {
+  const sourceText = normalizeComparableText([
+    note?.sophia_followup_source,
+    note?.source,
+    note?.type,
+    note?.conversation_type,
+    note?.notification_type,
+    note?.mode,
+    note?.medium,
+    note?.channel,
+    note?.from,
+    note?.to,
+    note?.cc,
+    note?.conversation?.source,
+    note?.conversation?.type,
+    note?.conversation?.from
+  ].map((value) => (typeof value === 'object' ? getDisplayName(value) : value)).filter(Boolean).join(' '));
+
+  if (/mail|correo|email|e mail|smtp/.test(sourceText)
+    || note?.email_body
+    || note?.mail_body
+    || note?.from
+    || note?.to
+    || note?.sender
+    || note?.recipients) return 'Correo';
+  if (/conversation|conversacion|reply|respuesta|message|mensaje/.test(sourceText) || note?.conversation) return 'Conversación';
+  return 'Nota';
 }
 
 function getNestedTextValue(candidates) {
@@ -5506,6 +5591,8 @@ function coerceTextValue(value) {
       value.content,
       value.description,
       value.text,
+      value.message,
+      value.body,
       value.value,
       value.display_value,
       value.name,
@@ -5543,7 +5630,7 @@ function sanitizeNotesWarningForUser(warning) {
 function createNotesDetailBlock(notes) {
   const text = notes
     .map((note) => {
-      const meta = [note.created, note.author].filter(Boolean).join(' - ');
+      const meta = [note.source, note.created, note.author].filter(Boolean).join(' - ');
       return `${meta ? `${meta}: ` : ''}${truncateText(redactSensitiveText(note.text), 280)}`;
     })
     .map((line) => `- ${line}`)
