@@ -5435,6 +5435,8 @@ function getRequestNotes(request) {
         || note?.sent_time
         || note?.last_updated_time
         || note?.performed_time
+        || note?.operation_time
+        || note?.created_date
         || note?.conversation?.created_time
         || note?.conversation?.sent_time
         || note?.note?.created_time;
@@ -5446,6 +5448,8 @@ function getRequestNotes(request) {
           || note?.from
           || note?.sender
           || note?.sent_by
+          || note?.by
+          || note?.performed_by
           || note?.owner
           || note?.user
           || note?.conversation?.created_by
@@ -5485,6 +5489,7 @@ function extractNotesFromRequestData(value, visited = new Set()) {
     'conversationThreads',
     'messages',
     'replies',
+    'history',
     'data',
     'list'
   ];
@@ -5494,7 +5499,7 @@ function extractNotesFromRequestData(value, visited = new Set()) {
     if (Array.isArray(candidate)) collections.push(...candidate);
   }
 
-  const singleKeys = ['note', 'request_note', 'conversation', 'message', 'reply'];
+  const singleKeys = ['note', 'request_note', 'conversation', 'message', 'reply', 'history'];
   for (const key of singleKeys) {
     const candidate = value[key];
     if (candidate && typeof candidate === 'object') collections.push(candidate);
@@ -5532,6 +5537,7 @@ function getNoteText(note) {
     note.conversation?.body,
     note.conversation?.html,
     note.conversation?.plain_text,
+    getHistoryDiffText(note),
     note.note?.description,
     note.note?.content,
     note.note?.text,
@@ -5542,6 +5548,22 @@ function getNoteText(note) {
   ]);
 }
 
+function getHistoryDiffText(note) {
+  if (!Array.isArray(note?.diff)) return '';
+  return note.diff
+    .filter((diff) => {
+      const fieldName = normalizeComparableText(diff?.field?.name || diff?.field || diff?.name);
+      return fieldName === 'note'
+        || fieldName === 'description'
+        || fieldName.includes('conversation')
+        || fieldName.includes('email')
+        || fieldName.includes('correo');
+    })
+    .map((diff) => coerceTextValue(diff?.current_value || diff?.value || diff?.new_value))
+    .filter(Boolean)
+    .join(' ');
+}
+
 function getFollowUpSource(note) {
   const sourceText = normalizeComparableText([
     note?.sophia_followup_source,
@@ -5549,6 +5571,7 @@ function getFollowUpSource(note) {
     note?.type,
     note?.conversation_type,
     note?.notification_type,
+    note?.sophia_notes_source,
     note?.mode,
     note?.medium,
     note?.channel,
@@ -5567,6 +5590,7 @@ function getFollowUpSource(note) {
     || note?.to
     || note?.sender
     || note?.recipients) return 'Correo';
+  if (/history|historial/.test(sourceText) || Array.isArray(note?.diff)) return 'Historial';
   if (/conversation|conversacion|reply|respuesta|message|mensaje/.test(sourceText) || note?.conversation) return 'Conversación';
   return 'Nota';
 }
