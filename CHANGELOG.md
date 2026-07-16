@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.5] - 2026-07-16
+
+### Ops
+- Se agrega `npm run prod:help` para listar scripts operativos, comandos directos utiles y flujo recomendado de despliegue en produccion.
+
 ## [0.8.4] - 2026-07-16
 
 ### Added
