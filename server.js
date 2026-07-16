@@ -450,7 +450,8 @@ function getLastTicketId(session) {
 function withUserRole(user) {
   if (!user) return user;
   const candidate = { ...user };
-  candidate.role = isSupportAdmin(candidate) ? 'support_admin' : (candidate.role || 'user');
+  candidate.executiveProfile = getExecutiveItProfile(candidate);
+  candidate.role = (isSupportAdmin(candidate) || candidate.executiveProfile) ? 'support_admin' : (candidate.role || 'user');
   return candidate;
 }
 
@@ -474,6 +475,41 @@ function isSupportAdmin(user) {
     (email && adminEmails.has(email)) ||
     (requesterId && adminRequesterIds.has(requesterId))
   );
+}
+
+function getExecutiveItProfile(user) {
+  if (!user) return null;
+
+  const executiveEmails = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_EMAILS');
+  const executiveAadObjectIds = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_AAD_OBJECT_IDS');
+  const email = String(user.email || '').toLowerCase();
+  const aadObjectId = String(user.aadObjectId || '').toLowerCase();
+  const normalizedName = normalizeComparableText(user.name || user.displayName || '');
+  const isYariela = normalizedName.includes('yariela saucedo') || normalizedName.includes('yariela saucedo de vallarino');
+
+  if (
+    isYariela ||
+    (email && executiveEmails.has(email)) ||
+    (aadObjectId && executiveAadObjectIds.has(aadObjectId))
+  ) {
+    return {
+      type: 'it_executive',
+      title: 'Gerente de IT',
+      serviceStyle: 'executive_follow_up',
+      reportingOptions: [
+        'tickets nuevos generados por usuarios',
+        'carga por personal técnico',
+        'seguimientos recientes',
+        'avances de MCI'
+      ]
+    };
+  }
+
+  return null;
+}
+
+function isItExecutiveUser(user) {
+  return Boolean(user?.executiveProfile?.type === 'it_executive' || getExecutiveItProfile(user));
 }
 
 function isMciAdmin(user) {
@@ -3002,6 +3038,306 @@ function formatKnowledgeCandidateUpdateText(result) {
   return `Listo. Marqué ${result.candidate.id} como ${result.candidate.status}. Aún no se incorpora al RAG; queda aprobado/descartado para revisión humana.`;
 }
 
+async function handleExecutiveItTurn({ message, user, onText, onCard, onWorking, responseChannel }) {
+  if (!isItExecutiveUser(user)) return false;
+  if (!isExecutiveItReportRequest(message)) return false;
+
+  await Promise.resolve(onWorking?.('Claro, preparo un panorama ejecutivo con tickets recientes, carga técnica, seguimientos y MCI.'));
+
+  const report = await buildExecutiveItReport(user);
+  const card = createExecutiveItReportCard(report, user);
+  if (responseChannel === 'teams' && card) {
+    onCard?.(card);
+  } else {
+    onText(formatExecutiveItReportText(report, user));
+  }
+  return true;
+}
+
+function isExecutiveItReportRequest(message = '') {
+  const normalized = normalizeComparableText(message);
+  return /\b(reporte|resumen|panorama|estado|informe|gerencial|ejecutivo|gestion|gestión)\b/.test(normalized) &&
+    /\b(it|soporte|tickets|tecnicos|tecnicos|seguimientos|mci|mesa|operacion|operación)\b/.test(normalized);
+}
+
+async function buildExecutiveItReport(user) {
+  const report = {
+    generatedAt: new Date().toISOString(),
+    tickets: [],
+    mci: [],
+    warnings: []
+  };
+
+  try {
+    const ticketsResult = await callMcpTool('sdp_list_requests', {
+      filter_by: 'All_Requests',
+      limit: Number(process.env.SOPHIA_EXECUTIVE_REPORT_TICKET_LIMIT || 30),
+      fields_required: [
+        'id',
+        'subject',
+        'status',
+        'priority',
+        'requester',
+        'technician',
+        'created_time',
+        'due_by_time',
+        'last_updated_time',
+        'category',
+        'subcategory'
+      ]
+    });
+    const ticketsData = JSON.parse(ticketsResult.content?.[0]?.text || '{}');
+    const visibleTickets = JSON.parse(scopeListToolOutputForUser(JSON.stringify(ticketsData), user, 'reporte ejecutivo IT'));
+    const enrichedTickets = JSON.parse(await enrichListToolOutputWithRecentFollowUps(JSON.stringify(visibleTickets), user));
+    report.tickets = Array.isArray(enrichedTickets.requests) ? enrichedTickets.requests : [];
+  } catch (error) {
+    report.warnings.push(`No pude consultar tickets generales: ${error.message}`);
+  }
+
+  try {
+    const mciResult = await callMcpTool('sdp_list_requests', {
+      filter_by: 'All_Requests',
+      mci_only: true,
+      limit: Number(process.env.SOPHIA_EXECUTIVE_REPORT_MCI_LIMIT || 20)
+    });
+    const mciData = JSON.parse(mciResult.content?.[0]?.text || '{}');
+    report.mci = Array.isArray(mciData.requests) ? mciData.requests : [];
+  } catch (error) {
+    report.warnings.push(`No pude consultar MCI: ${error.message}`);
+  }
+
+  report.newTickets = getRecentExecutiveTickets(report.tickets);
+  report.technicianLoad = getExecutiveTechnicianLoad(report.tickets);
+  report.recentFollowUps = getExecutiveRecentFollowUps(report.tickets);
+  report.mciProgress = getExecutiveMciProgress(report.mci);
+
+  return report;
+}
+
+function getRecentExecutiveTickets(tickets) {
+  return [...(tickets || [])]
+    .filter((ticket) => ticket?.id)
+    .sort((a, b) => (getRequestCreatedTimestamp(b) || 0) - (getRequestCreatedTimestamp(a) || 0))
+    .slice(0, 6);
+}
+
+function getExecutiveTechnicianLoad(tickets) {
+  const stats = new Map();
+  for (const ticket of tickets || []) {
+    const technician = getDisplayName(ticket.technician) || getAssignedTechnicianValue(ticket) || 'Sin asignar';
+    if (!stats.has(technician)) {
+      stats.set(technician, { technician, total: 0, open: 0, high: 0, waiting: 0 });
+    }
+    const entry = stats.get(technician);
+    const status = normalizeComparableText(getDisplayName(ticket.status));
+    const priority = normalizeComparableText(getDisplayName(ticket.priority));
+    entry.total += 1;
+    if (!status.includes('cerrad') && !status.includes('closed') && !status.includes('resuelt')) entry.open += 1;
+    if (priority.includes('alta') || priority.includes('high') || priority.includes('urgente')) entry.high += 1;
+    if (status.includes('espera') || status.includes('hold') || status.includes('suspend')) entry.waiting += 1;
+  }
+
+  return [...stats.values()]
+    .sort((a, b) => b.open - a.open || b.high - a.high || a.technician.localeCompare(b.technician))
+    .slice(0, 8);
+}
+
+function getExecutiveRecentFollowUps(tickets) {
+  return (tickets || [])
+    .filter((ticket) => ticket?.sophia_recent_followups?.latest?.text)
+    .sort((a, b) => (
+      (b.sophia_recent_followups.latest.createdTimestamp || 0) -
+      (a.sophia_recent_followups.latest.createdTimestamp || 0)
+    ))
+    .slice(0, 5);
+}
+
+function getExecutiveMciProgress(mciRequests) {
+  return [...(mciRequests || [])]
+    .filter((request) => request?.id)
+    .sort((a, b) => {
+      const progressA = Number(String(getMciProgressValue(a) || '').replace(/[^\d.]/g, '')) || 0;
+      const progressB = Number(String(getMciProgressValue(b) || '').replace(/[^\d.]/g, '')) || 0;
+      return progressA - progressB;
+    })
+    .slice(0, 6);
+}
+
+function createExecutiveItReportCard(report, user) {
+  const executiveName = user?.name || 'Gerencia IT';
+  const newTickets = report.newTickets || [];
+  const technicianLoad = report.technicianLoad || [];
+  const recentFollowUps = report.recentFollowUps || [];
+  const mciProgress = report.mciProgress || [];
+  const summaryText = `Reporte ejecutivo IT para ${executiveName}.`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: 'Reporte ejecutivo IT',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `Preparé un panorama actualizado para seguimiento gerencial. Generado: ${formatIsoDateTime(report.generatedAt)}.`,
+      wrap: true,
+      spacing: 'Small',
+      isSubtle: true
+    },
+    createExecutiveMetricStrip([
+      ['Tickets revisados', String(report.tickets?.length || 0)],
+      ['Nuevos destacados', String(newTickets.length)],
+      ['Técnicos', String(technicianLoad.length)],
+      ['MCI revisadas', String(report.mci?.length || 0)]
+    ])
+  ];
+
+  body.push(createExecutiveTicketsBlock(newTickets));
+  body.push(createExecutiveTechniciansBlock(technicianLoad));
+  body.push(createExecutiveFollowUpsBlock(recentFollowUps));
+  body.push(createExecutiveMciBlock(mciProgress));
+
+  if (report.warnings?.length) {
+    body.push({
+      type: 'TextBlock',
+      text: `Observaciones técnicas: ${report.warnings.map((warning) => truncateText(warning, 120)).join(' | ')}`,
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    });
+  }
+
+  body.push({
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Opciones para seguimiento',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: [
+          'Muéstrame tickets nuevos de hoy',
+          'Muéstrame tickets sin avance por técnico',
+          'Muéstrame seguimientos recientes',
+          'Muéstrame avance de MCI por líder'
+        ].map((option) => `- ${option}`).join('\n'),
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
+  });
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createExecutiveMetricStrip(metrics) {
+  return {
+    type: 'ColumnSet',
+    spacing: 'Medium',
+    columns: metrics.map(([label, value]) => ({
+      type: 'Column',
+      width: 'stretch',
+      items: [
+        {
+          type: 'TextBlock',
+          text: value,
+          weight: 'Bolder',
+          size: 'Medium',
+          horizontalAlignment: 'Center',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: label,
+          isSubtle: true,
+          size: 'Small',
+          horizontalAlignment: 'Center',
+          wrap: true
+        }
+      ]
+    }))
+  };
+}
+
+function createExecutiveTicketsBlock(tickets) {
+  return createExecutiveSection('Tickets nuevos o recientes', tickets, (ticket) => (
+    `#${ticket.id} - ${truncateText(ticket.subject || 'Sin asunto', 90)}\n${getDisplayName(ticket.status) || '-'} | ${getDisplayName(ticket.priority) || '-'} | Solicitante: ${getDisplayName(ticket.requester) || '-'} | Creado: ${getDisplayDate(ticket.created_time) || '-'}`
+  ), 'No encontré tickets recientes en el rango revisado.');
+}
+
+function createExecutiveTechniciansBlock(stats) {
+  return createExecutiveSection('Carga por personal técnico', stats, (entry) => (
+    `${entry.technician}: ${entry.open} abiertos, ${entry.high} alta prioridad, ${entry.waiting} en espera/suspendidos`
+  ), 'No encontré carga técnica en el rango revisado.');
+}
+
+function createExecutiveFollowUpsBlock(tickets) {
+  return createExecutiveSection('Seguimientos recientes', tickets, (ticket) => {
+    const latest = ticket.sophia_recent_followups.latest;
+    const meta = [latest.created, latest.author].filter(Boolean).join(' - ');
+    return `#${ticket.id} - ${truncateText(ticket.subject || 'Sin asunto', 80)}\n${meta ? `${meta}: ` : ''}${truncateText(redactSensitiveText(latest.text), 160)}`;
+  }, 'No encontré seguimientos recientes en los tickets revisados.');
+}
+
+function createExecutiveMciBlock(mciRequests) {
+  return createExecutiveSection('Avance de MCI', mciRequests, (request) => (
+    `#${request.id} - ${truncateText(request.subject || 'Sin asunto', 80)}\nLíder: ${getMciLeaderDisplayValue(request) || '-'} | Avance: ${getMciProgressValue(request) || '-'} | Predictiva: ${truncateText(getMciPredictiveValue(request) || '-', 80)}`
+  ), 'No encontré MCI en el rango revisado.');
+}
+
+function createExecutiveSection(title, items, renderItem, emptyText) {
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: title,
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: items.length ? items.map((item) => `- ${renderItem(item)}`).join('\n') : emptyText,
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: items.length === 0
+      }
+    ]
+  };
+}
+
+function formatExecutiveItReportText(report, user) {
+  return [
+    `Reporte ejecutivo IT para ${user?.name || 'Gerencia IT'}`,
+    `Generado: ${formatIsoDateTime(report.generatedAt)}`,
+    '',
+    `Tickets revisados: ${report.tickets?.length || 0}`,
+    `Técnicos con carga: ${report.technicianLoad?.length || 0}`,
+    `Seguimientos recientes: ${report.recentFollowUps?.length || 0}`,
+    `MCI revisadas: ${report.mci?.length || 0}`
+  ].join('\n');
+}
+
 async function handleActiveSituationTurn({ message, user, onText, onCard, responseChannel }) {
   const adminCommand = parseActiveSituationAdminCommand(message);
   if (adminCommand) {
@@ -3545,6 +3881,17 @@ async function runSupportTurn({
   responseChannel = 'web'
 }) {
   onStatus?.('Sophia está analizando tu solicitud...');
+
+  if (await handleExecutiveItTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    onWorking,
+    responseChannel
+  })) {
+    return;
+  }
 
   if (await handleKnowledgeCandidateReviewTurn({
     message,

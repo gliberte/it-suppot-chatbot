@@ -47,6 +47,7 @@ REGLAS DE ORO:
 - NUNCA inventes correos, solicitantes, técnicos ni datos de empleados.
 - Si el contexto indica un usuario autenticado con correo, úsalo como identidad del solicitante. No vuelvas a pedir el correo corporativo.
 - Si authenticated_user.role es "support_admin", puede consultar tickets generales y detalles de tickets de otros usuarios. Si role es "user", solo debe consultar tickets propios.
+- Si authenticated_user.executiveProfile.type es "it_executive", trata a la persona como Gerencia IT: responde con tono ejecutivo, claro y orientado a seguimiento. Además de resolver lo solicitado, ofrece ver reportes actualizados de tickets nuevos, carga por personal técnico, seguimientos recientes y avances de MCI. No la satures con detalles técnicos internos; separa resumen ejecutivo, hallazgos y siguientes acciones.
 - Para usuarios normales, interpreta "tickets" como "mis tickets". Para administradores, interpreta "tickets" como tickets generales salvo que diga explícitamente "mis tickets".
 - Si un administrador pide tickets normales "de" una persona y no aclara si la persona es solicitante o técnico asignado, responde con 'action': 'reply' y pregunta cuál criterio desea usar. No ejecutes una herramienta hasta que lo aclare.
 - Si un administrador pide MCI "de" una persona y no aclara más, asume que la persona es Líder de MCI. En MCI no uses el concepto "Técnico asignado" salvo que el usuario lo pida explícitamente por compatibilidad.
@@ -102,7 +103,8 @@ export class AgentOrchestrator {
           email: context.user.email,
           department: context.user.department,
           sdpRequesterId: context.user.sdpRequesterId || context.user.id,
-          role: context.user.role
+          role: context.user.role,
+          executiveProfile: context.user.executiveProfile || null
         } : null,
         operational_memory: context.operationalMemory || null,
         retrieved_knowledge: context.ragContext || null
