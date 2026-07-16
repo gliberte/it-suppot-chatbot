@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.7] - 2026-07-16
+
+### Added
+- Se agrega `npm run knowledge:export` para convertir candidatos aprobados en un borrador Markdown revisable antes de incorporarlos manualmente a `knowledge/`.
+
+### Ops
+- `prod:help` incluye el comando de exportación de conocimiento aprobado.
+
 ## [0.8.6] - 2026-07-16
 
 ### Added

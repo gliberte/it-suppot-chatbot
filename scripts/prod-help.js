@@ -81,6 +81,10 @@ const COMMANDS = [
         description: 'Genera reporte legible de candidatos de conocimiento.'
       },
       {
+        name: 'knowledge:export',
+        description: 'Exporta candidatos aprobados a un borrador Markdown revisable.'
+      },
+      {
         name: 'knowledge:review',
         description: 'Lista, revisa, aprueba o descarta candidatos de conocimiento.'
       }
