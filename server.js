@@ -5453,6 +5453,7 @@ function getResolutionText(resolution) {
 function getRequestNotes(request) {
   const notes = extractNotesFromRequestData(request);
   const seen = new Set();
+  const seenText = new Set();
 
   return notes
     .map((note) => {
@@ -5487,8 +5488,13 @@ function getRequestNotes(request) {
       };
     })
     .filter((note) => note.text && note.text !== '[object Object]')
+    .filter((note) => isUsefulFollowUpText(note.text))
     .filter((note) => {
-      const key = `${note.createdTimestamp || note.created || ''}|${normalizeComparableText(note.author || '')}|${normalizeComparableText(note.text)}`;
+      const textKey = normalizeComparableText(note.text);
+      if (seenText.has(textKey)) return false;
+      seenText.add(textKey);
+
+      const key = `${note.createdTimestamp || note.created || ''}|${normalizeComparableText(note.author || '')}|${textKey}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -5587,8 +5593,24 @@ function getHistoryDiffText(note) {
         || fieldName.includes('correo');
     })
     .map((diff) => coerceTextValue(diff?.current_value || diff?.value || diff?.new_value))
+    .filter((text) => isUsefulFollowUpText(text))
     .filter(Boolean)
     .join(' ');
+}
+
+function isUsefulFollowUpText(text) {
+  const raw = stripHtml(String(text || '')).trim();
+  if (!raw || raw === '[object Object]') return false;
+  if (/#history_in_file#/i.test(raw)) return false;
+  if (/^\s*#?[a-z_]+#?\s*$/i.test(raw)) return false;
+  if (/^\s*[\w.+-]+@[\w.-]+\.[a-z]{2,}(\s*[,;]\s*[\w.+-]+@[\w.-]+\.[a-z]{2,})*\s*$/i.test(raw)) return false;
+
+  const normalized = normalizeComparableText(raw);
+  if (!normalized) return false;
+  if (/^(email redacted\s*)+$/.test(normalized)) return false;
+  if (normalized === 'history in file') return false;
+
+  return true;
 }
 
 function getFollowUpSource(note) {

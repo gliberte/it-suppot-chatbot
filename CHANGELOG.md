@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.7.6] - 2026-07-16
+
+### Fixed
+- La sección `Seguimientos` elimina duplicados entre notas e historial de SDP.
+- Se ocultan marcadores técnicos del historial como `#History_In_File#` y valores compuestos solo por correos.
+
 ## [0.7.5] - 2026-07-16
 
 ### Fixed
