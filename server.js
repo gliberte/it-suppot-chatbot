@@ -25,6 +25,10 @@ const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 8 * 60 * 60 * 1000);
 const PENDING_ACTION_TTL_MS = Number(process.env.PENDING_ACTION_TTL_MS || 5 * 60 * 1000);
 const GEMINI_SUMMARY_MODEL = process.env.GEMINI_SUMMARY_MODEL || 'gemini-2.5-flash';
 const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || GEMINI_SUMMARY_MODEL;
+const TEAMS_IMAGE_ANALYSIS_ENABLED = process.env.TEAMS_IMAGE_ANALYSIS_ENABLED !== 'false';
+const TEAMS_IMAGE_MAX_BYTES = Number(process.env.TEAMS_IMAGE_MAX_BYTES || 5 * 1024 * 1024);
+const TEAMS_IMAGE_MAX_COUNT = Number(process.env.TEAMS_IMAGE_MAX_COUNT || 2);
 const RUNTIME_STATE_PATH = process.env.RUNTIME_STATE_PATH || path.join(__dirname, 'data', 'runtime-state.json');
 const ACTIVE_SITUATIONS_PATH = process.env.ACTIVE_SITUATIONS_PATH || path.join(__dirname, 'data', 'active-situations.json');
 const KNOWLEDGE_CANDIDATES_PATH = process.env.KNOWLEDGE_CANDIDATES_PATH || path.join(__dirname, 'data', 'knowledge-candidates.json');
@@ -787,6 +791,150 @@ function createAuditTextPreview(text, maxLength = 500) {
 
 function createTeamsActivityPreview(activity) {
   return createAuditTextPreview(getTeamsText(activity), 500);
+}
+
+function getTeamsImageAttachments(activity) {
+  return (activity?.attachments || [])
+    .filter((attachment) => {
+      const contentType = String(attachment?.contentType || '').toLowerCase();
+      const contentUrl = String(attachment?.contentUrl || '');
+      return contentType.startsWith('image/')
+        || /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(contentUrl);
+    })
+    .slice(0, TEAMS_IMAGE_MAX_COUNT);
+}
+
+async function analyzeTeamsImageAttachments(context, userText = '') {
+  const imageAttachments = getTeamsImageAttachments(context.activity);
+  if (!TEAMS_IMAGE_ANALYSIS_ENABLED || imageAttachments.length === 0) {
+    return {
+      imageCount: imageAttachments.length,
+      analyzedCount: 0,
+      errors: [],
+      analysisText: ''
+    };
+  }
+
+  const downloadedImages = [];
+  const errors = [];
+
+  for (const attachment of imageAttachments) {
+    try {
+      downloadedImages.push(await downloadTeamsImageAttachment(context, attachment));
+    } catch (error) {
+      errors.push(`${attachment?.name || attachment?.contentType || 'imagen'}: ${error.message}`);
+    }
+  }
+
+  if (downloadedImages.length === 0) {
+    return {
+      imageCount: imageAttachments.length,
+      analyzedCount: 0,
+      errors,
+      analysisText: ''
+    };
+  }
+
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: GEMINI_IMAGE_MODEL });
+  const prompt = [
+    'Analiza las capturas adjuntas como evidencia para soporte IT.',
+    'Extrae texto visible, mensajes de error, códigos, sistemas afectados, nombres de usuario, fechas, tickets y cualquier dato operativo útil.',
+    'No inventes datos que no se vean. Si algo no es legible, indícalo.',
+    'Devuelve un resumen breve en español con estas secciones:',
+    '- Texto visible relevante',
+    '- Señales técnicas',
+    '- Posible clasificación SDP',
+    '- Preguntas útiles para continuar',
+    '',
+    `Texto escrito por el usuario: ${userText || 'Sin texto adicional.'}`
+  ].join('\n');
+
+  const parts = [
+    { text: prompt },
+    ...downloadedImages.map((image) => ({
+      inlineData: {
+        mimeType: image.mimeType,
+        data: image.base64
+      }
+    }))
+  ];
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts }]
+  });
+
+  return {
+    imageCount: imageAttachments.length,
+    analyzedCount: downloadedImages.length,
+    errors,
+    analysisText: truncateText(result.response.text().trim(), 4000)
+  };
+}
+
+async function downloadTeamsImageAttachment(context, attachment) {
+  if (attachment?.content && typeof attachment.content === 'object' && attachment.content.data) {
+    const mimeType = attachment.contentType || 'image/png';
+    const base64 = String(attachment.content.data).replace(/^data:[^;]+;base64,/, '');
+    return ensureDownloadedImageSize({ base64, mimeType });
+  }
+
+  if (!attachment?.contentUrl) {
+    throw new Error('La imagen no incluye una URL descargable.');
+  }
+
+  const headers = {};
+  const token = await getBotConnectorToken(context);
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response = await fetch(attachment.contentUrl, { headers });
+  if (!response.ok && headers.Authorization) {
+    response = await fetch(attachment.contentUrl);
+  }
+
+  if (!response.ok) {
+    throw new Error(`No pude descargar la imagen (${response.status}).`);
+  }
+
+  const mimeType = response.headers.get('content-type')?.split(';')[0]
+    || attachment.contentType
+    || inferImageMimeType(attachment.contentUrl)
+    || 'image/png';
+  const arrayBuffer = await response.arrayBuffer();
+  return ensureDownloadedImageSize({
+    base64: Buffer.from(arrayBuffer).toString('base64'),
+    mimeType
+  });
+}
+
+async function getBotConnectorToken(context) {
+  try {
+    const connectorClient = context.turnState?.get(context.adapter?.ConnectorClientKey);
+    return await connectorClient?.credentials?.getToken?.();
+  } catch (error) {
+    console.warn('[Teams] No pude obtener token para descargar adjunto:', error.message);
+    return null;
+  }
+}
+
+function ensureDownloadedImageSize(image) {
+  const bytes = Buffer.byteLength(image.base64, 'base64');
+  if (bytes > TEAMS_IMAGE_MAX_BYTES) {
+    throw new Error(`La imagen supera el límite permitido (${Math.round(bytes / 1024 / 1024)} MB).`);
+  }
+  if (!String(image.mimeType || '').startsWith('image/')) {
+    throw new Error(`El adjunto no parece ser una imagen (${image.mimeType || 'sin tipo'}).`);
+  }
+  return image;
+}
+
+function inferImageMimeType(url) {
+  if (/\.jpe?g(\?|$)/i.test(url)) return 'image/jpeg';
+  if (/\.png(\?|$)/i.test(url)) return 'image/png';
+  if (/\.gif(\?|$)/i.test(url)) return 'image/gif';
+  if (/\.webp(\?|$)/i.test(url)) return 'image/webp';
+  if (/\.bmp(\?|$)/i.test(url)) return 'image/bmp';
+  return '';
 }
 
 function createAdaptiveCardPreview(card) {
@@ -6338,7 +6486,8 @@ async function handleTeamsMessage(context) {
   }
 
   const text = getTeamsText(context.activity);
-  if (!text) {
+  const imageAttachments = getTeamsImageAttachments(context.activity);
+  if (!text && imageAttachments.length === 0) {
     await auditTeamsEvent(context.activity, 'empty_message_received', { messagePreview });
     await sendTeamsReply(context, 'Escríbeme tu consulta de soporte IT para ayudarte.');
     return;
@@ -6356,6 +6505,10 @@ async function handleTeamsMessage(context) {
 
   await auditTeamsEvent(context.activity, 'message_received', {
     messagePreview,
+    attachments: {
+      imageCount: imageAttachments.length,
+      totalCount: context.activity?.attachments?.length || 0
+    },
     user: {
       name: user.name,
       emailDomain: getEmailDomain(user.email),
@@ -6365,6 +6518,42 @@ async function handleTeamsMessage(context) {
   });
 
   const session = getTeamsSession(context.activity, user);
+  let messageForSophia = text || 'Analiza la imagen adjunta y dime qué información útil ves para soporte IT.';
+
+  if (imageAttachments.length > 0) {
+    await context.sendActivity({ type: 'typing' });
+    let imageAnalysis;
+    try {
+      imageAnalysis = await analyzeTeamsImageAttachments(context, text);
+    } catch (error) {
+      console.error('[Teams] Error analizando imagen adjunta:', error);
+      imageAnalysis = {
+        imageCount: imageAttachments.length,
+        analyzedCount: 0,
+        errors: [error.message],
+        analysisText: ''
+      };
+    }
+    await auditTeamsEvent(context.activity, 'image_analysis', {
+      imageCount: imageAnalysis.imageCount,
+      analyzedCount: imageAnalysis.analyzedCount,
+      errors: imageAnalysis.errors,
+      analysisPreview: createAuditTextPreview(imageAnalysis.analysisText, 600)
+    });
+
+    if (imageAnalysis.analysisText) {
+      messageForSophia = [
+        messageForSophia,
+        '',
+        'Contexto extraído automáticamente de imagen adjunta:',
+        imageAnalysis.analysisText
+      ].join('\n');
+    } else if (imageAnalysis.errors.length > 0 && !text) {
+      await sendTeamsReply(context, `Recibí la imagen, pero no pude analizarla: ${imageAnalysis.errors.join('; ')}. Puedes escribirme el mensaje de error o adjuntar una captura más clara.`);
+      return;
+    }
+  }
+
   const normalizedText = text.toLowerCase();
   const buttonActionMatch = normalizedText.match(/^__sophia_(confirm|cancel):([0-9a-f-]+)$/i);
 
@@ -6438,7 +6627,7 @@ async function handleTeamsMessage(context) {
   const chunks = [];
   await context.sendActivity({ type: 'typing' });
   await runSupportTurn({
-    message: text,
+    message: messageForSophia,
     user,
     session,
     history: session.history,
@@ -6461,14 +6650,14 @@ async function handleTeamsMessage(context) {
 
   const cardResponse = chunks.find((chunk) => chunk?.type === 'adaptive_card');
   if (cardResponse) {
-    session.history = pushChatHistory(pushChatHistory(session.history, 'user', text), 'assistant', cardResponse.summaryText);
+    session.history = pushChatHistory(pushChatHistory(session.history, 'user', messageForSophia), 'assistant', cardResponse.summaryText);
     scheduleRuntimeStateSave();
     await sendTeamsReply(context, cardResponse);
     return;
   }
 
   const response = truncateText(chunks.join('').trim(), 27000);
-  session.history = pushChatHistory(pushChatHistory(session.history, 'user', text), 'assistant', response);
+  session.history = pushChatHistory(pushChatHistory(session.history, 'user', messageForSophia), 'assistant', response);
   scheduleRuntimeStateSave();
   await sendTeamsReply(context, response || 'No pude generar una respuesta para ese mensaje.');
 }

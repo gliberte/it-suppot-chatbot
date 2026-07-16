@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.0] - 2026-07-16
+
+### Added
+- Sophia puede analizar capturas e imágenes adjuntas en Teams usando Gemini multimodal.
+- El análisis visual extrae texto visible, señales técnicas, posible clasificación SDP y preguntas útiles para continuar.
+- Las evidencias visuales se incorporan como contexto para responder o preparar tickets, sin adjuntar todavía la imagen al ticket en SDP.
+
+### Ops
+- La auditoría Teams registra conteo de imágenes recibidas, imágenes analizadas y errores de descarga/análisis.
+
 ## [0.7.6] - 2026-07-16
 
 ### Fixed
