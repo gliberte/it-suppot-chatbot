@@ -27,6 +27,7 @@ const GEMINI_SUMMARY_MODEL = process.env.GEMINI_SUMMARY_MODEL || 'gemini-2.5-fla
 const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.0-flash';
 const RUNTIME_STATE_PATH = process.env.RUNTIME_STATE_PATH || path.join(__dirname, 'data', 'runtime-state.json');
 const ACTIVE_SITUATIONS_PATH = process.env.ACTIVE_SITUATIONS_PATH || path.join(__dirname, 'data', 'active-situations.json');
+const KNOWLEDGE_CANDIDATES_PATH = process.env.KNOWLEDGE_CANDIDATES_PATH || path.join(__dirname, 'data', 'knowledge-candidates.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsUserCache = new Map();
@@ -2676,6 +2677,331 @@ function getRecentFollowUpDays() {
   return Number.isFinite(days) && days > 0 ? Math.min(days, 30) : 7;
 }
 
+async function handleKnowledgeCandidateReviewTurn({ message, user, onText, onCard, responseChannel }) {
+  const command = parseKnowledgeCandidateReviewCommand(message);
+  if (!command) return false;
+
+  if (!isSupportAdmin(user)) {
+    onText('Puedo trabajar con candidatos de conocimiento, pero solo los administradores de soporte pueden revisarlos o cambiar su estado.');
+    return true;
+  }
+
+  if (command.type === 'list') {
+    const store = await readKnowledgeCandidatesStore();
+    const candidates = getKnowledgeCandidatesForReview(store, command.status).slice(0, command.limit);
+    const card = createKnowledgeCandidatesReviewCard(candidates, store, command.status);
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      onText(formatKnowledgeCandidatesReviewText(candidates, store, command.status));
+    }
+    return true;
+  }
+
+  const result = await updateKnowledgeCandidateReviewStatus(command, user);
+  const card = createKnowledgeCandidateUpdateCard(result);
+  if (responseChannel === 'teams' && card) {
+    onCard?.(card);
+  } else {
+    onText(formatKnowledgeCandidateUpdateText(result));
+  }
+  return true;
+}
+
+function parseKnowledgeCandidateReviewCommand(message = '') {
+  const text = String(message || '');
+  const normalized = normalizeComparableText(text);
+  const mentionsKnowledge = /\b(aprendizaje|aprendizajes|conocimiento|conocimientos|candidato|candidatos|borrador|borradores)\b/.test(normalized);
+  const candidateId = text.match(/\bkc_[a-f0-9]{8,64}\b/i)?.[0];
+
+  if (!mentionsKnowledge && !candidateId) return null;
+
+  if (candidateId && /\b(aprueba|aprobar|aprobado|validar|valida|acepta|aceptar)\b/.test(normalized)) {
+    return { type: 'approve', id: candidateId };
+  }
+
+  if (candidateId && /\b(descarta|descartar|rechaza|rechazar|rechazado|ignora|ignorar)\b/.test(normalized)) {
+    return { type: 'reject', id: candidateId };
+  }
+
+  if (mentionsKnowledge && /\b(muestra|mostrar|lista|listar|ver|pendientes|nuevos|revision|revisión)\b/.test(normalized)) {
+    return {
+      type: 'list',
+      status: normalized.includes('aprobado') ? 'approved' : (normalized.includes('descart') || normalized.includes('rechaz') ? 'rejected' : 'pending_review'),
+      limit: Math.min(Number(process.env.SOPHIA_KNOWLEDGE_CANDIDATES_CARD_LIMIT || 6), 10)
+    };
+  }
+
+  return null;
+}
+
+async function readKnowledgeCandidatesStore() {
+  try {
+    const text = await readFile(KNOWLEDGE_CANDIDATES_PATH, 'utf8');
+    const data = JSON.parse(text);
+    return {
+      version: 1,
+      updatedAt: data?.updatedAt,
+      candidates: Array.isArray(data?.candidates) ? data.candidates : []
+    };
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Knowledge] No se pudo leer knowledge-candidates.json:', error.message);
+    }
+    return { version: 1, candidates: [] };
+  }
+}
+
+async function writeKnowledgeCandidatesStore(store) {
+  const tmpPath = `${KNOWLEDGE_CANDIDATES_PATH}.tmp`;
+  await mkdir(path.dirname(KNOWLEDGE_CANDIDATES_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify({
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    candidates: store.candidates || []
+  }, null, 2));
+  await rename(tmpPath, KNOWLEDGE_CANDIDATES_PATH);
+}
+
+function getKnowledgeCandidatesForReview(store, status = 'pending_review') {
+  return (store.candidates || [])
+    .filter((candidate) => status === 'all' || candidate.status === status)
+    .sort(compareKnowledgeCandidates);
+}
+
+function compareKnowledgeCandidates(a, b) {
+  const priorityDiff = getKnowledgeCandidatePriority(b) - getKnowledgeCandidatePriority(a);
+  if (priorityDiff !== 0) return priorityDiff;
+  return Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0);
+}
+
+function getKnowledgeCandidatePriority(candidate) {
+  if (candidate?.type === 'sdp_error_pattern') return 90;
+  if (candidate?.type === 'low_confidence_classification') return 70;
+  if (candidate?.type === 'classification_pattern') return 50;
+  return 10;
+}
+
+function getKnowledgeCandidatePriorityLabel(candidate) {
+  const priority = getKnowledgeCandidatePriority(candidate);
+  if (priority >= 90) return 'Alta';
+  if (priority >= 70) return 'Media';
+  return 'Normal';
+}
+
+async function updateKnowledgeCandidateReviewStatus(command, user) {
+  const store = await readKnowledgeCandidatesStore();
+  const candidate = store.candidates.find((item) => item.id?.toLowerCase() === command.id.toLowerCase());
+  if (!candidate) {
+    return {
+      ok: false,
+      message: `No encontré el candidato ${command.id}. Ejecuta primero "muéstrame aprendizajes pendientes" para ver IDs vigentes.`
+    };
+  }
+
+  candidate.status = command.type === 'approve' ? 'approved' : 'rejected';
+  candidate.reviewedAt = new Date().toISOString();
+  candidate.reviewedBy = getAuditUserSummary(user);
+  candidate.reviewAction = command.type;
+
+  await writeKnowledgeCandidatesStore(store);
+  await auditKnowledgeCandidateReview({ user, action: command.type, candidate });
+
+  return {
+    ok: true,
+    action: command.type,
+    candidate
+  };
+}
+
+async function auditKnowledgeCandidateReview({ user, action, candidate }) {
+  const record = {
+    timestamp: new Date().toISOString(),
+    action,
+    candidateId: candidate?.id,
+    candidateType: candidate?.type,
+    candidateTitle: candidate?.title,
+    user: getAuditUserSummary(user)
+  };
+  try {
+    await appendFile(path.join(__dirname, 'knowledge-candidates-audit.log'), `${JSON.stringify(record)}\n`);
+  } catch (error) {
+    console.warn('[Knowledge] No se pudo escribir knowledge-candidates-audit.log:', error.message);
+  }
+}
+
+function createKnowledgeCandidatesReviewCard(candidates, store, status) {
+  const pendingCount = (store.candidates || []).filter((candidate) => candidate.status === 'pending_review').length;
+  const summaryText = candidates.length
+    ? `Hay ${pendingCount} aprendizaje${pendingCount === 1 ? '' : 's'} pendiente${pendingCount === 1 ? '' : 's'} de revisión.`
+    : 'No hay aprendizajes pendientes de revisión.';
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: 'Aprendizajes pendientes',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: summaryText,
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    }
+  ];
+
+  if (candidates.length > 0) {
+    body.push(...candidates.map((candidate, index) => createKnowledgeCandidateItemBlock(candidate, { shade: index % 2 === 1 })));
+  } else {
+    body.push({
+      type: 'TextBlock',
+      text: 'Para generar candidatos, ejecuta en producción: npm run knowledge:candidates.',
+      wrap: true,
+      spacing: 'Medium'
+    });
+  }
+
+  body.push({
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: 'Comandos útiles',
+        weight: 'Bolder',
+        wrap: true
+      },
+      {
+        type: 'TextBlock',
+        text: [
+          'Sophia, aprueba el aprendizaje kc_xxxxx',
+          'Sophia, descarta el aprendizaje kc_xxxxx',
+          'Sophia, muestra aprendizajes aprobados'
+        ].map((line) => `- ${line}`).join('\n'),
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      }
+    ]
+  });
+
+  return {
+    type: 'adaptive_card',
+    summaryText: `${summaryText} Estado: ${status}.`,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function createKnowledgeCandidateItemBlock(candidate, options = {}) {
+  return {
+    type: 'Container',
+    style: options.shade ? 'accent' : 'default',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: `${candidate.id} - ${truncateText(candidate.title || 'Sin título', 120)}`,
+        weight: 'Bolder',
+        color: getKnowledgeCandidatePriority(candidate) >= 90 ? 'Attention' : 'Accent',
+        wrap: true
+      },
+      {
+        type: 'FactSet',
+        spacing: 'Small',
+        facts: [
+          { title: 'Tipo', value: candidate.type || '-' },
+          { title: 'Prioridad', value: getKnowledgeCandidatePriorityLabel(candidate) },
+          { title: 'Estado', value: candidate.status || '-' },
+          { title: 'Creado', value: formatIsoDateTime(candidate.createdAt) || '-' }
+        ]
+      },
+      {
+        type: 'TextBlock',
+        text: `Evidencia: ${truncateText(redactSensitiveText(stripHtml(candidate.evidence || '')), 260)}`,
+        wrap: true,
+        spacing: 'Small',
+        isSubtle: true
+      },
+      {
+        type: 'TextBlock',
+        text: `Sugerencia: ${truncateText(redactSensitiveText(stripHtml(candidate.suggested_knowledge || '')), 260)}`,
+        wrap: true,
+        spacing: 'Small'
+      }
+    ]
+  };
+}
+
+function createKnowledgeCandidateUpdateCard(result) {
+  const summaryText = result.ok
+    ? `Aprendizaje ${result.action === 'approve' ? 'aprobado' : 'descartado'}: ${result.candidate.id}.`
+    : result.message;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: result.ok ? 'Revisión registrada' : 'No pude actualizar el aprendizaje',
+      weight: 'Bolder',
+      size: 'Medium',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: summaryText,
+      wrap: true,
+      spacing: 'Small'
+    }
+  ];
+
+  if (result.ok) {
+    body.push(createKnowledgeCandidateItemBlock(result.candidate));
+    body.push({
+      type: 'TextBlock',
+      text: result.action === 'approve'
+        ? 'Aprobado no significa incorporado al RAG todavía. El siguiente paso es convertirlo en cambio de conocimiento revisado.'
+        : 'Descartado queda fuera de la cola pendiente, pero permanece trazable en el archivo de candidatos.',
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    });
+  }
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+function formatKnowledgeCandidatesReviewText(candidates, store, status) {
+  const pendingCount = (store.candidates || []).filter((candidate) => candidate.status === 'pending_review').length;
+  if (candidates.length === 0) return `No hay aprendizajes con estado ${status}. Pendientes actuales: ${pendingCount}.`;
+  return [
+    `Aprendizajes con estado ${status}. Pendientes actuales: ${pendingCount}.`,
+    ...candidates.map((candidate) => `- ${candidate.id} [${getKnowledgeCandidatePriorityLabel(candidate)}] ${candidate.title}`)
+  ].join('\n');
+}
+
+function formatKnowledgeCandidateUpdateText(result) {
+  if (!result.ok) return result.message;
+  return `Listo. Marqué ${result.candidate.id} como ${result.candidate.status}. Aún no se incorpora al RAG; queda aprobado/descartado para revisión humana.`;
+}
+
 async function handleActiveSituationTurn({ message, user, onText, onCard, responseChannel }) {
   const adminCommand = parseActiveSituationAdminCommand(message);
   if (adminCommand) {
@@ -3219,6 +3545,16 @@ async function runSupportTurn({
   responseChannel = 'web'
 }) {
   onStatus?.('Sophia está analizando tu solicitud...');
+
+  if (await handleKnowledgeCandidateReviewTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
 
   if (await handleActiveSituationTurn({
     message,
@@ -4841,9 +5177,20 @@ function getNotesWarning(data, request) {
   ].filter(Boolean);
 
   const notesWarning = warnings.find((warning) => /nota|seguimiento/i.test(String(warning)));
-  if (notesWarning) return String(notesWarning);
+  if (notesWarning) return sanitizeNotesWarningForUser(notesWarning);
   if (request?.sophia_notes_checked) return 'No encontré seguimientos registrados para este ticket.';
   return '';
+}
+
+function sanitizeNotesWarningForUser(warning) {
+  const text = String(warning || '');
+  if (!text) return '';
+
+  if (/request failed|status code|notes_with|conversations|\/requests\/|http|endpoint|api/i.test(text)) {
+    return 'No encontré seguimientos registrados para este ticket.';
+  }
+
+  return truncateText(redactSensitiveText(stripHtml(text)), 220);
 }
 
 function createNotesDetailBlock(notes) {
