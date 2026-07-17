@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.2] - 2026-07-17
+
+### Added
+- `qa:tickets` acepta `--emit-candidates` para convertir hallazgos QA en candidatos de conocimiento pendientes de revisión.
+
+### Ops
+- Los candidatos emitidos por QA se deduplican por fingerprint y se integran al flujo `knowledge:review`, `knowledge:polish` y `knowledge:status`.
+
 ## [0.9.1] - 2026-07-17
 
 ### Added

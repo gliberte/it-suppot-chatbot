@@ -1,12 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const LOG_PATH = resolve(process.env.AUDIT_LOG_PATH || 'audit.log');
+const KNOWLEDGE_CANDIDATES_PATH = resolve(process.env.KNOWLEDGE_CANDIDATES_PATH || 'data/knowledge-candidates.json');
 const OUTPUT_PATH = getArgValue('--output');
 const FORMAT = getArgValue('--format') || 'text';
 const DAYS = Number(getArgValue('--days') || process.env.QA_TICKETS_DAYS || 7);
-const SINCE = getArgValue('--since') || getSinceFromDays(DAYS);
+const EXPLICIT_SINCE = getArgValue('--since');
+const SINCE = EXPLICIT_SINCE || getSinceFromDays(DAYS);
+const PERIOD_KEY = EXPLICIT_SINCE ? `since:${EXPLICIT_SINCE}` : `days:${DAYS}`;
 const LIMIT = Number(getArgValue('--limit') || process.env.QA_TICKETS_LIMIT || 1000);
+const EMIT_CANDIDATES = hasFlag('--emit-candidates');
 
 if (!existsSync(LOG_PATH)) {
   console.error(`No existe el archivo de auditoria: ${LOG_PATH}`);
@@ -19,13 +24,23 @@ const records = readAuditRecords(LOG_PATH)
   .slice(-LIMIT);
 
 const analysis = analyze(records);
+let emittedCandidates = [];
+
+if (EMIT_CANDIDATES) {
+  emittedCandidates = emitKnowledgeCandidates(analysis);
+  analysis.emittedCandidates = emittedCandidates.map((candidate) => ({
+    id: candidate.id,
+    type: candidate.type,
+    title: candidate.title
+  }));
+}
 
 if (FORMAT === 'json') {
   writeOrPrint(JSON.stringify(analysis, null, 2));
 } else if (FORMAT === 'md' || FORMAT === 'markdown') {
   writeOrPrint(renderMarkdown(analysis));
 } else {
-  writeOrPrint(renderText(analysis));
+  writeOrPrint(renderText(analysis, emittedCandidates));
 }
 
 function readAuditRecords(path) {
@@ -279,7 +294,7 @@ function toExample(record) {
   };
 }
 
-function renderText(data) {
+function renderText(data, emitted = []) {
   const lines = [
     'Sophia ticket QA',
     `Generado: ${data.generatedAt}`,
@@ -322,6 +337,18 @@ function renderText(data) {
     '  npm run knowledge:review',
     '  npm run routing:check'
   ];
+
+  if (EMIT_CANDIDATES) {
+    lines.push(
+      '',
+      'Candidatos QA emitidos',
+      '----------------------',
+      emitted.length
+        ? emitted.map((candidate) => `- ${candidate.id} [${candidate.type}] ${candidate.title}`).join('\n')
+        : '- No se emitieron candidatos nuevos; ya existían o no hubo hallazgos aplicables.',
+      `Archivo: ${relativePath(KNOWLEDGE_CANDIDATES_PATH)}`
+    );
+  }
 
   return lines.join('\n');
 }
@@ -373,8 +400,146 @@ function renderMarkdown(data) {
     '## Ejemplos recientes con error',
     '',
     renderExampleTable(data.examples.errors),
+    '',
+    ...(EMIT_CANDIDATES ? [
+      '## Candidatos QA emitidos',
+      '',
+      data.emittedCandidates?.length
+        ? renderMarkdownTable(['ID', 'Tipo', 'Título'], data.emittedCandidates.map((candidate) => [candidate.id, candidate.type, candidate.title]))
+        : '_No se emitieron candidatos nuevos; ya existían o no hubo hallazgos aplicables._'
+    ] : []),
     ''
   ].join('\n');
+}
+
+function emitKnowledgeCandidates(data) {
+  const store = readCandidateStore(KNOWLEDGE_CANDIDATES_PATH);
+  const existingFingerprints = new Set((store.candidates || []).map((candidate) => candidate.fingerprint).filter(Boolean));
+  const generated = createQaKnowledgeCandidates(data)
+    .filter((candidate) => candidate && !existingFingerprints.has(candidate.fingerprint));
+
+  if (!generated.length) return [];
+
+  const nextStore = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    candidates: [
+      ...(store.candidates || []),
+      ...generated
+    ]
+  };
+
+  mkdirSync(dirname(KNOWLEDGE_CANDIDATES_PATH), { recursive: true });
+  writeFileSync(KNOWLEDGE_CANDIDATES_PATH, JSON.stringify(nextStore, null, 2), 'utf8');
+  return generated;
+}
+
+function readCandidateStore(path) {
+  if (!existsSync(path)) return { version: 1, candidates: [] };
+  try {
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    return {
+      version: data.version || 1,
+      candidates: Array.isArray(data.candidates) ? data.candidates : []
+    };
+  } catch {
+    return { version: 1, candidates: [] };
+  }
+}
+
+function createQaKnowledgeCandidates(data) {
+  return [
+    createDefaultRouteCandidate(data),
+    createMissingSubcategoryCandidate(data),
+    createHighPriorityCandidate(data),
+    createSdpFieldErrorCandidate(data),
+    createLowConfidenceCandidate(data)
+  ].filter(Boolean);
+}
+
+function createDefaultRouteCandidate(data) {
+  if (data.summary.defaultRoute <= 0) return null;
+  const examples = data.examples.defaultRoute || [];
+  return createCandidate({
+    type: 'qa_ticket_default_route',
+    title: `QA tickets: ${data.summary.defaultRoute} evento(s) con ruta default`,
+    evidence: `${data.summary.defaultRoute} evento(s) de creación usaron ruta default o sin ruta desde ${data.since || 'todo el log'}.`,
+    suggestedKnowledge: 'Revisar los asuntos y descripciones que caen en ruta default. Si hay patrones claros, agregar reglas en knowledge/catalogo-sdp.md o playbooks específicos para evitar clasificaciones genéricas.',
+    examples,
+    fingerprintSeed: `qa:default_route:${PERIOD_KEY}:${data.summary.defaultRoute}:${examples.map((item) => item.subject).join('|')}`
+  });
+}
+
+function createMissingSubcategoryCandidate(data) {
+  if (data.summary.missingCategory <= 0 && data.summary.missingSubcategory <= 0) return null;
+  return createCandidate({
+    type: 'qa_ticket_missing_fields',
+    title: `QA tickets: campos de clasificación incompletos`,
+    evidence: `Eventos con categoría faltante: ${data.summary.missingCategory}. Eventos con subcategoría faltante: ${data.summary.missingSubcategory}.`,
+    suggestedKnowledge: 'Revisar rutas determinísticas y catálogo SDP para asegurar que cada caso tenga categoría y subcategoría válidas antes de preparar tickets.',
+    examples: [
+      ...(data.examples.defaultRoute || []),
+      ...(data.examples.errors || [])
+    ].slice(0, 5),
+    fingerprintSeed: `qa:missing_fields:${PERIOD_KEY}:${data.summary.missingCategory}:${data.summary.missingSubcategory}`
+  });
+}
+
+function createHighPriorityCandidate(data) {
+  if (data.summary.highPriorityWithoutImpactEvidence <= 0) return null;
+  return createCandidate({
+    type: 'qa_ticket_priority_triage',
+    title: `QA tickets: prioridad Alta sin evidencia clara`,
+    evidence: `${data.summary.highPriorityWithoutImpactEvidence} ticket(s) fueron preparados con prioridad Alta sin señales claras de impacto operativo en el asunto o descripción.`,
+    suggestedKnowledge: 'Refinar el triage de prioridad: conservar Alta solo cuando haya bloqueo operativo, varios usuarios, área completa o impacto en ventas, despacho, producción, facturación, caja o bodega.',
+    examples: data.examples.highPriorityWithoutImpactEvidence || [],
+    fingerprintSeed: `qa:high_priority_without_evidence:${PERIOD_KEY}:${data.summary.highPriorityWithoutImpactEvidence}`
+  });
+}
+
+function createSdpFieldErrorCandidate(data) {
+  if (!data.sdpFieldErrors.length) return null;
+  const top = data.sdpFieldErrors.slice(0, 3);
+  return createCandidate({
+    type: 'qa_ticket_sdp_errors',
+    title: `QA tickets: errores SDP en creación`,
+    evidence: `Errores SDP detectados: ${top.map((item) => `${item.field} (${item.count})`).join(', ')}.`,
+    suggestedKnowledge: 'Revisar si estos errores requieren reglas internas en knowledge/errores-sdp.md o ajustes de integración. Sophia no debe pedir al usuario campos internos de SDP.',
+    examples: data.examples.errors || [],
+    fingerprintSeed: `qa:sdp_errors:${PERIOD_KEY}:${top.map((item) => `${item.field}:${item.count}`).join('|')}`
+  });
+}
+
+function createLowConfidenceCandidate(data) {
+  if (data.summary.lowConfidence <= 0) return null;
+  return createCandidate({
+    type: 'qa_ticket_low_confidence',
+    title: `QA tickets: baja confianza de clasificación`,
+    evidence: `${data.summary.lowConfidence} evento(s) tuvieron confianza baja, default o media sin regla directa.`,
+    suggestedKnowledge: 'Revisar candidatos de baja confianza y decidir si se necesitan reglas nuevas en el catálogo o playbooks.',
+    examples: data.examples.lowConfidence || [],
+    fingerprintSeed: `qa:low_confidence:${PERIOD_KEY}:${data.summary.lowConfidence}`
+  });
+}
+
+function createCandidate({ type, title, evidence, suggestedKnowledge, examples = [], fingerprintSeed }) {
+  const fingerprint = hash(fingerprintSeed || `${type}:${title}:${suggestedKnowledge}`);
+  return {
+    id: `kc_${fingerprint.slice(0, 12)}`,
+    fingerprint,
+    type,
+    title,
+    status: 'pending_review',
+    source: 'qa:tickets',
+    createdAt: new Date().toISOString(),
+    evidence,
+    suggested_knowledge: suggestedKnowledge,
+    examples
+  };
+}
+
+function hash(value) {
+  return createHash('sha256').update(String(value || '')).digest('hex');
 }
 
 function renderCountLines(items, key) {
@@ -460,4 +625,8 @@ function getArgValue(name) {
   const index = process.argv.indexOf(name);
   if (index === -1) return null;
   return process.argv[index + 1] || null;
+}
+
+function hasFlag(name) {
+  return process.argv.includes(name);
 }

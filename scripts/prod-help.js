@@ -111,7 +111,7 @@ const COMMANDS = [
       },
       {
         name: 'qa:tickets',
-        description: 'Audita calidad de tickets creados por Sophia y sugiere correcciones.'
+        description: 'Audita tickets creados por Sophia; con --emit-candidates crea candidatos de mejora.'
       },
       {
         name: 'qa:routing',
