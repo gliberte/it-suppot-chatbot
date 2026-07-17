@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.8.9] - 2026-07-17
+
+### Added
+- Se agrega `npm run knowledge:status` para resumir pendientes, aprobados, aplicados, descartados, archivos RAG relevantes y proxima accion sugerida.
+
+### Ops
+- `prod:help` incluye el nuevo tablero rapido del ciclo de conocimiento.
+
 ## [0.8.8] - 2026-07-16
 
 ### Added

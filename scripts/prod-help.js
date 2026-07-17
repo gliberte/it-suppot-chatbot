@@ -87,6 +87,10 @@ const COMMANDS = [
       {
         name: 'knowledge:review',
         description: 'Lista, revisa, aprueba o descarta candidatos de conocimiento.'
+      },
+      {
+        name: 'knowledge:status',
+        description: 'Resume estado del ciclo RAG y sugiere la proxima accion.'
       }
     ]
   },
