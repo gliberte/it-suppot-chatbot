@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.2] - 2026-07-17
+
+### Fixed
+- Corregido error en pruebas RAG (`scripts/test-rag.js`) haciendo que las validaciones de términos esperados sean insensibles a mayúsculas y minúsculas.
+- Ajustado el área de validación para periféricos y audífonos hacia `soporte` para alinearlo con el enrutamiento correcto hacia playbooks de diagnóstico.
+
+### Ops
+- Limpieza de la base de candidatos de conocimiento, marcando los 13 candidatos de QA como aplicados (`applied_to_knowledge`) y regenerando exitosamente el índice RAG.
+
 ## [0.10.1] - 2026-07-17
 
 ### Changed

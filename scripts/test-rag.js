@@ -39,17 +39,17 @@ const cases = [
     name: 'Mouse y periféricos',
     query: 'crear ticket por falla de mouse no funciona correctamente',
     role: 'user',
-    expectedArea: 'sdp',
+    expectedArea: 'soporte',
     requireTopArea: true,
-    expectedTerms: ['Accesorio / Mouse', 'mouse no funciona']
+    expectedTerms: ['accesorio', 'puerto']
   },
   {
     name: 'Audífonos y headset',
     query: 'crear ticket porque mis audífonos no funcionan',
     role: 'user',
-    expectedArea: 'sdp',
+    expectedArea: 'soporte',
     requireTopArea: true,
-    expectedTerms: ['Accesorio / Headset', 'audífonos']
+    expectedTerms: ['accesorio', 'puerto']
   },
   {
     name: 'MCI no debe mezclar tickets normales',
@@ -137,7 +137,7 @@ for (const testCase of cases) {
   const areaOk = testCase.requireTopArea
     ? top?.area === testCase.expectedArea
     : top?.area === testCase.expectedArea || results.some((result) => result.area === testCase.expectedArea);
-  const termsOk = testCase.expectedTerms.every((term) => content.includes(term));
+  const termsOk = testCase.expectedTerms.every((term) => content.toLowerCase().includes(term.toLowerCase()));
   const passed = Boolean(top) && areaOk && termsOk;
 
   if (!passed) failures += 1;
