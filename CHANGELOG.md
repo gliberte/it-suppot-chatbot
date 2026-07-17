@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.3] - 2026-07-17
+
+### Added
+- `knowledge:review` acepta `--reason` para documentar el motivo al aprobar, descartar o marcar aplicado un candidato.
+
+### Ops
+- La auditoria de candidatos registra el motivo de revision o aplicacion para dejar trazabilidad operativa.
+
 ## [0.9.2] - 2026-07-17
 
 ### Added

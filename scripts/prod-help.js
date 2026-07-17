@@ -90,7 +90,7 @@ const COMMANDS = [
       },
       {
         name: 'knowledge:review',
-        description: 'Lista, revisa, aprueba o descarta candidatos de conocimiento.'
+        description: 'Lista, revisa, aprueba o descarta candidatos de conocimiento; acepta --reason para dejar trazabilidad.'
       },
       {
         name: 'knowledge:status',

@@ -10,6 +10,7 @@ const APPROVE_ID = getArgValue('--approve');
 const REJECT_ID = getArgValue('--reject');
 const APPLIED_ID = getArgValue('--applied');
 const APPLIED_TARGET = getArgValue('--target');
+const REVIEW_REASON = getArgValue('--reason');
 
 const store = readStore(STORE_PATH);
 
@@ -19,7 +20,8 @@ if (APPROVE_ID || REJECT_ID || APPLIED_ID) {
     process.exit(1);
   }
   updateCandidateStatus(APPROVE_ID || REJECT_ID || APPLIED_ID, getRequestedStatus(), {
-    target: APPLIED_TARGET
+    target: APPLIED_TARGET,
+    reason: REVIEW_REASON
   });
 } else if (DETAIL_ID) {
   renderCandidateDetail(DETAIL_ID);
@@ -100,9 +102,9 @@ function renderCandidateList() {
   console.log('Comandos de revision');
   console.log('--------------------');
   console.log('  npm run knowledge:review -- --id kc_xxxxx');
-  console.log('  npm run knowledge:review -- --approve kc_xxxxx');
-  console.log('  npm run knowledge:review -- --reject kc_xxxxx');
-  console.log('  npm run knowledge:review -- --applied kc_xxxxx --target knowledge/catalogo-sdp.md');
+  console.log('  npm run knowledge:review -- --approve kc_xxxxx --reason "patron vigente observado en produccion"');
+  console.log('  npm run knowledge:review -- --reject kc_xxxxx --reason "error historico ya corregido"');
+  console.log('  npm run knowledge:review -- --applied kc_xxxxx --target knowledge/catalogo-sdp.md --reason "documentado en catalogo-sdp"');
   console.log('  npm run knowledge:review -- --status approved');
   console.log('  npm run knowledge:review -- --status applied_to_knowledge');
   console.log('');
@@ -126,8 +128,10 @@ function renderCandidateDetail(id) {
   console.log(`Creado: ${candidate.createdAt || 'n/a'}`);
   if (candidate.reviewedAt) console.log(`Revisado: ${candidate.reviewedAt}`);
   if (candidate.reviewedBy?.name) console.log(`Revisado por: ${candidate.reviewedBy.name}`);
+  if (candidate.reviewReason) console.log(`Motivo revision: ${candidate.reviewReason}`);
   if (candidate.appliedAt) console.log(`Aplicado: ${candidate.appliedAt}`);
   if (candidate.appliedTarget) console.log(`Destino aplicado: ${candidate.appliedTarget}`);
+  if (candidate.appliedReason) console.log(`Motivo aplicado: ${candidate.appliedReason}`);
   console.log('');
   console.log('Evidencia');
   console.log('---------');
@@ -158,9 +162,9 @@ function renderCandidateDetail(id) {
   console.log('');
   console.log('Comandos');
   console.log('--------');
-  console.log(`  npm run knowledge:review -- --approve ${candidate.id}`);
-  console.log(`  npm run knowledge:review -- --reject ${candidate.id}`);
-  console.log(`  npm run knowledge:review -- --applied ${candidate.id} --target knowledge/<archivo>.md`);
+  console.log(`  npm run knowledge:review -- --approve ${candidate.id} --reason "patron vigente observado en produccion"`);
+  console.log(`  npm run knowledge:review -- --reject ${candidate.id} --reason "error historico ya corregido"`);
+  console.log(`  npm run knowledge:review -- --applied ${candidate.id} --target knowledge/<archivo>.md --reason "documentado en knowledge/<archivo>.md"`);
 }
 
 function updateCandidateStatus(id, status, options = {}) {
@@ -177,16 +181,23 @@ function updateCandidateStatus(id, status, options = {}) {
     name: process.env.USER || process.env.LOGNAME || 'cli',
     source: 'knowledge:review'
   };
+  if (options.reason) {
+    candidate.reviewReason = options.reason;
+  }
 
   if (status === 'applied_to_knowledge') {
     candidate.appliedAt = new Date().toISOString();
     candidate.appliedTarget = options.target;
+    if (options.reason) {
+      candidate.appliedReason = options.reason;
+    }
   }
 
   writeStore(store);
   appendAuditRecord(candidate);
 
   console.log(`Listo. ${candidate.id} quedo como ${status}.`);
+  if (candidate.reviewReason) console.log(`Motivo: ${candidate.reviewReason}`);
   console.log('');
   if (status === 'approved') {
     console.log('Aprobado no significa incorporado al RAG todavia.');
@@ -217,7 +228,9 @@ function appendAuditRecord(candidate) {
     candidateType: candidate.type,
     candidateTitle: candidate.title,
     status: candidate.status,
+    reviewReason: candidate.reviewReason,
     appliedTarget: candidate.appliedTarget,
+    appliedReason: candidate.appliedReason,
     user: candidate.reviewedBy
   };
 
