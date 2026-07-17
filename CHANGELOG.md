@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.4] - 2026-07-17
+
+### Changed
+- `knowledge:status` ahora muestra comandos recomendados con un candidato real y ejemplos usando `--reason`.
+
+### Ops
+- El flujo de revisión de conocimiento queda más guiado para aprobar, descartar, exportar, validar y marcar candidatos como aplicados.
+
 ## [0.9.3] - 2026-07-17
 
 ### Added

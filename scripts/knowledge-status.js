@@ -117,24 +117,29 @@ function printFileStatus(label, path, logicalTimestamp) {
 
 function getNextAction(counts) {
   if (counts.pending_review > 0) {
+    const candidateId = getFirstCandidateId('pending_review');
     return {
       summary: `Revisar ${counts.pending_review} candidato(s) pendiente(s).`,
       commands: [
-        'npm run knowledge:review',
-        'npm run knowledge:review -- --id kc_xxxxx',
-        'npm run knowledge:review -- --approve kc_xxxxx'
+        'npm run knowledge:review -- --limit 10',
+        `npm run knowledge:review -- --id ${candidateId}`,
+        `npm run knowledge:review -- --approve ${candidateId} --reason "patron vigente observado en produccion"`,
+        `npm run knowledge:review -- --reject ${candidateId} --reason "error historico ya corregido o no aplicable"`
       ]
     };
   }
 
   if (counts.approved > 0) {
+    const candidateId = getFirstCandidateId('approved');
     return {
       summary: `Exportar ${counts.approved} candidato(s) aprobado(s) y aplicar los validos en knowledge/.`,
       commands: [
         'npm run knowledge:export',
+        'npm run knowledge:polish',
         'nano knowledge/<archivo>.md',
         'npm run rag:ingest',
-        'npm run knowledge:review -- --applied kc_xxxxx --target knowledge/<archivo>.md'
+        'npm run rag:test',
+        `npm run knowledge:review -- --applied ${candidateId} --target knowledge/<archivo>.md --reason "documentado y validado en el RAG"`
       ]
     };
   }
@@ -147,6 +152,26 @@ function getNextAction(counts) {
       'npm run knowledge:status'
     ]
   };
+}
+
+function getFirstCandidateId(status) {
+  const candidate = candidates
+    .filter((item) => item.status === status)
+    .sort(compareCandidates)[0];
+  return candidate?.id || 'kc_xxxxx';
+}
+
+function compareCandidates(a, b) {
+  const priorityDiff = getPriority(b) - getPriority(a);
+  if (priorityDiff !== 0) return priorityDiff;
+  return Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0);
+}
+
+function getPriority(candidate) {
+  if (candidate?.type === 'sdp_error_pattern') return 90;
+  if (candidate?.type === 'low_confidence_classification') return 70;
+  if (candidate?.type === 'classification_pattern') return 50;
+  return 10;
 }
 
 function formatBytes(bytes) {
