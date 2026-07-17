@@ -1202,7 +1202,7 @@ function createCreateRequestConfirmationBlock(args = {}, user) {
   }
 
   if (args.description) {
-    items.push(createDetailTextBlock('Descripción', stripHtml(args.description)));
+    items.push(createDetailTextBlock('Descripción', stripHtml(args.description), { maxLength: 3000 }));
   }
 
   return {
@@ -1322,7 +1322,7 @@ function formatCreateRequestConfirmation(args = {}, user, intro) {
   }
 
   if (args.description) {
-    lines.push('', `**Descripción**`, truncateText(redactSensitiveText(stripHtml(args.description)), 500));
+    lines.push('', `**Descripción**`, truncateText(redactSensitiveText(stripHtml(args.description)), 2000));
   }
 
   lines.push('', 'Revisa estos datos antes de confirmar.');
@@ -2481,9 +2481,9 @@ function minimizeRequest(request) {
     technician: minimizePerson(request.technician),
     created_time: request.created_time?.display_value || request.created_time,
     due_by_time: request.due_by_time?.display_value || request.due_by_time,
-    description: truncateText(redactSensitiveText(stripHtml(request.description || request.short_description || '')), 700),
+    description: truncateText(redactSensitiveText(stripHtml(request.description || request.short_description || '')), 2000),
     resolution: request.resolution?.content
-      ? truncateText(redactSensitiveText(stripHtml(request.resolution.content)), 700)
+      ? truncateText(redactSensitiveText(stripHtml(request.resolution.content)), 2000)
       : undefined
   };
 }
@@ -5538,11 +5538,11 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
   ];
 
   if (description) {
-    body.push(createDetailTextBlock('Descripción', description));
+    body.push(createDetailTextBlock('Descripción', description, { maxLength: 3000 }));
   }
 
   if (resolution) {
-    body.push(createDetailTextBlock('Resolución', resolution));
+    body.push(createDetailTextBlock('Resolución', resolution, { maxLength: 3000 }));
   }
 
   if (notes.length > 0) {
@@ -5981,7 +5981,11 @@ function createDetailFactRow(label, value) {
   };
 }
 
-function createDetailTextBlock(title, text) {
+function createDetailTextBlock(title, text, options = {}) {
+  const maxLength = options.maxLength || 1400;
+  const chunkSize = options.chunkSize || 850;
+  const safeText = truncateText(redactSensitiveText(text), maxLength);
+  const chunks = splitTextForAdaptiveCard(safeText, chunkSize);
   return {
     type: 'Container',
     spacing: 'Medium',
@@ -5993,14 +5997,40 @@ function createDetailTextBlock(title, text) {
         weight: 'Bolder',
         wrap: true
       },
-      {
+      ...chunks.map((chunk, index) => ({
         type: 'TextBlock',
-        text: truncateText(redactSensitiveText(text), 900),
+        text: chunk,
         wrap: true,
-        spacing: 'Small'
-      }
+        spacing: index === 0 ? 'Small' : 'None'
+      }))
     ]
   };
+}
+
+function splitTextForAdaptiveCard(text, maxChunkLength) {
+  const normalized = String(text || '').replace(/\r\n/g, '\n').trim();
+  if (!normalized) return ['-'];
+
+  const chunks = [];
+  let remaining = normalized;
+
+  while (remaining.length > maxChunkLength) {
+    const slice = remaining.slice(0, maxChunkLength + 1);
+    const breakAt = Math.max(
+      slice.lastIndexOf('\n\n'),
+      slice.lastIndexOf('\n'),
+      slice.lastIndexOf('. '),
+      slice.lastIndexOf('; '),
+      slice.lastIndexOf(', '),
+      slice.lastIndexOf(' ')
+    );
+    const cut = breakAt > Math.floor(maxChunkLength * 0.55) ? breakAt + 1 : maxChunkLength;
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+
+  if (remaining) chunks.push(remaining);
+  return chunks;
 }
 
 function createDetailOptionsBlock(ticketId, request) {

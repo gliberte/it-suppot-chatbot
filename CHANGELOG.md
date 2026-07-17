@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.9] - 2026-07-17
+
+### Changed
+- Las tarjetas de confirmacion y detalle muestran descripciones mas largas y las dividen en bloques legibles para evitar truncamiento temprano en Teams.
+
 ## [0.9.8] - 2026-07-17
 
 ### Fixed
