@@ -76,6 +76,10 @@ function validateRoutingBehavior() {
     },
     {
       text: 'Impresora Zebra con papel atascado',
+      expectedRoute: 'printer_zebra'
+    },
+    {
+      text: 'Falla de impresora HP de la oficina que no imprime',
       expectedRoute: 'printer'
     },
     {

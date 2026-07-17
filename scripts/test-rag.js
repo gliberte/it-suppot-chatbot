@@ -26,7 +26,14 @@ const cases = [
     query: 'impresora Zebra con papel atascado no imprime etiquetas',
     role: 'user',
     expectedArea: 'sdp',
-    expectedTerms: ['Impresoras / Honeywell', 'Zebra']
+    expectedTerms: ['Impresoras / Zebra Etiquetas', 'Zebra']
+  },
+  {
+    name: 'Impresora HP',
+    query: 'crear ticket para soporte de impresora HP de la oficina',
+    role: 'user',
+    expectedArea: 'sdp',
+    expectedTerms: ['Impresoras / HP', 'HP']
   },
   {
     name: 'Celular corporativo dañado',

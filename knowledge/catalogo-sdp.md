@@ -114,14 +114,19 @@ Antes de crear tickets por correo, Teams u Office, revisar situaciones activas d
 
 ## Impresoras
 
-Usar `Impresoras / Honeywell` para impresoras de etiquetas, Zebra, Honeywell, impresión de etiquetas, papel atascado o problemas de impresión.
+Usar `Impresoras / HP` para impresoras de oficina generales, HP u otros problemas generales de impresión.
+Usar `Impresoras / Zebra Etiquetas` para impresoras de etiquetas, Zebra, impresión de etiquetas, calibración de etiquetas o papel atascado de etiquetas.
 
-Señales:
+Señales HP / Generales:
+- impresora HP
+- no imprime impresora
+- cola de impresión
+
+Señales Zebra:
 - impresora Zebra
-- impresora Honeywell
 - etiqueta no imprime
-- papel atascado
-- calibración de impresora
+- papel atascado etiquetas
+- calibración de impresora Zebra
 
 ## Accesorios y periféricos
 

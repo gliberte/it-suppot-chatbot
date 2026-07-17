@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.5] - 2026-07-17
+
+### Fixed
+- Corregida la subcategoría de impresoras en `ticket-routing.js` eliminando la referencia inexistente `Honeywell` y solucionando un error tipográfico en la categoría por defecto (ahora apunta correctamente a `Impresoras`).
+
+### Added
+- Separada la ruta de impresoras en dos reglas específicas: `printer_zebra` (apunta a `Impresoras / Zebra Etiquetas` para etiquetas y códigos de barras) y `printer` (apunta a `Impresoras / HP` para impresoras generales/oficina).
+- Actualizados los playbooks de impresoras y los casos de prueba de comportamiento RAG en correspondencia.
+
 ## [0.10.4] - 2026-07-17
 
 ### Added

@@ -159,10 +159,18 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_NETWORK_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      name: 'printer_zebra',
+      keywords: ['zebra', 'etiqueta', 'etiquetas', 'codigo de barras', 'código de barras'],
+      category: env.SDP_PRINTER_ZEBRA_CATEGORY || 'Impresoras',
+      subcategory: env.SDP_PRINTER_ZEBRA_SUBCATEGORY || 'Zebra Etiquetas',
+      priority: env.SDP_PRINTER_ZEBRA_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_PRINTER_ZEBRA_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'printer',
-      keywords: ['impresora', 'imprimir', 'etiqueta', 'zebra', 'printer'],
-      category: env.SDP_PRINTER_CATEGORY || env.SDP_DEFAULT_CATEGORY || 'Contraseñas',
-      subcategory: env.SDP_PRINTER_SUBCATEGORY || 'Honeywell',
+      keywords: ['impresora', 'imprimir', 'hp', 'printer', 'cola de impresion', 'no imprime'],
+      category: env.SDP_PRINTER_CATEGORY || 'Impresoras',
+      subcategory: env.SDP_PRINTER_SUBCATEGORY || 'HP',
       priority: env.SDP_PRINTER_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
       udf_pick_2701: env.SDP_PRINTER_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },

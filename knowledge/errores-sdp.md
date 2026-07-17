@@ -86,7 +86,8 @@ Sophia debe resolver la subcategoría desde el catálogo SDP:
 - Headset o audífonos: `Accesorio / Headset`
 - Monitor: `Computadoras / Monitor`
 - Celular corporativo: `Teléfonos / Celulares`
-- Zebra/Honeywell/etiquetas: `Impresoras / Honeywell`
+- Impresora HP: `Impresoras / HP`
+- Impresora Zebra: `Impresoras / Zebra Etiquetas`
 
 Qué evitar:
 
