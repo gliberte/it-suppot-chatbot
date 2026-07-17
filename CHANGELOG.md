@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.4] - 2026-07-17
+
+### Added
+- Se añade justificación automatizada e indicadores de impacto en la descripción de los tickets creados con prioridad `Alta` para facilitar el triage de soporte y cumplir las reglas de calidad en la auditoría de tickets (`qa:tickets`).
+
 ## [0.10.3] - 2026-07-17
 
 ### Added

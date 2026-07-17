@@ -2196,6 +2196,13 @@ function applyTicketClassificationToArgs(args, classification, originalMessage =
     ...(suggestion.udf_fields || {})
   };
   args.sophia_classification = summarizeTicketClassificationForAudit(classification);
+
+  if (args.priority === 'Alta') {
+    const tag = '[Prioridad Alta: Urgente / Solicitado por el usuario o justificado por posible impacto crítico en la operación]';
+    if (args.description && !args.description.includes('Prioridad Alta:')) {
+      args.description = `${args.description}\n\n${tag}`;
+    }
+  }
 }
 
 function resolveCreateRequestPriority(args, suggestion, originalMessage = '') {
