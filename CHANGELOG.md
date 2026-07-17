@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.1] - 2026-07-17
+
+### Changed
+- Al crear un ticket confirmado, Sophia responde con un resumen operativo del ticket creado y opciones contextuales.
+- El ticket creado se recuerda con asunto, prioridad, categoría y técnico para continuar la conversación con referencias como "ese ticket".
+
 ## [0.10.0] - 2026-07-17
 
 ### Added

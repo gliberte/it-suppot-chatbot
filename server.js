@@ -4551,6 +4551,19 @@ async function executeConfirmedAction(action, user, session = null) {
     outcome: 'confirmed_success'
   });
   rememberLastTicketFromToolOutput(session, action.toolName, toolResult.content?.[0]?.text);
+  if (action.toolName === 'sdp_create_request' && createdRequestId) {
+    rememberLastTicket(session, {
+      id: createdRequestId,
+      subject: confirmedArgs.subject,
+      status: 'Abierto',
+      priority: confirmedArgs.priority,
+      requester: user?.name || confirmedArgs.requester,
+      technician: confirmedArgs.udf_fields?.udf_pick_2701,
+      category: confirmedArgs.category,
+      subcategory: confirmedArgs.subcategory
+    }, 'created');
+    return formatCreatedTicketSummary({ requestId: createdRequestId, args: confirmedArgs });
+  }
   if (action.toolName !== 'sdp_update_mci' && confirmedArgs?.request_id) {
     rememberLastTicket(session, { id: confirmedArgs.request_id }, action.toolName);
   }
@@ -4589,6 +4602,47 @@ async function executeConfirmedAction(action, user, session = null) {
   }
 
   return summarizeToolOutput(toolResult.content[0].text);
+}
+
+function formatCreatedTicketSummary({ requestId, args = {} }) {
+  const assignedTechnician = getDisplayName(args.udf_fields?.udf_pick_2701) || args.udf_fields?.udf_pick_2701 || 'Sin asignar';
+  const classification = args.sophia_classification || {};
+  const lines = [
+    `Listo, creé el ticket #${requestId}.`,
+    '',
+    '**Resumen**',
+    `| Campo | Valor |`,
+    `| --- | --- |`,
+    `| Ticket | #${escapeMarkdownTableValue(requestId)} |`,
+    `| Asunto | ${escapeMarkdownTableValue(args.subject || 'Sin asunto')} |`,
+    `| Categoría | ${escapeMarkdownTableValue(args.category || '-')} |`,
+    `| Subcategoría | ${escapeMarkdownTableValue(args.subcategory || '-')} |`,
+    `| Prioridad | ${escapeMarkdownTableValue(args.priority || '-')} |`,
+    `| Técnico asignado | ${escapeMarkdownTableValue(assignedTechnician)} |`
+  ];
+
+  if (classification.routing || classification.confidence) {
+    lines.push(
+      '',
+      '**Clasificación Sophia**',
+      `| Campo | Valor |`,
+      `| --- | --- |`,
+      `| Ruta | ${escapeMarkdownTableValue(classification.routing || '-')} |`,
+      `| Confianza | ${escapeMarkdownTableValue(classification.confidence || '-')} |`
+    );
+  }
+
+  lines.push(
+    '',
+    'Lo dejo como el ticket reciente de esta conversación, así que puedes decirme “muéstrame ese ticket” o “agrégale una nota”.',
+    '',
+    '**Opciones**',
+    `- Ver detalle del ticket #${requestId}`,
+    `- Agregar un seguimiento al ticket #${requestId}`,
+    '- Consultar mis tickets abiertos'
+  );
+
+  return lines.join('\n');
 }
 
 function getConfirmedNoteVerification(toolResult) {
