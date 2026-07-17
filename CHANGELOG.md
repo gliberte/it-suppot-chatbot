@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.3] - 2026-07-17
+
+### Added
+- Agregada la ruta determinista `microsoft_365_email` en `ticket-routing.js` para clasificar automáticamente solicitudes de Outlook, correo, Teams, OneDrive y licencias de Office.
+- La ruta mapea correctamente a la categoría `Correo` y subcategoría `Envió & Recepción` en ServiceDesk Plus.
+
+### Fixed
+- Agregados casos de prueba y validaciones de comportamiento para la nueva ruta en `scripts/test-rag.js` y `scripts/check-routing.js`.
+
 ## [0.10.2] - 2026-07-17
 
 ### Fixed

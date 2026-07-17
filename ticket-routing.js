@@ -252,6 +252,30 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_MOBILE_UDF_PICK_2701 || env.SDP_DEVICE_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      name: 'microsoft_365_email',
+      keywords: [
+        'correo',
+        'outlook',
+        'teams',
+        'onedrive',
+        'sharepoint',
+        'microsoft 365',
+        'm365',
+        'office 365',
+        'licencia de office',
+        'activar office',
+        'no recibo correos',
+        'no puedo enviar',
+        'no envia',
+        'no recibe',
+        'sincroniza correo'
+      ],
+      category: env.SDP_EMAIL_CATEGORY || 'Correo',
+      subcategory: env.SDP_EMAIL_SUBCATEGORY || 'Envió & Recepción',
+      priority: env.SDP_EMAIL_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_EMAIL_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'password',
       keywords: ['contraseña', 'clave', 'password', 'bloqueada', 'bloqueado', 'usuario o contraseña'],
       category: env.SDP_PASSWORD_CATEGORY || env.SDP_DEFAULT_CATEGORY || 'Contraseñas',

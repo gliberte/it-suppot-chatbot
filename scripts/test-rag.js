@@ -36,6 +36,13 @@ const cases = [
     expectedTerms: ['Teléfonos / Celulares', 'pantalla rota']
   },
   {
+    name: 'Microsoft 365 y Correo',
+    query: 'crear ticket porque Outlook no sincroniza mis correos',
+    role: 'user',
+    expectedArea: 'sdp',
+    expectedTerms: ['Correo', 'Outlook']
+  },
+  {
     name: 'Mouse y periféricos',
     query: 'crear ticket por falla de mouse no funciona correctamente',
     role: 'user',

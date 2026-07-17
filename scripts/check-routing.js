@@ -79,6 +79,10 @@ function validateRoutingBehavior() {
       expectedRoute: 'printer'
     },
     {
+      text: 'Mi correo Outlook no recibe mensajes de proveedores externos',
+      expectedRoute: 'microsoft_365_email'
+    },
+    {
       text: 'Laptop lenta',
       expectedRoute: 'default'
     }
