@@ -2166,10 +2166,12 @@ function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', h
 
   if (shouldBypassDiagnostic(message, history)) return null;
 
-  const triagePrompt = getPriorityTriagePrompt({ message, preparedText: text, history });
+  const routeName = args.sophia_classification?.routing || resolveTicketRouting(args).name;
+  const triagePrompt = shouldAskPriorityTriageForRoute(routeName, text)
+    ? getPriorityTriagePrompt({ message, preparedText: text, history })
+    : null;
   if (triagePrompt) return triagePrompt;
 
-  const routeName = args.sophia_classification?.routing || resolveTicketRouting(args).name;
   const playbook = findDiagnosticPlaybook(routeName, text);
   if (!playbook) return null;
 
@@ -2182,6 +2184,21 @@ function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', h
     '',
     'Respóndeme con lo que sepas. Si el caso es urgente o prefieres registrarlo ya, dime **crear de todos modos** y preparo la solicitud con la información disponible.'
   ].join('\n');
+}
+
+function shouldAskPriorityTriageForRoute(routeName, text = '') {
+  const normalizedText = normalizeRoutingText(text);
+  if (hasPriorityTriageEvidence(normalizedText)) return false;
+
+  const route = String(routeName || '');
+  const serviceRequestRoutes = new Set([
+    'automation_reporting',
+    'sap_reporting',
+    'web_hosting_dns',
+    'password'
+  ]);
+
+  return !serviceRequestRoutes.has(route);
 }
 
 function getPriorityTriagePrompt({ message = '', preparedText = '', history = [] }) {
@@ -2242,6 +2259,8 @@ function countPriorityTriageSignals(normalizedText) {
 
 function shouldBypassDiagnostic(text, history = []) {
   const normalizedText = normalizeRoutingText(text);
+  if (isCreateRequestAmendmentMessage(normalizedText)) return true;
+
   if (/\b(crear de todos modos|registralo ya|regístralo ya|abrelo ya|ábrelo ya|sin diagnostico|sin diagnóstico|urgente|prioridad alta)\b/i.test(text)) {
     return true;
   }
@@ -2255,6 +2274,11 @@ function shouldBypassDiagnostic(text, history = []) {
   return recentAssistant.includes('antes de crear el ticket') &&
     recentAssistant.includes('crear de todos modos') &&
     normalizedText.split(/\s+/).filter(Boolean).length >= 3;
+}
+
+function isCreateRequestAmendmentMessage(normalizedText) {
+  return /\b(agrega|agregar|anade|anadir|añade|añadir|coloca|poner|incluye|modifica|cambia|actualiza|quita|elimina)\b/.test(normalizedText) &&
+    /\b(descripcion|asunto|prioridad|categoria|subcategoria|ticket|solicitud|texto|principio|final)\b/.test(normalizedText);
 }
 
 function summarizeTicketClassificationForAudit(classification) {

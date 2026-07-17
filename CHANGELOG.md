@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.6] - 2026-07-17
+
+### Changed
+- La encuesta de prioridad ya no se muestra para solicitudes de servicio bien clasificadas como automatizacion/reportes, SAP reportería, DNS/web hosting o contraseñas.
+
+### Fixed
+- Sophia deja de interrumpir ediciones de una solicitud preparada, como agregar texto a la descripcion, con preguntas de priorizacion innecesarias.
+
 ## [0.9.5] - 2026-07-17
 
 ### Added
