@@ -159,6 +159,22 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_NETWORK_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      name: 'mudanzas',
+      keywords: ['mudanza', 'traslado de equipo', 'cambio de puesto', 'mover computadora', 'mover pc', 'mover puesto', 'trasladar puesto'],
+      category: env.SDP_MUDANZAS_CATEGORY || 'Mudanzas',
+      subcategory: env.SDP_MUDANZAS_SUBCATEGORY || null,
+      priority: env.SDP_MUDANZAS_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_MUDANZAS_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
+      name: 'suministros',
+      keywords: ['suministros', 'toner', 'cartucho', 'tinta', 'resma de papel', 'rollos de etiquetas', 'bateria', 'pila', 'mousepad'],
+      category: env.SDP_SUPPLIES_CATEGORY || 'Suministros',
+      subcategory: env.SDP_SUPPLIES_SUBCATEGORY || 'Tintas',
+      priority: env.SDP_SUPPLIES_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_SUPPLIES_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'printer_zebra',
       keywords: ['zebra', 'etiqueta', 'etiquetas', 'codigo de barras', 'código de barras'],
       category: env.SDP_PRINTER_ZEBRA_CATEGORY || 'Impresoras',

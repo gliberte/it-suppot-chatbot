@@ -87,6 +87,14 @@ function validateRoutingBehavior() {
       expectedRoute: 'microsoft_365_email'
     },
     {
+      text: 'Solicito traslado de equipo de computo por cambio de puesto de oficina',
+      expectedRoute: 'mudanzas'
+    },
+    {
+      text: 'Necesito solicitar un cartucho de toner negro para la impresora de recepcion',
+      expectedRoute: 'suministros'
+    },
+    {
       text: 'Laptop lenta',
       expectedRoute: 'default'
     }

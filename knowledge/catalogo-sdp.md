@@ -177,6 +177,29 @@ Señales:
 - no enciende
 - falla de aplicación móvil
 
+## Mudanzas
+
+Usar `Mudanzas` (sin subcategoría) para solicitudes de traslado de puestos, cambio de oficina o movimiento físico de equipos de cómputo y monitores.
+
+Señales:
+- traslado de equipo
+- mudanza de oficina
+- cambio de puesto
+- mover computadora
+- trasladar PC
+
+## Suministros
+
+Usar `Suministros / Tintas` para solicitudes de insumos y consumibles de oficina (tóner, cartuchos de tinta, resmas de papel, rollos de etiquetas, cintas, mousepads, pilas, baterías).
+
+Señales:
+- pedir tóner o cartucho
+- suministros de oficina
+- rollo de etiquetas o cintas
+- resma de papel
+- batería o pilas
+- mousepad
+
 ## Barraza Móvil
 
 Barraza Móvil es una aplicación móvil Android usada por vendedores en calle para gestionar clientes, rutas, cobertura comercial, fotos de fachada, coordenadas GPS, mapas y navegación hacia clientes.

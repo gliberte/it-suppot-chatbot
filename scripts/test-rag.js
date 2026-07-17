@@ -36,6 +36,20 @@ const cases = [
     expectedTerms: ['Impresoras / HP', 'HP']
   },
   {
+    name: 'Mudanzas de equipo',
+    query: 'solicito traslado de mi computadora de escritorio y monitor a mi nuevo puesto de trabajo',
+    role: 'user',
+    expectedArea: 'sdp',
+    expectedTerms: ['Mudanzas']
+  },
+  {
+    name: 'Suministros de oficina',
+    query: 'necesito pedir un nuevo cartucho de toner de tinta para la impresora de recepcion',
+    role: 'user',
+    expectedArea: 'sdp',
+    expectedTerms: ['Suministros / Tintas', 'tinta']
+  },
+  {
     name: 'Celular corporativo dañado',
     query: 'crear ticket por celular corporativo dañado pantalla rota',
     role: 'user',

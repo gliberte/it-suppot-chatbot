@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.6] - 2026-07-17
+
+### Added
+- Agregadas las rutas deterministas `mudanzas` (categoría `Mudanzas`) y `suministros` (categoría `Suministros`, subcategoría `Tintas` por defecto) en `ticket-routing.js` para clasificar correctamente solicitudes de traslados de equipo y requisiciones de insumos/tóner de oficina.
+- Nuevos casos de prueba RAG y de enrutamiento asociados en `scripts/test-rag.js`, `scripts/check-routing.js` y `knowledge/catalogo-sdp.md`.
+
 ## [0.10.5] - 2026-07-17
 
 ### Fixed
