@@ -43,7 +43,7 @@ const READ_ONLY_CHAT_TOOLS = new Set([
   'sdp_search_user'
 ]);
 
-const CONFIRMATION_WORDS = new Set(['confirmar', 'confirmo', 'si', 'sí', 'ok', 'dale']);
+const CONFIRMATION_WORDS = new Set(['confirmar', 'confirma', 'confirmo', 'confírmalo', 'confirmalo', 'si', 'sí', 'ok', 'dale']);
 const CANCEL_WORDS = new Set(['cancelar', 'cancela', 'no']);
 const TOOLS_REQUIRING_CONFIRMATION = new Set([
   'sdp_create_request',
@@ -1002,10 +1002,40 @@ function createPendingAction(session, { toolName, args, content }) {
     toolName,
     args,
     content,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    editHistory: [],
     expiresAt: Date.now() + PENDING_ACTION_TTL_MS
   });
   scheduleRuntimeStateSave();
   return actionId;
+}
+
+function updatePendingAction(session, actionId, updater) {
+  prunePendingActions(session);
+  const action = session.pendingActions.get(actionId);
+  if (!action) return null;
+  const updatedAction = updater({ ...action, args: cloneActionArgs(action.args) }) || action;
+  updatedAction.updatedAt = new Date().toISOString();
+  updatedAction.expiresAt = Date.now() + PENDING_ACTION_TTL_MS;
+  session.pendingActions.set(actionId, updatedAction);
+  scheduleRuntimeStateSave();
+  return updatedAction;
+}
+
+function cloneActionArgs(args = {}) {
+  return {
+    ...args,
+    udf_fields: args.udf_fields && typeof args.udf_fields === 'object' ? { ...args.udf_fields } : args.udf_fields,
+    sophia_classification: args.sophia_classification && typeof args.sophia_classification === 'object'
+      ? {
+          ...args.sophia_classification,
+          matchedKeywords: Array.isArray(args.sophia_classification.matchedKeywords)
+            ? [...args.sophia_classification.matchedKeywords]
+            : args.sophia_classification.matchedKeywords
+        }
+      : args.sophia_classification
+  };
 }
 
 function takePendingAction(session, actionId) {
@@ -1055,6 +1085,132 @@ function formatConfirmedActionError(action, error) {
   }
 
   return `No pude ejecutar la acción confirmada: ${error.message}`;
+}
+
+function getLatestPendingCreateRequestEntry(session) {
+  prunePendingActions(session);
+  const entries = [...(session.pendingActions || new Map()).entries()]
+    .filter(([, action]) => action.toolName === 'sdp_create_request');
+  return entries.at(-1) || null;
+}
+
+function updateCreateRequestDraftFromMessage(session, message, user) {
+  const pendingEntry = getLatestPendingCreateRequestEntry(session);
+  if (!pendingEntry) return null;
+
+  const draftEdit = parseCreateRequestDraftEdit(message);
+  if (!draftEdit) return null;
+
+  const [actionId] = pendingEntry;
+  const updatedAction = updatePendingAction(session, actionId, (action) => {
+    const args = action.args || {};
+    const changes = [];
+
+    if (draftEdit.subject !== undefined) {
+      args.subject = draftEdit.subject;
+      changes.push('asunto');
+    }
+
+    if (draftEdit.priority !== undefined) {
+      args.priority = draftEdit.priority;
+      changes.push('prioridad');
+    }
+
+    if (draftEdit.description !== undefined) {
+      args.description = draftEdit.description;
+      changes.push('descripción');
+    } else if (draftEdit.descriptionPrepend) {
+      args.description = [draftEdit.descriptionPrepend, args.description].filter(Boolean).join('\n\n');
+      changes.push('descripción');
+    } else if (draftEdit.descriptionAppend) {
+      args.description = [args.description, draftEdit.descriptionAppend].filter(Boolean).join('\n\n');
+      changes.push('descripción');
+    }
+
+    action.args = args;
+    action.content = createDraftUpdatedIntro(changes, user);
+    action.editHistory = [
+      ...(Array.isArray(action.editHistory) ? action.editHistory : []),
+      {
+        at: new Date().toISOString(),
+        message: truncateText(redactSensitiveText(stripHtml(message)), 400),
+        changes
+      }
+    ].slice(-10);
+    return action;
+  });
+
+  if (!updatedAction) return null;
+
+  return {
+    actionId,
+    action: updatedAction,
+    changes: updatedAction.editHistory?.at(-1)?.changes || []
+  };
+}
+
+function createDraftUpdatedIntro(changes = [], user) {
+  const changedText = changes.length ? changes.join(', ') : 'la solicitud';
+  const name = user?.name?.split(/\s+/)[0] || '';
+  return `${name ? `${name}, ` : ''}actualicé ${changedText} en la solicitud preparada. Revísala y confirma cuando esté correcta.`;
+}
+
+function parseCreateRequestDraftEdit(message = '') {
+  const text = String(message || '').trim();
+  const normalized = normalizeRoutingText(text);
+  if (!text || !isCreateRequestDraftEditIntent(normalized)) return null;
+
+  const edit = {};
+  const quotedText = extractQuotedText(text);
+  const priority = inferExplicitPriorityFromText(text);
+  if (priority && /\b(prioridad|urgencia|urgente)\b/.test(normalized)) {
+    edit.priority = priority;
+  }
+
+  if (/\b(asunto|titulo|título)\b/.test(normalized)) {
+    const subject = quotedText || extractValueAfterEditMarker(text, /(asunto|t[ií]tulo)/i);
+    if (subject) edit.subject = subject;
+  }
+
+  if (/\b(descripcion|descripción)\b/.test(normalized)) {
+    const descriptionText = quotedText || extractValueAfterEditMarker(text, /(descripci[oó]n|texto)/i);
+    if (descriptionText) {
+      if (/\b(principio|inicio|comienzo|antes)\b/.test(normalized)) {
+        edit.descriptionPrepend = descriptionText;
+      } else if (/\b(final|despues|después|al final)\b/.test(normalized)) {
+        edit.descriptionAppend = descriptionText;
+      } else if (/\b(reemplaza|sustituye|cambia toda|nueva descripcion|nueva descripción)\b/.test(normalized)) {
+        edit.description = descriptionText;
+      } else {
+        edit.descriptionAppend = descriptionText;
+      }
+    }
+  }
+
+  if (Object.keys(edit).length === 0 && quotedText && /\b(agrega|agregar|anade|anadir|añade|añadir|incluye|coloca|pon)\b/.test(normalized)) {
+    edit.descriptionAppend = quotedText;
+  }
+
+  return Object.keys(edit).length > 0 ? edit : null;
+}
+
+function isCreateRequestDraftEditIntent(normalizedText) {
+  return /\b(agrega|agregar|anade|anadir|añade|añadir|incluye|coloca|pon|poner|cambia|cambiar|actualiza|actualizar|modifica|modificar|reemplaza|sustituye)\b/.test(normalizedText) &&
+    /\b(descripcion|descripción|asunto|titulo|título|prioridad|texto|solicitud|ticket)\b/.test(normalizedText);
+}
+
+function extractQuotedText(text) {
+  const match = String(text || '').match(/["“”']([^"“”']{1,3000})["“”']/);
+  return match?.[1]?.trim() || '';
+}
+
+function extractValueAfterEditMarker(text, fieldPattern) {
+  const source = String(text || '');
+  const fieldMatch = source.match(fieldPattern);
+  if (!fieldMatch) return '';
+  const afterField = source.slice((fieldMatch.index || 0) + fieldMatch[0].length);
+  const markerMatch = afterField.match(/(?:a|por|con|como|siguiente texto|texto)\s*:?\s*(.+)$/i);
+  return markerMatch?.[1]?.trim().replace(/^["“”']|["“”']$/g, '') || '';
 }
 
 function getPendingActionLabel(action) {
@@ -6723,6 +6879,33 @@ async function handleTeamsMessage(context) {
     session.pendingActions.clear();
     scheduleRuntimeStateSave();
     await sendTeamsReply(context, 'Listo, cancelé la acción pendiente.');
+    return;
+  }
+
+  const draftUpdate = updateCreateRequestDraftFromMessage(session, messageForSophia, user);
+  if (draftUpdate) {
+    await auditToolCall({
+      user,
+      toolName: draftUpdate.action.toolName,
+      args: draftUpdate.action.args,
+      outcome: 'draft_updated'
+    });
+    const card = createTeamsConfirmationCard({
+      actionId: draftUpdate.actionId,
+      toolName: draftUpdate.action.toolName,
+      args: draftUpdate.action.args,
+      user,
+      intro: draftUpdate.action.content,
+      summaryText: draftUpdate.action.content,
+      expiresInMs: PENDING_ACTION_TTL_MS
+    });
+    session.history = pushChatHistory(
+      pushChatHistory(session.history, 'user', messageForSophia),
+      'assistant',
+      card.summaryText
+    );
+    scheduleRuntimeStateSave();
+    await sendTeamsReply(context, card);
     return;
   }
 

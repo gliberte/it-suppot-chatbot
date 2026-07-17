@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.0] - 2026-07-17
+
+### Added
+- Sophia puede editar una solicitud pendiente antes de confirmarla, aplicando cambios directos sobre el borrador vigente.
+- Soporta ediciones naturales de asunto, prioridad y descripcion, incluyendo agregar texto al inicio o al final.
+
+### Changed
+- Las ediciones de una solicitud preparada ya no dependen de que Gemini reconstruya el ticket desde cero; se actualiza la accion pendiente y se reenvia la tarjeta de confirmacion.
+
 ## [0.9.9] - 2026-07-17
 
 ### Changed
