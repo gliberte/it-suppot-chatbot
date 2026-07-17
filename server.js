@@ -1525,6 +1525,7 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
   }
 
   if (toolName === 'sdp_create_request' && user?.name) {
+    normalizeCreateRequestAliases(args);
     args.requester = user.name;
     args.requester_id = getRequesterId(user);
     const classification = await classifyTicketWithKnowledge({ ...args, message }, user);
@@ -2062,6 +2063,14 @@ function resolveCreateRequestPriority(args, suggestion, originalMessage = '') {
 function sanitizeCreateRequestArgs(args) {
   delete args.impact;
   delete args.urgency;
+  delete args.request_subject;
+  delete args.title;
+  delete args.summary;
+}
+
+function normalizeCreateRequestAliases(args) {
+  args.subject = args.subject || args.request_subject || args.title || args.summary;
+  args.description = args.description || args.details || args.body || args.message;
 }
 
 const SUPPORT_DIAGNOSTIC_PLAYBOOKS = [

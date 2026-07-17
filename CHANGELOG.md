@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.7] - 2026-07-17
+
+### Fixed
+- Sophia normaliza alias de creación como `request_subject`, `title` o `summary` hacia `subject` antes de clasificar, confirmar y crear tickets.
+
 ## [0.9.6] - 2026-07-17
 
 ### Changed
