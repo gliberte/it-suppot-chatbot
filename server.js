@@ -2110,6 +2110,17 @@ const SUPPORT_DIAGNOSTIC_PLAYBOOKS = [
     ]
   },
   {
+    routes: ['automation_reporting'],
+    label: 'automatización o reporte operativo',
+    signals: ['excel', 'macro', 'macros', 'power query', 'reporte', 'wms', 'automatizacion', 'automatización', 'materiales vencidos'],
+    evidence: ['fuente', 'wms', 'sap', 'excel', 'macro', 'macros', 'semanal', 'diario', 'lunes', 'responsable', 'calidad', 'columnas', 'filtros', 'carpeta', 'correo', 'ubicacion', 'ubicación'],
+    questions: [
+      '¿El reporte ya existe o hay que crearlo desde cero?',
+      '¿Cuál es la fuente de datos y con qué frecuencia debe actualizarse?',
+      '¿Qué área lo usará y quién es el responsable funcional?'
+    ]
+  },
+  {
     routes: ['peripheral_mouse', 'peripheral_keyboard', 'peripheral_audio', 'peripheral'],
     label: 'accesorio o periférico',
     signals: ['mouse', 'raton', 'ratón', 'teclado', 'audifono', 'audífono', 'headset', 'microfono', 'micrófono', 'periferico', 'periférico'],

@@ -71,6 +71,10 @@ function validateRoutingBehavior() {
       expectedRoute: 'web_hosting_dns'
     },
     {
+      text: 'Necesito automatizar un Excel con macros para actualizar un reporte semanal de materiales vencidos de WMS',
+      expectedRoute: 'automation_reporting'
+    },
+    {
       text: 'Impresora Zebra con papel atascado',
       expectedRoute: 'printer'
     },

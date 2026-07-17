@@ -80,6 +80,22 @@ Señales:
 
 Si el usuario menciona una ruta de SAP como `Herramientas>>>Consultas de Usuario>>>8.Calidad`, esto corresponde a reportería o consulta de usuario SAP, no a contraseñas.
 
+## Automatizaciones y reportes Excel/WMS
+
+Usar `Softwares / Office` cuando el usuario solicite automatizar archivos de Excel, macros, Power Query, reportes automaticos o reportes operativos de WMS.
+
+Señales:
+- automatizar Excel
+- Excel con macros
+- Power Query
+- actualizacion automatica de reportes
+- reporte semanal
+- materiales vencidos
+- reporte WMS
+- extraccion o transformacion periodica de datos
+
+Una solicitud de automatizacion Excel/WMS no corresponde a `Contraseñas / Usuario Windows`.
+
 ## Microsoft 365, correo y colaboración
 
 Usar la ruta aprobada más cercana disponible para problemas de Outlook, correo corporativo, Teams, OneDrive, SharePoint, licencias Microsoft 365 o activación de Office. Si el catálogo SDP no tiene una categoría específica documentada, Sophia debe dejar claro en la descripción que el sistema afectado es Microsoft 365/correo y no clasificarlo como SAP, impresoras o accesorios.

@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.5] - 2026-07-17
+
+### Added
+- Se agrega la ruta `automation_reporting` para solicitudes de automatizacion de Excel, macros, reportes automaticos y WMS.
+- Se incorpora `knowledge/automatizaciones-reportes.md` como playbook RAG para reportes operativos y automatizaciones.
+
+### Fixed
+- Sophia deja de clasificar solicitudes de automatizacion Excel/WMS como `Contraseñas / Usuario Windows`.
+
 ## [0.9.4] - 2026-07-17
 
 ### Changed

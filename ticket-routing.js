@@ -80,6 +80,36 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_WEB_HOSTING_UDF_PICK_2701 || env.SDP_NETWORK_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      name: 'automation_reporting',
+      keywords: [
+        'automatizacion de excel',
+        'automatización de excel',
+        'automatizar excel',
+        'excel con macros',
+        'macros',
+        'macro',
+        'power query',
+        'actualizacion automatica',
+        'actualización automática',
+        'reporte automatico',
+        'reporte automático',
+        'reporte semanal',
+        'materiales vencidos',
+        'reporte wms',
+        'wms materiales',
+        'extraccion de datos',
+        'extracción de datos',
+        'transformacion de datos',
+        'transformación de datos',
+        'consolidacion de informacion',
+        'consolidación de información'
+      ],
+      category: env.SDP_AUTOMATION_REPORT_CATEGORY || env.SDP_OFFICE_CATEGORY || 'Softwares',
+      subcategory: env.SDP_AUTOMATION_REPORT_SUBCATEGORY || env.SDP_OFFICE_SUBCATEGORY || 'Office',
+      priority: env.SDP_AUTOMATION_REPORT_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_AUTOMATION_REPORT_UDF_PICK_2701 || env.SDP_SOFTWARE_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'internet_slow',
       keywords: [
         'internet lento',
