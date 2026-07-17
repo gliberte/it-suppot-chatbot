@@ -85,6 +85,10 @@ const COMMANDS = [
         description: 'Exporta candidatos aprobados a un borrador Markdown revisable.'
       },
       {
+        name: 'knowledge:polish',
+        description: 'Convierte candidatos aprobados en bloques de conocimiento mas limpios.'
+      },
+      {
         name: 'knowledge:review',
         description: 'Lista, revisa, aprueba o descarta candidatos de conocimiento.'
       },

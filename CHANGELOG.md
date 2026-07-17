@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.0] - 2026-07-17
+
+### Added
+- Se agrega `npm run knowledge:polish` para convertir candidatos aprobados en bloques de conocimiento mas limpios y listos para revision humana.
+
+### Ops
+- `prod:help` incluye el flujo de pulido de conocimiento aprobado antes de incorporarlo al RAG.
+
 ## [0.8.9] - 2026-07-17
 
 ### Added
