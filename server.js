@@ -2221,6 +2221,10 @@ function getPriorityTriagePrompt({ message = '', preparedText = '', history = []
     .map((entry) => normalizeRoutingText(entry.content))
     .join(' ');
 
+  if (isPriorityTriageFollowUpAnswer(normalizedMessage, recentAssistant)) {
+    return null;
+  }
+
   if (recentAssistant.includes('calcular mejor la prioridad') || recentAssistant.includes('afecta solo a una persona')) {
     return null;
   }
@@ -2255,6 +2259,24 @@ function hasEnoughDiagnosticEvidence(text, playbook) {
 
 function hasPriorityTriageEvidence(normalizedText) {
   return countPriorityTriageSignals(normalizedText) >= 2;
+}
+
+function isPriorityTriageFollowUpAnswer(normalizedMessage, normalizedRecentAssistant) {
+  const assistantAskedPriority =
+    normalizedRecentAssistant.includes('ajustar la prioridad') ||
+    normalizedRecentAssistant.includes('calcular mejor la prioridad') ||
+    normalizedRecentAssistant.includes('bloquea completamente') ||
+    normalizedRecentAssistant.includes('puedes seguir usando') ||
+    normalizedRecentAssistant.includes('puedes seguir trabajando');
+
+  if (!assistantAskedPriority) return false;
+
+  return [
+    /\b(bloquea|bloqueado|no puedo trabajar|no puedo seguir|no me deja trabajar|me impide trabajar|detenido|parado|fuera de servicio)\b/,
+    /\b(puedo seguir|parcialmente|no bloquea|no me bloquea|solo molesta|puedo trabajar)\b/,
+    /\b(solo yo|solo mi equipo|varios usuarios|todos|area completa|toda el area)\b/,
+    /\b(desde hoy|desde ayer|hace [0-9]+|esta manana|hoy en la manana)\b/
+  ].some((pattern) => pattern.test(normalizedMessage));
 }
 
 function countPriorityTriageSignals(normalizedText) {

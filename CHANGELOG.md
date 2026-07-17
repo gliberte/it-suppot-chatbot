@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.8] - 2026-07-17
+
+### Fixed
+- Sophia reconoce respuestas breves a preguntas de prioridad, como "bloquea mi trabajo", y evita repetir la encuesta completa.
+
 ## [0.9.7] - 2026-07-17
 
 ### Fixed
