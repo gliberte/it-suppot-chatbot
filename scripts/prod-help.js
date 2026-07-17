@@ -110,6 +110,10 @@ const COMMANDS = [
         description: 'Valida rutas de clasificacion SDP y ejemplos protegidos.'
       },
       {
+        name: 'qa:tickets',
+        description: 'Audita calidad de tickets creados por Sophia y sugiere correcciones.'
+      },
+      {
         name: 'qa:routing',
         description: 'Alias de routing:check.'
       },

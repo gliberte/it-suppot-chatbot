@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.9.1] - 2026-07-17
+
+### Added
+- Se agrega `npm run qa:tickets` para auditar calidad de tickets creados por Sophia: errores SDP, baja confianza, ruta default, campos faltantes, prioridades altas sin evidencia y rutas/categorías más usadas.
+
+### Ops
+- `prod:help` incluye el reporte QA de tickets para orientar mejoras de clasificación con evidencia real.
+
 ## [0.9.0] - 2026-07-17
 
 ### Added
