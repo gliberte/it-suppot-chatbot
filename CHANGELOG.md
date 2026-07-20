@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.19.4] - 2026-07-20
+
+### Fixed
+- **Aislamiento de la Revisión de Candidatos de Aprendizaje (`parseKnowledgeCandidateReviewCommand`):**
+  - Removido la palabra comodín `borrador` de las activaciones generales de revisión de conocimiento para evitar interceptaciones accidentales al crear o actualizar borradores de tickets/MCI.
+  - Asegurado que cualquier solicitud sobre MCI o tickets (`mci`, `ticket`, `solicitud`) pase de forma directa al orquestador conversacional sin desplegar la tarjeta de candidatos de aprendizaje.
+
 ## [0.19.3] - 2026-07-20
 
 ### Fixed

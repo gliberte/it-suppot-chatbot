@@ -3412,7 +3412,13 @@ async function handleKnowledgeCandidateReviewTurn({ message, user, onText, onCar
 function parseKnowledgeCandidateReviewCommand(message = '') {
   const text = String(message || '');
   const normalized = normalizeComparableText(text);
-  const mentionsKnowledge = /\b(aprendizaje|aprendizajes|conocimiento|conocimientos|candidato|candidatos|borrador|borradores)\b/.test(normalized);
+
+  if (/\b(mci|ticket|tickets|solicitud|solicitudes)\b/.test(normalized) && !/\bkc_[a-f0-9]{8,64}\b/i.test(text)) {
+    return null;
+  }
+
+  const mentionsKnowledge = /\b(aprendizaje|aprendizajes|conocimiento|conocimientos|candidato|candidatos)\b/.test(normalized) ||
+    /\b(borrador de conocimiento|candidato de conocimiento)\b/.test(normalized);
   const candidateId = text.match(/\bkc_[a-f0-9]{8,64}\b/i)?.[0];
 
   if (!mentionsKnowledge && !candidateId) return null;
