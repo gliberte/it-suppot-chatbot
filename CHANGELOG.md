@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.19.2] - 2026-07-20
+
+### Fixed
+- **Normalización de Fechas y Timestamp Epoch para SDP (`normalizeSdpDateValue`):**
+  - Implementada la función `normalizeSdpDateValue` para convertir automáticamente cualquier fecha enviada como string (ej. `"07/20/2026"`, `"20/07/2026"`, `"hoy"`) al formato epoch timestamp exacto esperado por ServiceDesk Plus (`{ value: "1784524800000" }`).
+  - Resuelto el desbordamiento de meses en SDP que causaba que la fecha `"07/20/2026"` se interpretara erróneamente como día 7 del mes 20 (provocando el salto a `07/08/2027`).
+
 ## [0.19.1] - 2026-07-20
 
 ### Fixed

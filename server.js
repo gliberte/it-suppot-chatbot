@@ -1448,7 +1448,7 @@ function formatConfirmationFieldValue(field, value) {
 }
 
 function isConfirmationDateField(field) {
-  return ['current_date', 'start_date', 'due_date', 'previous_week'].includes(field);
+  return ['current_date', 'udf_date_1508', 'start_date', 'due_date', 'previous_week'].includes(field);
 }
 
 function formatConfirmationDateValue(value) {
@@ -1829,6 +1829,8 @@ function normalizeMciUpdateFields(fields = {}) {
       normalized[normalizedKey] = parseMciProgressValue(value);
     } else if (normalizedKey === 'status') {
       normalized[normalizedKey] = normalizeStatusValue(value);
+    } else if (['current_date', 'start_date', 'due_date'].includes(normalizedKey)) {
+      normalized[normalizedKey] = normalizeSdpDateValue(value);
     } else {
       normalized[normalizedKey] = value;
     }
@@ -1878,17 +1880,76 @@ function normalizeStatusValue(status) {
 
 function applyRelativeMciDatesFromMessage(fields, message = '') {
   if (!fields || typeof fields !== 'object') return;
-  if (!Object.prototype.hasOwnProperty.call(fields, 'current_date')) return;
-
   const normalizedMessage = normalizeComparableText(message);
   const dayMs = 24 * 60 * 60 * 1000;
+
   if (/\bhoy\b|\btoday\b/.test(normalizedMessage)) {
     fields.current_date = createSdpDateValue(Date.now());
   } else if (/\bayer\b|\byesterday\b/.test(normalizedMessage)) {
     fields.current_date = createSdpDateValue(Date.now() - dayMs);
   } else if (/\bmanana\b|\btomorrow\b/.test(normalizedMessage)) {
     fields.current_date = createSdpDateValue(Date.now() + dayMs);
+  } else if (fields.current_date) {
+    fields.current_date = normalizeSdpDateValue(fields.current_date);
   }
+}
+
+function normalizeSdpDateValue(value) {
+  if (!value) return value;
+  if (typeof value === 'object' && value.value) return value;
+
+  let timestamp = null;
+
+  if (typeof value === 'number') {
+    timestamp = value;
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{10,13}$/.test(trimmed)) {
+      timestamp = Number(trimmed);
+      if (timestamp < 1e11) timestamp *= 1000;
+    } else {
+      const normText = normalizeComparableText(trimmed);
+      const dayMs = 24 * 60 * 60 * 1000;
+      if (/\bhoy\b|\btoday\b/.test(normText)) {
+        timestamp = Date.now();
+      } else if (/\bayer\b|\byesterday\b/.test(normText)) {
+        timestamp = Date.now() - dayMs;
+      } else if (/\bmanana\b|\btomorrow\b/.test(normText)) {
+        timestamp = Date.now() + dayMs;
+      } else {
+        const dmyMatch = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+        if (dmyMatch) {
+          const p1 = Number(dmyMatch[1]);
+          const p2 = Number(dmyMatch[2]);
+          const year = Number(dmyMatch[3]);
+          let day, month;
+          if (p1 > 12) {
+            day = p1;
+            month = p2 - 1;
+          } else if (p2 > 12) {
+            month = p1 - 1;
+            day = p2;
+          } else {
+            month = p1 - 1;
+            day = p2;
+          }
+          const date = new Date(year, month, day, 0, 0, 0, 0);
+          timestamp = date.getTime();
+        } else {
+          const parsed = Date.parse(trimmed);
+          if (!Number.isNaN(parsed)) timestamp = parsed;
+        }
+      }
+    }
+  }
+
+  if (timestamp) {
+    const d = new Date(timestamp);
+    const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    return { value: String(localDate.getTime()) };
+  }
+
+  return value;
 }
 
 function createSdpDateValue(timestamp) {
