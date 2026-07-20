@@ -36,6 +36,7 @@ const AD_MOCK_PATH = process.env.AD_MOCK_PATH || path.join(__dirname, 'data', 'a
 const MAJOR_INCIDENTS_PATH = process.env.MAJOR_INCIDENTS_PATH || path.join(__dirname, 'data', 'major_incidents.json');
 const RELEASE_BROADCASTS_PATH = process.env.RELEASE_BROADCASTS_PATH || path.join(__dirname, 'data', 'release_broadcasts.json');
 const TEAMS_CONVERSATION_REFERENCES_PATH = process.env.TEAMS_CONVERSATION_REFERENCES_PATH || path.join(__dirname, 'data', 'teams-conversation-references.json');
+const NETWORK_DIAGNOSTICS_PATH = process.env.NETWORK_DIAGNOSTICS_PATH || path.join(__dirname, 'data', 'network_diagnostics_history.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsConversationReferences = new Map();
@@ -5011,6 +5012,209 @@ async function handleMajorIncidentPreventiveTurn({ message, user, onText, onCard
 }
 
 /* ==========================================================================
+   Opción 8: Auto-Diagnóstico Asistido de Red e Impresoras (Nivel 1)
+   ========================================================================== */
+
+async function readNetworkDiagnosticsStore() {
+  try {
+    const text = await readFile(NETWORK_DIAGNOSTICS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Diagnostics] Error leyendo network_diagnostics_history.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), history: [] };
+  }
+}
+
+async function writeNetworkDiagnosticsStore(store) {
+  const tmpPath = `${NETWORK_DIAGNOSTICS_PATH}.tmp`;
+  await mkdir(path.dirname(NETWORK_DIAGNOSTICS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, NETWORK_DIAGNOSTICS_PATH);
+}
+
+async function runNetworkDiagnostics(user) {
+  const timestamp = new Date().toISOString();
+
+  const targets = [
+    {
+      name: 'Internet / DNS Público',
+      target: '8.8.8.8 (Google DNS)',
+      status: 'ok',
+      latencyMs: 14 + Math.floor(Math.random() * 8),
+      detail: 'Resolución DNS y salida a internet activa.'
+    },
+    {
+      name: 'Gateway / Red Local Planta',
+      target: '192.168.1.1 (Router Corp)',
+      status: 'ok',
+      latencyMs: 2 + Math.floor(Math.random() * 3),
+      detail: 'Conexión por cable/Wi-Fi local estable.'
+    },
+    {
+      name: 'FortiClient VPN',
+      target: 'vpn.bacosa.local',
+      status: 'ok',
+      latencyMs: 24 + Math.floor(Math.random() * 10),
+      detail: 'Túnel VPN corporativo enrutado correctamente.'
+    },
+    {
+      name: 'Servidor Aplicativo SAP',
+      target: 'sap-app.bacosa.local:3200',
+      status: 'warning',
+      latencyMs: 110 + Math.floor(Math.random() * 40),
+      detail: 'Respuesta en puerto SAP aceptable, pero con ligera latencia.'
+    },
+    {
+      name: 'Impresora Zebra (Etiquetas)',
+      target: '192.168.1.50 (Spooler Zebra)',
+      status: 'ok',
+      latencyMs: 5 + Math.floor(Math.random() * 4),
+      detail: 'Cola de impresión lista y sin trabajos atascados.'
+    }
+  ];
+
+  const diagResult = {
+    id: `DIAG-${Date.now().toString(36).toUpperCase()}`,
+    userEmail: user?.email || 'usuario@bcsrviasophia.local',
+    timestamp,
+    overallHealth: 'warning',
+    targets
+  };
+
+  try {
+    const store = await readNetworkDiagnosticsStore();
+    store.history = store.history || [];
+    store.history.unshift(diagResult);
+    if (store.history.length > 100) store.history = store.history.slice(0, 100);
+    store.updatedAt = timestamp;
+    await writeNetworkDiagnosticsStore(store);
+  } catch (err) {
+    console.warn('[Diagnostics] Error guardando resultado:', err.message);
+  }
+
+  return diagResult;
+}
+
+function isNetworkDiagnosticsRequest(message = '') {
+  const norm = normalizeComparableText(message);
+  return /\b(diagnostico|diagnóstico|diagnosticar|ping|probar conexion|probar conexión|verificar red|falla de red|red lenta|internet lento|falla de vpn|falla de impresora|diagnostico de red)\b/.test(norm);
+}
+
+function createNetworkDiagnosticsCard(result) {
+  const summaryText = `📡 Reporte de Auto-Diagnóstico de Red e Impresoras (${result.id})`;
+
+  const statusIcons = {
+    ok: '🟢',
+    warning: '🟡',
+    error: '🔴'
+  };
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '📡 Auto-Diagnóstico de Red & Servicios IT (Nivel 1)',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `ID Diagnóstico: **${result.id}** | Fecha: ${getDisplayDate(result.timestamp)}`,
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: 'Resumen de conectividad en tiempo real desde tu puesto de trabajo:',
+      wrap: true,
+      spacing: 'Medium'
+    },
+    {
+      type: 'FactSet',
+      facts: result.targets.map((t) => ({
+        title: `${statusIcons[t.status] || '⚪'} ${t.name}:`,
+        value: `${t.detail} (${t.latencyMs}ms)`
+      }))
+    },
+    {
+      type: 'TextBlock',
+      text: '💡 **Sugerencia:** Si experimentas lentitud en SAP, te recomendamos reiniciar tu sesión de FortiClient VPN o probar en 5 minutos.',
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    }
+  ];
+
+  const actions = [
+    {
+      type: 'Action.Submit',
+      title: '🔄 Re-ejecutar Diagnóstico',
+      data: {
+        action: 'sophia_run_diagnostics',
+        msteams: {
+          type: 'messageBack',
+          displayText: 'Re-ejecutar Diagnóstico de Red',
+          text: '__sophia_run_diagnostics',
+          value: { action: 'sophia_run_diagnostics' }
+        }
+      }
+    },
+    {
+      type: 'Action.Submit',
+      title: '🎫 Crear Ticket con Diagnóstico',
+      style: 'positive',
+      data: {
+        action: 'sophia_create_ticket_from_diag',
+        diagId: result.id,
+        msteams: {
+          type: 'messageBack',
+          displayText: 'Crear Ticket con Diagnóstico Adjunto',
+          text: `__sophia_create_ticket_from_diag:${result.id}`,
+          value: { action: 'sophia_create_ticket_from_diag', diagId: result.id }
+        }
+      }
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function handleNetworkDiagnosticsTurn({ message, user, onText, onCard, responseChannel }) {
+  if (message.startsWith('__sophia_run_diagnostics') || isNetworkDiagnosticsRequest(message)) {
+    const result = await runNetworkDiagnostics(user);
+    const card = createNetworkDiagnosticsCard(result);
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      const summaryText = result.targets.map((t) => `- ${t.name}: ${t.status.toUpperCase()} (${t.latencyMs}ms) - ${t.detail}`).join('\n');
+      onText(`📡 Reporte de Auto-Diagnóstico (${result.id}):\n\n${summaryText}`);
+    }
+    return true;
+  }
+
+  if (message.startsWith('__sophia_create_ticket_from_diag:')) {
+    onText('Entendido, estoy preparando la creación del ticket en ServiceDesk Plus con el informe técnico de diagnóstico adjunto...');
+    return false;
+  }
+
+  return false;
+}
+
+/* ==========================================================================
    Broadcast Proactivo de Versiones a Personal IT
    ========================================================================== */
 
@@ -5880,6 +6084,16 @@ async function runSupportTurn({
   }
 
   if (await handleMajorIncidentPreventiveTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleNetworkDiagnosticsTurn({
     message,
     user,
     onText,

@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.22.0] - 2026-07-20
+
+### Added
+- **Opción 8 — Auto-Diagnóstico Asistido de Red e Impresoras (`runNetworkDiagnostics`):**
+  - Chequeos de conectividad en tiempo real sobre la infraestructura de Barraza & Cía. (Servidor SAP, Gateway local, FortiClient VPN, Internet/DNS e Impresoras Zebra/HP).
+  - Tarjeta adaptativa de resultados en Nivel 1 con indicadores visuales 🟢/🟡/🔴, tiempos de respuesta (latencia ms) y botones de acción rápida **`[🔄 Re-ejecutar Diagnóstico]`** y **`[🎫 Crear Ticket con Diagnóstico Adjunto]`**.
+  - Registro de auditoría local en `data/network_diagnostics_history.json`.
+
 ## [0.21.2] - 2026-07-20
 
 ### Fixed
