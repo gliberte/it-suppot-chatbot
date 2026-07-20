@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.23.2] - 2026-07-20
+
+### Changed
+- **Enriquecimiento de Tarjetas de Notificación Proactiva de Versión (`createReleaseBroadcastAdaptiveCard`):**
+  - Añadido resumen visual de todas las capacidades clave activas (Aprobación de Licencias, Auto-Diagnóstico de Red Nivel 1, Autogestión de AD, Detector de Incidentes Masivos, Dashboard Ejecutivo y Análisis de Evidencias por Imagen).
+  - Actualizadas las sugerencias de frases de prueba con ejemplos prácticos para cada módulo.
+
 ## [0.23.1] - 2026-07-20
 
 ### Fixed

@@ -5528,26 +5528,42 @@ function createReleaseBroadcastAdaptiveCard(releaseInfo) {
     },
     {
       type: 'TextBlock',
-      text: 'Hola Team IT, he recibido nuevas mejoras para hacer nuestro trabajo de soporte más ágil durante la fase piloto:',
+      text: 'Hola Team IT, he recibido nuevas mejoras para optimizar nuestra gestión de soporte durante la fase piloto:',
       wrap: true,
       spacing: 'Small'
     },
     {
       type: 'TextBlock',
-      text: '✨ **Novedades en esta versión:**',
+      text: '✨ **Novedades y Actualizaciones Recientes:**',
       weight: 'Bolder',
       spacing: 'Medium',
       wrap: true
     },
     ...highlights.map((item) => ({
       type: 'TextBlock',
-      text: item.startsWith('- ') || item.startsWith('🔑') || item.startsWith('🚨') || item.startsWith('📢') ? item : `- ${item}`,
+      text: item.startsWith('- ') || item.startsWith('🔑') || item.startsWith('🚨') || item.startsWith('📡') || item.startsWith('📢') ? item : `- ${item}`,
       wrap: true,
       spacing: 'Small'
     })),
     {
       type: 'TextBlock',
-      text: '💡 **Puedes probarlas de inmediato escribiendo en este chat:**\n- *"¿Mi cuenta está bloqueada?"*\n- *"Reportar falla de SAP"*\n- *"Dashboard"*',
+      text: '⚡ **Capacidades Principales Activas:**\n' +
+            '- 🔑 **Licencias:** Aprobación en 1-clic por Teams para PowerBI, M365, Visio y Adobe.\n' +
+            '- 📡 **Diagnóstico Nivel 1:** Chequeo en tiempo real de SAP, VPN, Gateway e Impresoras.\n' +
+            '- 🔓 **Autogestión AD:** Diagnóstico y desbloqueo seguro de cuentas Active Directory.\n' +
+            '- 🚨 **Incidentes Masivos:** Detección de caídas de servicio y respuestas preventivas.\n' +
+            '- 📊 **Salud IT:** Dashboard ejecutivo de indicadores operativos y SLA.\n' +
+            '- 🖼️ **Evidencias:** Análisis de capturas de pantalla e imágenes adjuntas en Teams.',
+      wrap: true,
+      spacing: 'Medium'
+    },
+    {
+      type: 'TextBlock',
+      text: '💡 **Escribe en este chat para probar las funciones de inmediato:**\n' +
+            '- 💬 *"Solicitar licencia de PowerBI Pro"*\n' +
+            '- 💬 *"Ejecutar diagnóstico de red"*\n' +
+            '- 💬 *"¿Mi cuenta de AD está bloqueada?"*\n' +
+            '- 💬 *"Dashboard"* | *"Mis tickets resueltos"*',
       wrap: true,
       spacing: 'Medium',
       isSubtle: true
