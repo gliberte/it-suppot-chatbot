@@ -2184,6 +2184,51 @@ function createTicketClassificationReason(routing, topEvidence) {
   return `${parts.join('; ')}.`;
 }
 
+function formatStructuredTicketDescription(rawText) {
+  if (!rawText || typeof rawText !== 'string') return '';
+
+  let text = rawText.trim();
+  if (!text) return '';
+
+  let priorityTag = '';
+  const priorityMatch = text.match(/(\[Prioridad Alta:[^\]]+\])/i);
+  if (priorityMatch) {
+    priorityTag = priorityMatch[1];
+    text = text.replace(priorityMatch[1], '').trim();
+  }
+
+  const hasHeaders = /(📌|🔍|⚡|Problema|Detalle|Impacto):/i.test(text);
+
+  let formatted = '';
+
+  if (hasHeaders) {
+    formatted = text
+      .replace(/(\n|^)(📌|🔍|⚡|Problema|Detalle|Impacto):/gi, '\n\n$2:')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  } else {
+    const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+
+    if (sentences.length <= 1) {
+      formatted = `📌 Problema o Solicitud:\n${text}`;
+    } else {
+      const firstSentence = sentences[0];
+      const restSentences = sentences.slice(1);
+
+      formatted = [
+        `📌 Problema o Solicitud:\n${firstSentence}`,
+        `🔍 Detalle y Síntomas:\n${restSentences.map((s) => (s.startsWith('-') ? s : `- ${s}`)).join('\n')}`
+      ].join('\n\n');
+    }
+  }
+
+  if (priorityTag) {
+    formatted = `${formatted}\n\n${priorityTag}`;
+  }
+
+  return formatted.trim();
+}
+
 function applyTicketClassificationToArgs(args, classification, originalMessage = '') {
   const suggestion = classification?.suggestion || {};
   args.subject = args.subject || suggestion.subject;
@@ -2202,6 +2247,10 @@ function applyTicketClassificationToArgs(args, classification, originalMessage =
     if (args.description && !args.description.includes('Prioridad Alta:')) {
       args.description = `${args.description}\n\n${tag}`;
     }
+  }
+
+  if (args.description) {
+    args.description = formatStructuredTicketDescription(args.description);
   }
 }
 
@@ -2229,6 +2278,9 @@ function sanitizeCreateRequestArgs(args) {
   delete args.request_subject;
   delete args.title;
   delete args.summary;
+  if (args.description) {
+    args.description = formatStructuredTicketDescription(args.description);
+  }
 }
 
 function normalizeCreateRequestAliases(args) {

@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.7] - 2026-07-20
+
+### Added
+- Formateador automático de descripciones estructuradas (`formatStructuredTicketDescription`) en `server.js` para asegurar que las descripciones de tickets creados por Sophia incluyan encabezados limpios (`📌 Problema o Solicitud:`, `🔍 Detalle y Síntomas:`, `⚡ Impacto Operativo:`) y viñetas ordenadas.
+- Actualizadas las instrucciones del orquestador (`agent-orchestrator.js`) para orientar a la IA a generar descripciones en secciones legibles con saltos de línea dobles.
+
 ## [0.10.6] - 2026-07-17
 
 ### Added
