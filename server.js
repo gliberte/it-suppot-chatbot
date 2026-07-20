@@ -124,6 +124,15 @@ function requireAuth(req, res, next) {
   next();
 }
 
+app.post('/api/admin/reminders/trigger', async (req, res) => {
+  try {
+    const result = await runProactiveStaleTicketReminders();
+    res.json({ status: 'success', message: 'Revisión proactiva de recordatorios ejecutada con éxito.', ...result });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 async function callMcpTool(name, args = {}) {
   if (name === 'web_search_support') {
     const text = await performWebSearchSupport(args.query || args.search_text || args.text || '');
@@ -4772,6 +4781,71 @@ async function handleStaleTicketReminderTurn({
   return true;
 }
 
+function getMsUntilNext830AmPanama() {
+  const nowObj = new Date();
+  const panamaStr = nowObj.toLocaleString('en-US', { timeZone: 'America/Panama' });
+  const panamaNow = new Date(panamaStr);
+
+  const target = new Date(panamaNow);
+  target.setHours(8, 30, 0, 0);
+
+  if (panamaNow >= target) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  while (target.getDay() === 0 || target.getDay() === 6) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  return target.getTime() - panamaNow.getTime();
+}
+
+function scheduleDaily830AmReminders() {
+  if (String(process.env.SOPHIA_PROACTIVE_REMINDERS_ENABLED || 'true').toLowerCase() === 'false') {
+    console.log('[Cron] Recordatorios proactivos automáticos desactivados por configuración.');
+    return;
+  }
+
+  const delayMs = getMsUntilNext830AmPanama();
+  const delayHours = (delayMs / (1000 * 60 * 60)).toFixed(2);
+  console.log(`[Cron] ⏰ Recordatorios proactivos de las 8:30 AM programados para dentro de ${delayHours} horas.`);
+
+  setTimeout(async () => {
+    try {
+      console.log('[Cron] ⏰ Ejecutando revisión proactiva matutina de las 8:30 AM para tickets en espera...');
+      await runProactiveStaleTicketReminders();
+    } catch (err) {
+      console.warn('[Cron] Error en revisión proactiva de las 8:30 AM:', err.message);
+    } finally {
+      scheduleDaily830AmReminders();
+    }
+  }, delayMs);
+}
+
+async function runProactiveStaleTicketReminders() {
+  try {
+    const listResult = await callMcpTool('sdp_list_requests', { filter_by: 'Open_Requests' });
+    const parsed = JSON.parse(listResult.content[0].text);
+    const requests = Array.isArray(parsed?.requests) ? parsed.requests : [];
+    const now = Date.now();
+    const thresholdDays = Number(process.env.SOPHIA_REMINDER_STALE_DAYS || 2);
+
+    const staleRequests = requests.filter((r) => {
+      const status = normalizeComparableText(getDisplayName(r.status));
+      const isEnEspera = status.includes('espera') || status.includes('hold') || status.includes('pending') || status.includes('suspend');
+      const updatedAt = getRequestUpdatedTimestamp(r) || getRequestCreatedTimestamp(r);
+      const staleDays = updatedAt ? Math.max(0, Math.floor((now - updatedAt) / (24 * 60 * 60 * 1000))) : 0;
+      return isEnEspera || staleDays >= thresholdDays;
+    });
+
+    console.log(`[ProactiveReminder] Revisión matutina completada. ${staleRequests.length} tickets en espera detectados para recordatorio.`);
+    return { count: staleRequests.length, tickets: staleRequests.map(r => r.id) };
+  } catch (error) {
+    console.warn('[ProactiveReminder] Error consultando tickets:', error.message);
+    throw error;
+  }
+}
+
 function formatIsoDateTime(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -8079,6 +8153,7 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`Chatbot Backend Bridge corriendo en http://localhost:${PORT}`);
     initMCP();
+    scheduleDaily830AmReminders();
   });
 }
 

@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.17.0] - 2026-07-20
+
+### Added
+- **Notificación Proactiva Matutina a las 8:30 AM (Modalidad 2 de Recordatorios):**
+  - Implementado el temporizador diario `scheduleDaily830AmReminders` en `server.js` configurado para ejecutarse a las 8:30 AM de lunes a viernes (zona horaria `America/Panama`).
+  - Añadido el endpoint de administración `POST /api/admin/reminders/trigger` para forzar la revisión proactiva en cualquier momento.
+  - Creado el script ejecutable `scripts/trigger-reminders.js` (`npm run prod:reminders`).
+
 ## [0.16.0] - 2026-07-20
 
 ### Added
