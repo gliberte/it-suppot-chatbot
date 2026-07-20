@@ -5475,24 +5475,39 @@ async function writeReleaseBroadcastsStore(store) {
 async function getLatestReleaseHighlights() {
   try {
     const changelog = await readFile(path.join(__dirname, 'CHANGELOG.md'), 'utf8');
-    const versionMatch = changelog.match(/## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})/);
-    const version = versionMatch ? versionMatch[1] : '0.21.0';
-    const date = versionMatch ? versionMatch[2] : '2026-07-20';
+    const sections = changelog.split(/^## \[/m);
 
-    const highlights = [
-      '🔑 **Autogestión de Active Directory (AD):** Diagnóstico automático de cuentas bloqueadas y tarjeta de desbloqueo en 1-clic en Teams.',
-      '🚨 **Detección Inteligente de Incidentes Masivos:** Identificación automática de caídas de SAP o VPN para evitar tickets duplicados.',
-      '📢 **Notificaciones Proactivas de Versión:** Transmisión directa de novedades al equipo de IT en cada actualización.'
-    ];
+    const latestBlock = sections[1] || '';
+    const headerLineMatch = latestBlock.match(/^(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})/);
+
+    const version = headerLineMatch ? headerLineMatch[1] : '0.23.0';
+    const date = headerLineMatch ? headerLineMatch[2] : '2026-07-20';
+
+    const highlights = [];
+    const lines = latestBlock.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('- **') || (trimmed.startsWith('-') && !trimmed.startsWith('---'))) {
+        const clean = trimmed.replace(/^-\s*/, '').trim();
+        if (clean.length > 5 && !highlights.includes(clean)) {
+          highlights.push(clean);
+        }
+      }
+    }
+
+    if (highlights.length === 0) {
+      highlights.push('🚀 Mejoras de estabilidad, rendimiento y nuevas capacidades para el soporte IT en Teams.');
+    }
 
     return { version, date, highlights };
   } catch (error) {
     return {
-      version: '0.21.0',
+      version: '0.23.0',
       date: '2026-07-20',
       highlights: [
-        '🔑 Autogestión y desbloqueo seguro de Active Directory (AD) en Teams.',
-        '🚨 Detección de incidentes masivos con alertas y respuestas preventivas.'
+        '🔑 **Flujo de Aprobación de Licencias de Software:** Aprobación en 1-clic por Teams.',
+        '📡 **Auto-Diagnóstico de Red e Impresoras:** Pruebas Nivel 1 de SAP, VPN, Gateway e Impresoras.',
+        '📢 **Notificaciones Proactivas de Versión:** Transmisión de novedades al personal de IT.'
       ]
     };
   }
