@@ -35,8 +35,10 @@ const KNOWLEDGE_CANDIDATES_PATH = process.env.KNOWLEDGE_CANDIDATES_PATH || path.
 const AD_MOCK_PATH = process.env.AD_MOCK_PATH || path.join(__dirname, 'data', 'active_ad_mock.json');
 const MAJOR_INCIDENTS_PATH = process.env.MAJOR_INCIDENTS_PATH || path.join(__dirname, 'data', 'major_incidents.json');
 const RELEASE_BROADCASTS_PATH = process.env.RELEASE_BROADCASTS_PATH || path.join(__dirname, 'data', 'release_broadcasts.json');
+const TEAMS_CONVERSATION_REFERENCES_PATH = process.env.TEAMS_CONVERSATION_REFERENCES_PATH || path.join(__dirname, 'data', 'teams-conversation-references.json');
 const sessions = new Map();
 const teamsSessions = new Map();
+const teamsConversationReferences = new Map();
 const teamsUserCache = new Map();
 const graphTokenCache = { accessToken: null, expiresAt: 0 };
 let runtimeStateSaveTimer = null;
@@ -5110,6 +5112,46 @@ function createReleaseBroadcastAdaptiveCard(releaseInfo) {
   };
 }
 
+async function readTeamsConversationReferencesStore() {
+  try {
+    const text = await readFile(TEAMS_CONVERSATION_REFERENCES_PATH, 'utf8');
+    const data = JSON.parse(text);
+    for (const [key, ref] of Object.entries(data.references || {})) {
+      teamsConversationReferences.set(key, ref);
+    }
+    console.log(`[TeamsRef] Referencias proactivas de Teams cargadas: ${teamsConversationReferences.size}`);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[TeamsRef] Error leyendo teams-conversation-references.json:', error.message);
+    }
+  }
+}
+
+async function saveTeamsConversationReference(context, user) {
+  try {
+    if (!context?.activity) return;
+    const reference = TurnContext.getConversationReference(context.activity);
+    const key = String(user?.email || user?.userPrincipalName || context.activity?.from?.email || context.activity?.from?.aadObjectId || context.activity?.from?.id || '').toLowerCase().trim();
+    if (!key || !reference) return;
+
+    teamsConversationReferences.set(key, reference);
+
+    const tmpPath = `${TEAMS_CONVERSATION_REFERENCES_PATH}.tmp`;
+    await mkdir(path.dirname(TEAMS_CONVERSATION_REFERENCES_PATH), { recursive: true });
+    await writeFile(tmpPath, JSON.stringify({
+      updatedAt: new Date().toISOString(),
+      references: Object.fromEntries(teamsConversationReferences.entries())
+    }, null, 2), 'utf8');
+    await rename(tmpPath, TEAMS_CONVERSATION_REFERENCES_PATH);
+  } catch (error) {
+    console.warn('[TeamsRef] Error guardando referencia de conversación:', error.message);
+  }
+}
+
+readTeamsConversationReferencesStore().catch((err) => {
+  console.warn('[TeamsRef] Fallo inicial al cargar referencias proactivas:', err.message);
+});
+
 async function broadcastReleaseNotesToItStaff({ force = false } = {}) {
   const releaseInfo = await getLatestReleaseHighlights();
   const store = await readReleaseBroadcastsStore();
@@ -5124,38 +5166,43 @@ async function broadcastReleaseNotesToItStaff({ force = false } = {}) {
   }
 
   const card = createReleaseBroadcastAdaptiveCard(releaseInfo);
-  const recipients = [];
+  const appId = process.env.MICROSOFT_APP_ID;
+  let deliveredCount = 0;
+  const deliveredRecipients = [];
+  const errors = [];
 
-  const activeUserEmails = new Set();
-  for (const session of sessions.values()) {
-    if (session?.user?.email) activeUserEmails.add(session.user.email);
-  }
-  for (const user of teamsUserCache.values()) {
-    if (user?.userPrincipalName) activeUserEmails.add(user.userPrincipalName);
-  }
-  const configuredAdmins = (process.env.SUPPORT_ADMIN_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
-  const configuredExecs = (process.env.IT_EXECUTIVE_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
-
-  for (const email of [...activeUserEmails, ...configuredAdmins, ...configuredExecs]) {
-    if (email && !recipients.includes(email)) {
-      recipients.push(email);
+  for (const [userKey, reference] of teamsConversationReferences.entries()) {
+    try {
+      if (typeof teamsAdapter?.continueConversationAsync === 'function') {
+        await teamsAdapter.continueConversationAsync(appId, reference, async (turnContext) => {
+          await sendTeamsReply(turnContext, card);
+        });
+        deliveredCount++;
+        deliveredRecipients.push(userKey);
+      }
+    } catch (err) {
+      console.warn(`[ProactiveBroadcast] Error entregando a ${userKey}:`, err.message);
+      errors.push(`${userKey}: ${err.message}`);
     }
   }
 
   store.broadcasts.push({
     version: releaseInfo.version,
     broadcastAt: new Date().toISOString(),
-    recipientCount: recipients.length,
-    recipients
+    recipientCount: deliveredCount,
+    recipients: deliveredRecipients,
+    errors
   });
   store.updatedAt = new Date().toISOString();
   await writeReleaseBroadcastsStore(store);
 
   return {
-    sent: true,
+    sent: deliveredCount > 0,
     version: releaseInfo.version,
-    recipientCount: recipients.length,
-    recipients,
+    recipientCount: deliveredCount,
+    recipients: deliveredRecipients,
+    savedReferencesTotal: teamsConversationReferences.size,
+    noActiveTeamsConversations: teamsConversationReferences.size === 0 ? 'Aún no hay referencias de conversación proactiva guardadas. Un usuario debe chatear con Sophia en Teams al menos una vez para registrar su canal proactivo.' : undefined,
     card
   };
 }
@@ -8471,6 +8518,7 @@ async function handleTeamsMessage(context) {
     }
   });
 
+  await saveTeamsConversationReference(context, user);
   const session = getTeamsSession(context.activity, user);
   let messageForSophia = text || 'Analiza la imagen adjunta y dime qué información útil ves para soporte IT.';
 

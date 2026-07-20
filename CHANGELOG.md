@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.21.2] - 2026-07-20
+
+### Fixed
+- **Entregabilidad de Mensajes Proactivos en Teams (`continueConversationAsync`):**
+  - Integrada la captura y persistencia de referencias de conversación de Bot Framework (`saveTeamsConversationReference`) en `data/teams-conversation-references.json`.
+  - Conectado `broadcastReleaseNotesToItStaff` con `teamsAdapter.continueConversationAsync` para entregar físicamente la tarjeta adaptativa de novedades directamente en el chat privado de Teams de cada usuario de IT.
+
 ## [0.21.1] - 2026-07-20
 
 ### Fixed
