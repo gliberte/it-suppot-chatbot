@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.10] - 2026-07-20
+
+### Fixed
+- Eliminado el punto (`.`) de la expresión regular de teléfonos en `redactSensitiveText` en `server.js` y actualizado el reemplazo con `replaceAll` para garantizar que ninguna dirección IPv4 o puerto vuelva a ser enmascarado como número telefónico.
+
 ## [0.10.9] - 2026-07-20
 
 ### Fixed

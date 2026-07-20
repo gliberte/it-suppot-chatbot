@@ -2819,12 +2819,12 @@ function redactSensitiveText(text) {
 
   cleanText = cleanText
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email-redacted]')
-    .replace(/\b(?:\+?\d[\d\s().-]{7,}\d)\b/g, '[phone-redacted]')
+    .replace(/\b(?:\+?\d[\d\s()-]{7,}\d)\b/g, '[phone-redacted]')
     .replace(/\/api\/v3\/[^\s"')]+/g, '[internal-url-redacted]')
     .replace(/https?:\/\/[^\s"')]+/g, '[url-redacted]');
 
   for (const [key, ip] of ipMap.entries()) {
-    cleanText = cleanText.replace(key, ip);
+    cleanText = cleanText.replaceAll(key, ip);
   }
 
   return cleanText;
