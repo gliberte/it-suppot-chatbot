@@ -2808,11 +2808,26 @@ function getEmailDomain(email) {
 
 function redactSensitiveText(text) {
   if (!text) return text;
-  return String(text)
+
+  const ipMap = new Map();
+  let ipCounter = 0;
+  let cleanText = String(text).replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g, (match) => {
+    const key = `__IP_ADDR_${ipCounter++}__`;
+    ipMap.set(key, match);
+    return key;
+  });
+
+  cleanText = cleanText
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email-redacted]')
     .replace(/\b(?:\+?\d[\d\s().-]{7,}\d)\b/g, '[phone-redacted]')
     .replace(/\/api\/v3\/[^\s"')]+/g, '[internal-url-redacted]')
     .replace(/https?:\/\/[^\s"')]+/g, '[url-redacted]');
+
+  for (const [key, ip] of ipMap.entries()) {
+    cleanText = cleanText.replace(key, ip);
+  }
+
+  return cleanText;
 }
 
 function stripHtml(text) {

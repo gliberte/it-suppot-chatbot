@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.9] - 2026-07-20
+
+### Fixed
+- Corregida la sanitización de teléfonos en `redactSensitiveText` en `server.js` para proteger direcciones IPv4 e IPv4 con puertos (ej. `192.168.1.50`, `181.xxx.xxx.xxx:80`), evitando que fueran reemplazadas erróneamente por `[phone-redacted]`.
+
 ## [0.10.8] - 2026-07-20
 
 ### Fixed
