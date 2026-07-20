@@ -32,6 +32,8 @@ const TEAMS_IMAGE_MAX_COUNT = Number(process.env.TEAMS_IMAGE_MAX_COUNT || 2);
 const RUNTIME_STATE_PATH = process.env.RUNTIME_STATE_PATH || path.join(__dirname, 'data', 'runtime-state.json');
 const ACTIVE_SITUATIONS_PATH = process.env.ACTIVE_SITUATIONS_PATH || path.join(__dirname, 'data', 'active-situations.json');
 const KNOWLEDGE_CANDIDATES_PATH = process.env.KNOWLEDGE_CANDIDATES_PATH || path.join(__dirname, 'data', 'knowledge-candidates.json');
+const AD_MOCK_PATH = process.env.AD_MOCK_PATH || path.join(__dirname, 'data', 'active_ad_mock.json');
+const MAJOR_INCIDENTS_PATH = process.env.MAJOR_INCIDENTS_PATH || path.join(__dirname, 'data', 'major_incidents.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsUserCache = new Map();
@@ -4608,6 +4610,393 @@ function formatActiveSituationUserText(situations) {
   ].join('\n');
 }
 
+/* ==========================================================================
+   Opción 6: Autogestión y Desbloqueo de Active Directory (AD)
+   ========================================================================== */
+
+async function readAdMockStore() {
+  try {
+    const text = await readFile(AD_MOCK_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[AD] Error leyendo active_ad_mock.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), accounts: [] };
+  }
+}
+
+async function writeAdMockStore(store) {
+  const tmpPath = `${AD_MOCK_PATH}.tmp`;
+  await mkdir(path.dirname(AD_MOCK_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, AD_MOCK_PATH);
+}
+
+async function getAdAccountStatusForUser(user) {
+  const store = await readAdMockStore();
+  const email = String(user?.email || '').toLowerCase().trim();
+  const name = String(user?.name || user?.preferred_username || '').toLowerCase().trim();
+
+  let account = store.accounts.find((acc) => 
+    (email && String(acc.email).toLowerCase() === email) ||
+    (email && String(acc.userPrincipalName).toLowerCase() === email) ||
+    (name && String(acc.displayName).toLowerCase().includes(name)) ||
+    (name && String(acc.samAccountName).toLowerCase() === name)
+  );
+
+  if (!account && email) {
+    account = {
+      samAccountName: email.split('@')[0],
+      userPrincipalName: email,
+      email,
+      displayName: user?.name || email.split('@')[0],
+      status: 'active',
+      badPasswordCount: 0
+    };
+  }
+
+  return account || {
+    samAccountName: 'desconocido',
+    userPrincipalName: email || 'usuario@bcsrviasophia.local',
+    email: email || '',
+    displayName: user?.name || 'Usuario Soporte',
+    status: 'active',
+    badPasswordCount: 0
+  };
+}
+
+async function unlockAdAccountForUser(user) {
+  const store = await readAdMockStore();
+  const email = String(user?.email || '').toLowerCase().trim();
+  const name = String(user?.name || user?.preferred_username || '').toLowerCase().trim();
+
+  let account = store.accounts.find((acc) => 
+    (email && String(acc.email).toLowerCase() === email) ||
+    (email && String(acc.userPrincipalName).toLowerCase() === email) ||
+    (name && String(acc.displayName).toLowerCase().includes(name))
+  );
+
+  if (account) {
+    account.status = 'active';
+    account.badPasswordCount = 0;
+    account.unlockedAt = new Date().toISOString();
+  } else {
+    account = {
+      samAccountName: email.split('@')[0] || 'usuario',
+      userPrincipalName: email || 'usuario@bcsrviasophia.local',
+      email,
+      displayName: user?.name || 'Usuario Soporte',
+      status: 'active',
+      badPasswordCount: 0,
+      unlockedAt: new Date().toISOString()
+    };
+    store.accounts.push(account);
+  }
+
+  store.updatedAt = new Date().toISOString();
+  await writeAdMockStore(store);
+  return account;
+}
+
+function isAdAccountQueryOrUnlockRequest(message = '') {
+  const normalized = normalizeComparableText(message);
+  return /\b(desbloquear|desbloquea|desbloqueo|locked|bloqueada|bloqueado|no puedo entrar|clave bloqueada|usuario bloqueado|active directory|cuenta ad)\b/.test(normalized);
+}
+
+function createAdAccountCard(account, isUnlocked = false) {
+  const isLocked = account.status === 'locked_out';
+  const statusBadge = isUnlocked
+    ? '🟢 [DESBLOQUEADA HACE UN MOMENTO]'
+    : (isLocked ? '🔴 [CUENTA BLOQUEADA]' : '🟢 [CUENTA ACTIVA Y SIN BLOQUEOS]');
+
+  const summaryText = isUnlocked
+    ? `Tu cuenta de Active Directory (${account.samAccountName}) fue desbloqueada exitosamente.`
+    : (isLocked
+      ? `Tu cuenta (${account.samAccountName}) está bloqueada en Active Directory.`
+      : `Tu cuenta (${account.samAccountName}) se encuentra activa.`);
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '🔑 Estado de Cuenta - Active Directory (AD)',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: statusBadge,
+      weight: 'Bolder',
+      spacing: 'Small',
+      wrap: true
+    },
+    {
+      type: 'FactSet',
+      facts: [
+        { title: 'Usuario (SAM):', value: account.samAccountName || '-' },
+        { title: 'Correo:', value: account.email || account.userPrincipalName || '-' },
+        { title: 'Reintentos fallidos:', value: String(account.badPasswordCount || 0) },
+        { title: 'Estado en Dominio:', value: account.status || 'active' }
+      ]
+    }
+  ];
+
+  const actions = [];
+
+  if (isLocked && !isUnlocked) {
+    body.push({
+      type: 'TextBlock',
+      text: 'Detectamos reintentos fallidos de contraseña. Puedes desbloquear tu cuenta directamente desde Teams con 1-clic:',
+      wrap: true,
+      spacing: 'Medium'
+    });
+
+    actions.push({
+      type: 'Action.Submit',
+      title: '🔓 Desbloquear Mi Cuenta de AD',
+      style: 'positive',
+      data: {
+        action: 'sophia_ad_unlock',
+        samAccountName: account.samAccountName,
+        msteams: {
+          type: 'messageBack',
+          displayText: 'Desbloquear Mi Cuenta de AD',
+          text: `__sophia_ad_unlock:${account.samAccountName}`,
+          value: { action: 'sophia_ad_unlock', samAccountName: account.samAccountName }
+        }
+      }
+    });
+  } else if (isUnlocked) {
+    body.push({
+      type: 'TextBlock',
+      text: '✅ ¡Listo! Puedes intentar iniciar sesión nuevamente en tu equipo o correo corporativo.',
+      wrap: true,
+      spacing: 'Medium',
+      color: 'Good'
+    });
+  } else {
+    body.push({
+      type: 'TextBlock',
+      text: 'Tu cuenta no registra bloqueos en el dominio corporativo.',
+      wrap: true,
+      spacing: 'Small',
+      isSubtle: true
+    });
+  }
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function handleAdAccountTurn({ message, user, onText, onCard, responseChannel }) {
+  if (message.startsWith('__sophia_ad_unlock:')) {
+    const unlocked = await unlockAdAccountForUser(user);
+    const card = createAdAccountCard(unlocked, true);
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      onText(`✅ Tu cuenta de Active Directory (${unlocked.samAccountName}) ha sido desbloqueada exitosamente.`);
+    }
+    return true;
+  }
+
+  if (!isAdAccountQueryOrUnlockRequest(message)) return false;
+
+  const account = await getAdAccountStatusForUser(user);
+  const card = createAdAccountCard(account, false);
+  if (responseChannel === 'teams' && card) {
+    onCard?.(card);
+  } else {
+    onText(account.status === 'locked_out'
+      ? `🔴 Tu cuenta (${account.samAccountName}) está bloqueada en Active Directory por reintentos fallidos. Puedes desbloquearla en Teams.`
+      : `🟢 Tu cuenta de Active Directory (${account.samAccountName}) se encuentra activa sin bloqueos.`
+    );
+  }
+  return true;
+}
+
+/* ==========================================================================
+   Opción 7: Detección Inteligente de Incidentes Masivos y Caídas de Servicio
+   ========================================================================== */
+
+async function readMajorIncidentsStore() {
+  try {
+    const text = await readFile(MAJOR_INCIDENTS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[MajorIncidents] Error leyendo major_incidents.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), activeClusters: [], recentReports: [], subscribers: {} };
+  }
+}
+
+async function writeMajorIncidentsStore(store) {
+  const tmpPath = `${MAJOR_INCIDENTS_PATH}.tmp`;
+  await mkdir(path.dirname(MAJOR_INCIDENTS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, MAJOR_INCIDENTS_PATH);
+}
+
+function extractMajorIncidentSystem(message = '') {
+  const norm = normalizeComparableText(message);
+  if (/\b(sap)\b/.test(norm)) return 'SAP';
+  if (/\b(vpn|forticlient)\b/.test(norm)) return 'FortiClient VPN';
+  if (/\b(internet|enlace|red|wifi)\b/.test(norm)) return 'Red / Internet';
+  if (/\b(correo|outlook|office365|m365)\b/.test(norm)) return 'Correo / Office 365';
+  if (/\b(impresora|impresoras|zebra)\b/.test(norm)) return 'Impresoras';
+  return null;
+}
+
+async function trackAndDetectMajorIncidentCluster(message = '', user) {
+  const system = extractMajorIncidentSystem(message);
+  if (!system) return null;
+
+  const store = await readMajorIncidentsStore();
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+
+  store.recentReports = (store.recentReports || []).filter((rep) => (now - Date.parse(rep.timestamp)) < windowMs);
+
+  store.recentReports.push({
+    system,
+    timestamp: new Date().toISOString(),
+    userEmail: user?.email || 'desconocido'
+  });
+
+  const matchingReports = store.recentReports.filter((rep) => rep.system === system);
+
+  let activeCluster = (store.activeClusters || []).find((cls) => cls.system === system && cls.status === 'active');
+
+  if (matchingReports.length >= 3 && !activeCluster) {
+    activeCluster = {
+      clusterId: `MI-${system.toUpperCase().replace(/[^A-Z0-9]/g, '')}`,
+      system,
+      count: matchingReports.length,
+      firstReportedAt: matchingReports[0].timestamp,
+      activatedAt: new Date().toISOString(),
+      status: 'active',
+      summary: `Falla masiva / intermitencia detectada en ${system} (${matchingReports.length} reportes coincidentes en 15 minutos).`
+    };
+    store.activeClusters = store.activeClusters || [];
+    store.activeClusters.push(activeCluster);
+  } else if (activeCluster) {
+    activeCluster.count = matchingReports.length;
+    activeCluster.updatedAt = new Date().toISOString();
+  }
+
+  store.updatedAt = new Date().toISOString();
+  await writeMajorIncidentsStore(store);
+
+  return activeCluster;
+}
+
+async function getActiveMajorIncidentForMessage(message = '') {
+  const system = extractMajorIncidentSystem(message);
+  if (!system) return null;
+
+  const store = await readMajorIncidentsStore();
+  return (store.activeClusters || []).find((cls) => cls.system === system && cls.status === 'active') || null;
+}
+
+function createMajorIncidentPreventiveCard(cluster) {
+  const summaryText = `⚠️ INCIDENTE MAYOR EN CURSO: El equipo de TI ya está atendiendo la falla en ${cluster.system}.`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: `🚨 Incidente Mayor Detectado: ${cluster.system}`,
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Attention',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `Detectamos un volumen inusual de reportes coincidentes (${cluster.count} usuarios afectados) en los últimos 15 minutos.`,
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'FactSet',
+      facts: [
+        { title: 'Sistema Afectado:', value: cluster.system },
+        { title: 'Estado de TI:', value: '🟡 En Diagnóstico / Resolución' },
+        { title: 'Reportes Vinculados:', value: `${cluster.count} usuarios` },
+        { title: 'Primer Reporte:', value: getDisplayDate(cluster.firstReportedAt) || '-' }
+      ]
+    },
+    {
+      type: 'TextBlock',
+      text: '📌 **Nota Preventiva:** Nuestro equipo de soporte e infraestructura ya se encuentra trabajando en la solución. No es necesario crear un nuevo ticket.',
+      wrap: true,
+      spacing: 'Medium',
+      color: 'Accent'
+    }
+  ];
+
+  const actions = [
+    {
+      type: 'Action.Submit',
+      title: '🔔 Notificarme cuando se resuelva',
+      style: 'positive',
+      data: {
+        action: 'sophia_mi_subscribe',
+        clusterId: cluster.clusterId,
+        msteams: {
+          type: 'messageBack',
+          displayText: 'Notificarme cuando se resuelva',
+          text: `__sophia_mi_subscribe:${cluster.clusterId}`,
+          value: { action: 'sophia_mi_subscribe', clusterId: cluster.clusterId }
+        }
+      }
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function handleMajorIncidentPreventiveTurn({ message, user, onText, onCard, responseChannel }) {
+  if (message.startsWith('__sophia_mi_subscribe:')) {
+    onText('🔔 ¡Suscripción confirmada! Te enviaremos un aviso proactivo a Teams apenas el equipo de TI resuelva este Incidente Mayor.');
+    return true;
+  }
+
+  await trackAndDetectMajorIncidentCluster(message, user);
+  const activeCluster = await getActiveMajorIncidentForMessage(message);
+
+  if (!activeCluster) return false;
+
+  const card = createMajorIncidentPreventiveCard(activeCluster);
+  if (responseChannel === 'teams' && card) {
+    onCard?.(card);
+  } else {
+    onText(`⚠️ [INCIDENTE MAYOR EN CURSO]: El equipo de TI ya está atendiendo la falla en ${activeCluster.system} (${activeCluster.count} usuarios afectados). Te notificaremos cuando se resuelva.`);
+  }
+  return true;
+}
+
 function createCsatSurveyAdaptiveCard(requestId, subject = 'Solicitud de Soporte') {
   const ticketId = `#${requestId}`;
   return {
@@ -5266,6 +5655,26 @@ async function runSupportTurn({
     onText,
     onCard,
     onWorking
+  })) {
+    return;
+  }
+
+  if (await handleAdAccountTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleMajorIncidentPreventiveTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
   })) {
     return;
   }

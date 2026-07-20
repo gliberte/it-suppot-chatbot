@@ -1,0 +1,31 @@
+{
+  "updatedAt": "2026-07-20T16:00:00.000Z",
+  "accounts": [
+    {
+      "samAccountName": "lsolano",
+      "userPrincipalName": "lsolano@bcsrviasophia.local",
+      "email": "lsolano@bcsrviasophia.local",
+      "displayName": "Luis Solano",
+      "status": "locked_out",
+      "badPasswordCount": 5,
+      "lastBadPasswordAttempt": "2026-07-20T15:45:00.000Z",
+      "lockoutTime": "2026-07-20T15:45:00.000Z"
+    },
+    {
+      "samAccountName": "omaure",
+      "userPrincipalName": "omaure@bcsrviasophia.local",
+      "email": "omaure@bcsrviasophia.local",
+      "displayName": "Octavio Maure",
+      "status": "active",
+      "badPasswordCount": 0
+    },
+    {
+      "samAccountName": "ysaucedo",
+      "userPrincipalName": "ysaucedo@bcsrviasophia.local",
+      "email": "ysaucedo@bcsrviasophia.local",
+      "displayName": "Yariela Saucedo",
+      "status": "active",
+      "badPasswordCount": 1
+    }
+  ]
+}

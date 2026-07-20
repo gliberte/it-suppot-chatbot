@@ -9,6 +9,19 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.20.0] - 2026-07-20
+
+### Added
+- **Opción 6 — Autogestión y Desbloqueo de Active Directory (`handleAdAccountTurn`):**
+  - Verificación del estado de cuenta en Active Directory (AD) para detectar cuentas bloqueadas (`locked_out`) por reintentos fallidos de contraseña.
+  - Tarjeta adaptativa interactiva en Teams con el botón **`[🔓 Desbloquear Mi Cuenta de AD]`** para desbloqueo automático con 1-clic.
+  - Almacén de persistencia `data/active_ad_mock.json` para emulación y pruebas de dominio.
+
+- **Opción 7 — Detección Inteligente de Incidentes Masivos y Caídas (`handleMajorIncidentPreventiveTurn`):**
+  - Rastreador en tiempo real con ventana móvil de 15 minutos para detectar 3 o más reportes coincidentes de un mismo servicio (ej. SAP, VPN, Red).
+  - Activación automática de **Incidente Mayor de Servicio (Major Incident Cluster)** al alcanzar el umbral de 3 afectaciones coincidentes.
+  - Tarjeta de respuesta preventiva para usuarios con botón **`[🔔 Notificarme cuando se resuelva]`**, evitando la duplicación de tickets.
+
 ## [0.19.5] - 2026-07-20
 
 ### Fixed
