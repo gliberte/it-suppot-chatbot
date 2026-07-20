@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.16.0] - 2026-07-20
+
+### Added
+- **Recordatorios Automáticos de Tickets En Espera (Opción 2):**
+  - Creada la tarjeta adaptativa interactiva de recordatorio `createStaleTicketReminderAdaptiveCard` con campo de texto para ingresar respuesta rápida y botón `[📝 Enviar Respuesta al Ticket]`.
+  - Creado el manejador de turno `handleStaleTicketReminderTurn` en `server.js` para consultar tickets en estado `En Espera` inactivos por 2 o más días.
+  - Registra las respuestas directamente como notas estructuradas en ServiceDesk Plus (`sdp_add_note`) y notifica al técnico asignado.
+
 ## [0.15.0] - 2026-07-20
 
 ### Added

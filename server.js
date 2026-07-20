@@ -4612,6 +4612,166 @@ async function handleCsatTurn({
   return true;
 }
 
+function createStaleTicketReminderAdaptiveCard(request, staleDays = 2) {
+  const ticketId = `#${request.id}`;
+  const subject = request.subject || 'Sin asunto';
+  const requester = getDisplayName(request.requester) || 'Usuario';
+  const technician = getDisplayName(request.technician) || getDisplayName(request?.udf_fields?.udf_pick_2701) || 'Técnico IT';
+  const status = getDisplayName(request.status) || 'En Espera';
+
+  return {
+    type: 'adaptive_card',
+    summaryText: `🔔 Recordatorio de Ticket ${ticketId} - En Espera hace ${staleDays} días`,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body: [
+        {
+          type: 'TextBlock',
+          text: `🔔 Recordatorio de Seguimiento — Ticket ${ticketId}`,
+          weight: 'Bolder',
+          size: 'Medium',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: `Hola ${requester}, este ticket lleva **${staleDays} días** en estado *"${status}"* aguardando respuesta o actualización.`,
+          wrap: true,
+          spacing: 'Small'
+        },
+        {
+          type: 'Container',
+          spacing: 'Medium',
+          separator: true,
+          style: 'emphasis',
+          items: [
+            {
+              type: 'TextBlock',
+              text: `**Asunto:** ${subject}`,
+              wrap: true
+            },
+            {
+              type: 'TextBlock',
+              text: `**Técnico:** ${technician} | **Estado:** ${status}`,
+              wrap: true,
+              isSubtle: true,
+              spacing: 'Small'
+            }
+          ]
+        },
+        {
+          type: 'TextBlock',
+          text: '¿Deseas agregar una respuesta rápida ahora para continuar con la atención?',
+          wrap: true,
+          spacing: 'Medium',
+          weight: 'Bolder'
+        },
+        {
+          type: 'Input.Text',
+          id: 'reminder_note_text',
+          isMultiline: true,
+          placeholder: 'Escribe tu respuesta o información adicional aquí...'
+        }
+      ],
+      actions: [
+        {
+          type: 'Action.Submit',
+          title: '📝 Enviar Respuesta al Ticket',
+          style: 'positive',
+          data: {
+            action: 'sophia_reminder_reply',
+            requestId: String(request.id),
+            msteams: {
+              type: 'messageBack',
+              displayText: 'Enviar Respuesta al Ticket',
+              text: `__sophia_reminder_reply:${request.id}`,
+              value: { action: 'sophia_reminder_reply', requestId: String(request.id) }
+            }
+          }
+        }
+      ]
+    }
+  };
+}
+
+function isStaleTicketReminderRequest(message = '') {
+  const text = normalizeComparableText(message);
+  if (text.startsWith('__sophia_reminder_reply:')) return true;
+  return /\b(recordatorio|recordatorios|recordar|recordame|nudges?|alerta en espera|aviso en espera)\b/.test(text) &&
+         /\b(ticket|tickets|solicitud|solicitudes|en espera|pendientes?)\b/.test(text);
+}
+
+async function handleStaleTicketReminderTurn({
+  message,
+  user,
+  session,
+  onText,
+  onCard,
+  onWorking
+}) {
+  if (!isStaleTicketReminderRequest(message)) return false;
+
+  if (message.startsWith('__sophia_reminder_reply:')) {
+    const parts = message.split(':');
+    const requestId = parts[1];
+    const noteText = parts.slice(2).join(':').trim();
+
+    if (!noteText) {
+      onText(`Por favor escribe el mensaje o dato que deseas agregar al ticket #${requestId}.`);
+      return true;
+    }
+
+    await onWorking?.({ content: `Agregando tu respuesta al ticket #${requestId}...` });
+
+    try {
+      await callMcpTool('sdp_add_note', { request_id: requestId, note_text: noteText });
+      await auditToolCall({ user, toolName: 'sdp_add_note', args: { request_id: requestId, note_text: noteText }, outcome: 'success' });
+
+      onText(`✅ **Respuesta registrada en el Ticket #${requestId}:**\n\n> "${noteText}"\n\nEl técnico asignado ha sido notificado para continuar con la gestión.`);
+    } catch (error) {
+      console.warn('[Reminder] Error guardando respuesta al ticket:', error.message);
+      onText(`No pude registrar la nota automáticamente en el ticket #${requestId}: ${error.message}`);
+    }
+    return true;
+  }
+
+  await onWorking?.({ content: 'Buscando tickets abiertos en espera que requieran recordatorio...' });
+
+  try {
+    const listResult = await callMcpTool('sdp_list_requests', { filter_by: 'Open_Requests' });
+    const parsed = JSON.parse(listResult.content[0].text);
+    const requests = Array.isArray(parsed?.requests) ? parsed.requests : [];
+    const now = Date.now();
+
+    const staleRequests = requests.filter((r) => {
+      const status = normalizeComparableText(getDisplayName(r.status));
+      const isEnEspera = status.includes('espera') || status.includes('hold') || status.includes('pending') || status.includes('suspend');
+      const updatedAt = getRequestUpdatedTimestamp(r) || getRequestCreatedTimestamp(r);
+      const staleDays = updatedAt ? Math.max(0, Math.floor((now - updatedAt) / (24 * 60 * 60 * 1000))) : 0;
+      return isEnEspera || staleDays >= 2;
+    });
+
+    if (staleRequests.length === 0) {
+      onText('🎉 ¡Excelente noticia! No tienes tickets en espera de respuesta o que lleven más de 2 días inactivos.');
+      return true;
+    }
+
+    onText(`Encontré ${staleRequests.length} ticket${staleRequests.length === 1 ? '' : 's'} en espera que requiere${staleRequests.length === 1 ? '' : 'n'} tu atención. Te comparto la tarjeta de seguimiento:`);
+
+    for (const req of staleRequests.slice(0, 3)) {
+      const updatedAt = getRequestUpdatedTimestamp(req) || getRequestCreatedTimestamp(req);
+      const staleDays = updatedAt ? Math.max(0, Math.floor((now - updatedAt) / (24 * 60 * 60 * 1000))) : 2;
+      onCard(createStaleTicketReminderAdaptiveCard(req, staleDays));
+    }
+  } catch (error) {
+    console.warn('[Reminder] Error al buscar tickets en espera:', error.message);
+    onText('No pude consultar la lista de tickets en espera en este momento.');
+  }
+
+  return true;
+}
+
 function formatIsoDateTime(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -4676,6 +4836,17 @@ async function runSupportTurn({
   if (await handleCsatTurn({
     message,
     user,
+    onText,
+    onCard,
+    onWorking
+  })) {
+    return;
+  }
+
+  if (await handleStaleTicketReminderTurn({
+    message,
+    user,
+    session,
     onText,
     onCard,
     onWorking
@@ -7142,6 +7313,10 @@ function getTeamsText(activity) {
       const rating = activity.value.csat_rating || activity.value.rating || '5';
       const comment = activity.value.csat_comment || activity.value.comment || '';
       return `__sophia_csat:${activity.value.requestId}:${rating}:${comment}`;
+    }
+    if (activity.value.action === 'sophia_reminder_reply' && activity.value.requestId) {
+      const noteText = activity.value.reminder_note_text || activity.value.note_text || '';
+      return `__sophia_reminder_reply:${activity.value.requestId}:${noteText}`;
     }
   }
 
