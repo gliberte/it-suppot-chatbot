@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.14.0] - 2026-07-20
+
+### Added
+- **Triage de Tickets Rezagados o En Espera de Respuesta (Opción 3):**
+  - Ampliadas las frases de activación en `isStaleTicketsRequest` (`server.js`) para capturar consultas como *"qué tickets necesitan respuesta"*, *"tickets en espera"*, *"tickets rezagados"* o *"triage"*.
+  - Actualizado `agent-orchestrator.js` para instruir a Gemini a llamar a `sdp_list_requests` con filtrado de tickets rezagados/estancados.
+  - Presenta resúmenes ejecutivos con días transcurridos desde el último movimiento y sugerencias de seguimiento.
+
 ## [0.13.1] - 2026-07-20
 
 ### Added

@@ -1887,7 +1887,7 @@ function inferRequestFilterFromMessage(message) {
 
 function isStaleTicketsRequest(message = '') {
   const text = normalizeComparableText(message);
-  return /\b(sin avance|sin actualizacion|sin movimiento|sin seguimiento|rezagad|estancad|necesitan seguimiento|requieren seguimiento|pendientes de seguimiento|sin cambios|sin novedad)\b/.test(text);
+  return /\b(sin avance|sin actualizacion|sin movimiento|sin seguimiento|rezagad|estancad|necesitan seguimiento|requieren seguimiento|pendientes de seguimiento|sin cambios|sin novedad|esperando respuesta|en espera|espera de usuario|triage|dormidos|parados)\b/.test(text);
 }
 
 function inferStaleDaysFromMessage(message = '') {
