@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.13.1] - 2026-07-20
+
+### Added
+- **Rutas Determinísticas para VPN, Carpetas Compartidas y Licencias (Opción 2):**
+  - Añadidas las rutas `network_shared_folders` (`Red / Red Local`), `software_licenses` (`Softwares / Office`) y ampliada `network_vpn` (`Red / VPN`) con patrones para FortiClient, Fortinet y teletrabajo.
+  - Agregados casos de prueba automatizados en `scripts/check-routing.js` (24 rutas validadas, 20/20 casos de prueba superados con 100% de precisión).
+  - Actualizada la documentación en `knowledge/catalogo-sdp.md` y re-indexado el índice RAG (109 fragmentos).
+
 ## [0.13.0] - 2026-07-20
 
 ### Added

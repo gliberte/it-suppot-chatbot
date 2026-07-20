@@ -143,10 +143,26 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_NETWORK_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      name: 'software_licenses',
+      keywords: ['licencia', 'licencias', 'licenciamiento', 'licencia de software', 'licencia powerbi', 'licencia adobe', 'licencia autocad', 'solicitud de licencia'],
+      category: env.SDP_SOFTWARE_CATEGORY || 'Softwares',
+      subcategory: env.SDP_LICENSES_SUBCATEGORY || 'Office',
+      priority: env.SDP_SOFTWARE_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_SOFTWARE_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'network_vpn',
-      keywords: ['vpn'],
+      keywords: ['vpn', 'forticlient', 'fortinet', 'teletrabajo', 'conexion remota vpn', 'acceso remoto vpn', 'cliente vpn'],
       category: env.SDP_NETWORK_CATEGORY || 'Red',
       subcategory: env.SDP_VPN_SUBCATEGORY || 'VPN',
+      priority: env.SDP_NETWORK_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_NETWORK_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
+      name: 'network_shared_folders',
+      keywords: ['carpeta compartida', 'carpetas compartidas', 'disco de red', 'disco compartido', 'servidor de archivos', 'unidad de red', 'recurso compartido', 'acceso a carpeta'],
+      category: env.SDP_NETWORK_CATEGORY || 'Red',
+      subcategory: env.SDP_SHARED_FOLDERS_SUBCATEGORY || 'Red Local',
       priority: env.SDP_NETWORK_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
       udf_pick_2701: env.SDP_NETWORK_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },

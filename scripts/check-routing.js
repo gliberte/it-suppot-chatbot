@@ -95,6 +95,18 @@ function validateRoutingBehavior() {
       expectedRoute: 'suministros'
     },
     {
+      text: 'FortiClient VPN no conecta para teletrabajo',
+      expectedRoute: 'network_vpn'
+    },
+    {
+      text: 'Solicitud de acceso a carpeta compartida de Contabilidad',
+      expectedRoute: 'network_shared_folders'
+    },
+    {
+      text: 'Solicitud de licencia de PowerBI Pro',
+      expectedRoute: 'software_licenses'
+    },
+    {
       text: 'Laptop lenta',
       expectedRoute: 'default'
     }

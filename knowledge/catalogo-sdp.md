@@ -34,8 +34,9 @@ Señales:
 Usar `Internet / Acceso` cuando el usuario no tenga internet o no pueda navegar.
 Usar `Internet / Lentitud` cuando el usuario reporte internet lento.
 Usar `Red / WIFI` para problemas de WiFi.
-Usar `Red / VPN` para problemas de VPN.
-Usar `Red / Red Local` para problemas de red local, cable de red o punto de red.
+Usar `Red / VPN` para problemas de VPN, FortiClient, Fortinet o conexiones de teletrabajo.
+Usar `Red / Red Local` para problemas de red local, cable de red, punto de red, carpetas compartidas o discos de red.
+Usar `Softwares / Office` para licencias de software (PowerBI, Adobe, AutoCAD, Office).
 
 Una falla de internet o red no corresponde a `Contraseñas / Usuario Windows`.
 
