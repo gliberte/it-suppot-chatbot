@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.15.0] - 2026-07-20
+
+### Added
+- **Encuestas de Satisfacción Rápida CSAT (Opción 1):**
+  - Creada la tarjeta adaptativa interactiva de micro-encuesta CSAT (`createCsatSurveyAdaptiveCard`) con selección de 1 a 5 estrellas y comentario opcional.
+  - Implementado el manejador de turno `handleCsatTurn` en `server.js` para registrar automáticamente las evaluaciones como notas estructuradas en ServiceDesk Plus (`sdp_add_note`).
+  - Añadida la opción interactiva "Calificar la atención del ticket #ID" en los detalles de tickets resueltos o cerrados.
+  - Integrada la respuesta en Teams y Web con tarjeta de agradecimiento personalizada (`createCsatConfirmationAdaptiveCard`).
+
 ## [0.14.0] - 2026-07-20
 
 ### Added

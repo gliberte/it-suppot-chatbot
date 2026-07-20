@@ -4428,6 +4428,190 @@ function formatActiveSituationUserText(situations) {
   ].join('\n');
 }
 
+function createCsatSurveyAdaptiveCard(requestId, subject = 'Solicitud de Soporte') {
+  const ticketId = `#${requestId}`;
+  return {
+    type: 'adaptive_card',
+    summaryText: `Encuesta de satisfacción para el Ticket ${ticketId}`,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body: [
+        {
+          type: 'TextBlock',
+          text: `⭐ Encuesta de Satisfacción — Ticket ${ticketId}`,
+          weight: 'Bolder',
+          size: 'Medium',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: `¿Qué tan satisfecho quedaste con la atención de: "${subject}"?`,
+          wrap: true,
+          isSubtle: true,
+          spacing: 'Small'
+        },
+        {
+          type: 'TextBlock',
+          text: 'Calificación:',
+          weight: 'Bolder',
+          spacing: 'Medium'
+        },
+        {
+          type: 'Input.ChoiceSet',
+          id: 'csat_rating',
+          style: 'expanded',
+          value: '5',
+          choices: [
+            { title: '⭐⭐⭐⭐⭐ Excelente (5/5)', value: '5' },
+            { title: '⭐⭐⭐⭐ Bueno (4/5)', value: '4' },
+            { title: '⭐⭐⭐ Regular (3/5)', value: '3' },
+            { title: '⭐⭐ Deficiente (2/5)', value: '2' },
+            { title: '⭐ Malo (1/5)', value: '1' }
+          ]
+        },
+        {
+          type: 'Input.Text',
+          id: 'csat_comment',
+          isMultiline: true,
+          placeholder: 'Comentario opcional sobre el servicio recibido...'
+        }
+      ],
+      actions: [
+        {
+          type: 'Action.Submit',
+          title: 'Enviar Calificación',
+          style: 'positive',
+          data: {
+            action: 'sophia_csat',
+            requestId: String(requestId),
+            msteams: {
+              type: 'messageBack',
+              displayText: 'Enviar Calificación',
+              text: `__sophia_csat:${requestId}`,
+              value: { action: 'sophia_csat', requestId: String(requestId) }
+            }
+          }
+        }
+      ]
+    }
+  };
+}
+
+function createCsatConfirmationAdaptiveCard(requestId, rating, comment) {
+  const stars = '⭐'.repeat(Number(rating) || 5);
+  return {
+    type: 'adaptive_card',
+    summaryText: 'Calificación registrada',
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body: [
+        {
+          type: 'TextBlock',
+          text: '¡Muchas Gracias por tu Calificación! 🙌',
+          weight: 'Bolder',
+          size: 'Medium',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: `Registramos tu evaluación de ${stars} (${rating}/5) para el Ticket #${requestId}.`,
+          wrap: true,
+          spacing: 'Small'
+        },
+        ...(comment ? [{
+          type: 'TextBlock',
+          text: `*"${comment}"*`,
+          isSubtle: true,
+          wrap: true,
+          spacing: 'Small'
+        }] : []),
+        {
+          type: 'TextBlock',
+          text: 'Tu retroalimentación ayuda al equipo de Soporte IT de Barraza & Cía. a mantener un servicio de excelencia.',
+          wrap: true,
+          isSubtle: true,
+          spacing: 'Medium'
+        }
+      ]
+    }
+  };
+}
+
+function isCsatRequest(message = '') {
+  const text = normalizeComparableText(message);
+  if (text.startsWith('__sophia_csat:')) return true;
+  return /\b(calificar|califica|evaluar|evalua|encuesta|satisfaccion|csat|calificacion|estrellas|estrella)\b/.test(text) &&
+         /\b(ticket|tickets|solicitud|solicitudes|soporte|atencion|servicio|#?\d{3,8})\b/.test(text);
+}
+
+async function handleCsatTurn({
+  message,
+  user,
+  onText,
+  onCard,
+  onWorking
+}) {
+  if (!isCsatRequest(message)) return false;
+
+  if (message.startsWith('__sophia_csat:')) {
+    const parts = message.split(':');
+    const requestId = parts[1];
+    const rating = parts[2] || '5';
+    const comment = parts.slice(3).join(':').trim();
+
+    await onWorking?.({ content: `Registrando tu calificación para el ticket #${requestId}...` });
+
+    try {
+      const noteText = `⭐ [Encuesta CSAT] Calificación: ${rating}/5 estrellas.${comment ? ` Comentario: ${comment}` : ''}`;
+      await callMcpTool('sdp_add_note', { request_id: requestId, note_text: noteText });
+      await auditToolCall({ user, toolName: 'sdp_add_note', args: { request_id: requestId, note_text: noteText }, outcome: 'success' });
+
+      onCard(createCsatConfirmationAdaptiveCard(requestId, rating, comment));
+    } catch (error) {
+      console.warn('[CSAT] Error guardando nota CSAT:', error.message);
+      onText(`Registramos tu calificación de ${rating}/5 estrellas para el ticket #${requestId}. ¡Muchas gracias por tu retroalimentación!`);
+    }
+    return true;
+  }
+
+  const ticketIdMatch = message.match(/#?(\d{4,8})/);
+  const ratingMatch = message.match(/\b([1-5])\s*(?:estrellas?|puntos?)?\b/);
+
+  if (ticketIdMatch && ratingMatch) {
+    const requestId = ticketIdMatch[1];
+    const rating = ratingMatch[1];
+    const commentMatch = message.match(/(?:comentario|nota|diciendo|porque)\s*:\s*(.+)$/i);
+    const comment = commentMatch ? commentMatch[1].trim() : '';
+
+    await onWorking?.({ content: `Registrando tu calificación para el ticket #${requestId}...` });
+
+    try {
+      const noteText = `⭐ [Encuesta CSAT] Calificación: ${rating}/5 estrellas.${comment ? ` Comentario: ${comment}` : ''}`;
+      await callMcpTool('sdp_add_note', { request_id: requestId, note_text: noteText });
+      await auditToolCall({ user, toolName: 'sdp_add_note', args: { request_id: requestId, note_text: noteText }, outcome: 'success' });
+
+      onCard(createCsatConfirmationAdaptiveCard(requestId, rating, comment));
+    } catch (error) {
+      console.warn('[CSAT] Error guardando nota CSAT:', error.message);
+      onText(`Registramos tu calificación de ${rating}/5 estrellas para el ticket #${requestId}. ¡Muchas gracias por tu retroalimentación!`);
+    }
+    return true;
+  }
+
+  if (ticketIdMatch) {
+    const requestId = ticketIdMatch[1];
+    onCard(createCsatSurveyAdaptiveCard(requestId, `Ticket #${requestId}`));
+    return true;
+  }
+
+  onText('Con gusto te ayudo a registrar tu encuesta de satisfacción. ¿Podrías indicarme el número del ticket (ej. #12345) que deseas calificar?');
+  return true;
+}
+
 function formatIsoDateTime(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -4485,6 +4669,16 @@ async function runSupportTurn({
     onText,
     onCard,
     responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleCsatTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    onWorking
   })) {
     return;
   }
@@ -6510,11 +6704,15 @@ function splitTextForAdaptiveCard(text, maxChunkLength) {
 
 function createDetailOptionsBlock(ticketId, request) {
   const category = getDisplayName(request.category);
+  const status = normalizeComparableText(getDisplayName(request.status));
+  const isResolvedOrClosed = status.includes('resuelt') || status.includes('cerrad') || status.includes('resolved') || status.includes('closed');
+
   const options = [
     `Agregar un seguimiento al ticket ${ticketId}`,
+    isResolvedOrClosed ? `Calificar la atención del ticket ${ticketId}` : null,
     category ? `Ver tickets similares de ${category}` : 'Ver tickets similares',
     'Crear una nueva solicitud relacionada'
-  ];
+  ].filter(Boolean);
 
   return {
     type: 'Container',
@@ -6937,9 +7135,14 @@ async function getGraphAccessToken({ tenantId, clientId, clientSecret }) {
 }
 
 function getTeamsText(activity) {
-  if (activity?.value?.action && activity?.value?.actionId) {
-    if (activity.value.action === 'sophia_confirm') return `__sophia_confirm:${activity.value.actionId}`;
-    if (activity.value.action === 'sophia_cancel') return `__sophia_cancel:${activity.value.actionId}`;
+  if (activity?.value?.action) {
+    if (activity.value.action === 'sophia_confirm' && activity.value.actionId) return `__sophia_confirm:${activity.value.actionId}`;
+    if (activity.value.action === 'sophia_cancel' && activity.value.actionId) return `__sophia_cancel:${activity.value.actionId}`;
+    if (activity.value.action === 'sophia_csat' && activity.value.requestId) {
+      const rating = activity.value.csat_rating || activity.value.rating || '5';
+      const comment = activity.value.csat_comment || activity.value.comment || '';
+      return `__sophia_csat:${activity.value.requestId}:${rating}:${comment}`;
+    }
   }
 
   const clonedActivity = { ...activity };
