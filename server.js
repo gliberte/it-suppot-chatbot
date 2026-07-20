@@ -5420,7 +5420,8 @@ async function handleSoftwareLicenseApprovalTurn({ message, user, onText, onCard
   }
 
   const { software } = parseSoftwareLicenseInfo(message);
-  const approverEmail = process.env.SUPPORT_ADMIN_EMAILS ? process.env.SUPPORT_ADMIN_EMAILS.split(',')[0].trim() : 'algis.morales@bacosa.com';
+  const configuredApprovers = (process.env.LICENSE_APPROVER_EMAILS || process.env.SUPPORT_ADMIN_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
+  const approverEmail = configuredApprovers.length > 0 ? configuredApprovers[0] : 'algis.morales@bacosa.com';
 
   const newApproval = {
     id: `LIC-${Date.now().toString().slice(-4)}`,
