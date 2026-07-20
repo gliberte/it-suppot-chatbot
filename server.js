@@ -4132,6 +4132,11 @@ async function handleActiveSituationTurn({ message, user, onText, onCard, respon
 
 function parseActiveSituationAdminCommand(message = '') {
   const normalized = normalizeComparableText(message);
+
+  if (/\b(mci|ticket|tickets|solicitud|solicitudes)\b/.test(normalized) || /#?\d{4,8}\b/.test(normalized)) {
+    return null;
+  }
+
   const isRegister = /\b(registra|registrar|crea|crear|nueva|abrir|abre)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
   const isUpdate = /\b(actualiza|actualizar|modifica|modificar)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
   const isClose = /\b(cierra|cerrar|resuelve|resolver|finaliza|finalizar)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);

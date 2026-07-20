@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.19.5] - 2026-07-20
+
+### Fixed
+- **Aislamiento de la Gestión de Situaciones Activas (`parseActiveSituationAdminCommand`):**
+  - Excluidos los mensajes sobre MCI, tickets o IDs específicos (`mci`, `ticket`, `solicitud`, `#ID`) del módulo de administración de situaciones activas.
+  - Prevenida la falsa captura que interpretaba la actualización de una MCI (ej. *"actualizar la MCI 12862"*) como una solicitud de actualización de situación activa de sistema (`mci 12862`), asegurando que pase al orquestador conversacional para ejecutar `sdp_update_mci`.
+
 ## [0.19.4] - 2026-07-20
 
 ### Fixed
