@@ -4927,6 +4927,167 @@ async function runProactiveStaleTicketReminders() {
   }
 }
 
+function createSolutionConfirmationAdaptiveCard(request) {
+  const ticketId = `#${request.id}`;
+  const subject = request.subject || 'Sin asunto';
+  const technician = getDisplayName(request.technician) || getDisplayName(request?.udf_fields?.udf_pick_2701) || 'Soporte IT';
+
+  return {
+    type: 'adaptive_card',
+    summaryText: `🏁 Confirmación de Solución para el Ticket ${ticketId}`,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body: [
+        {
+          type: 'TextBlock',
+          text: `🏁 Confirmación de Solución — Ticket ${ticketId}`,
+          weight: 'Bolder',
+          size: 'Medium',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'El equipo de Soporte IT ha marcado esta solicitud como **Resuelta**.',
+          wrap: true,
+          spacing: 'Small'
+        },
+        {
+          type: 'Container',
+          spacing: 'Medium',
+          separator: true,
+          style: 'emphasis',
+          items: [
+            {
+              type: 'TextBlock',
+              text: `**Asunto:** ${subject}`,
+              wrap: true
+            },
+            {
+              type: 'TextBlock',
+              text: `**Atendido por:** ${technician} | **Estado:** Resuelto`,
+              wrap: true,
+              isSubtle: true,
+              spacing: 'Small'
+            }
+          ]
+        },
+        {
+          type: 'TextBlock',
+          text: '¿Confirmas que el problema fue solucionado a tu entera satisfacción?',
+          wrap: true,
+          spacing: 'Medium',
+          weight: 'Bolder'
+        }
+      ],
+      actions: [
+        {
+          type: 'Action.Submit',
+          title: '✔ Sí, Confirmar y Calificar (CSAT)',
+          style: 'positive',
+          data: {
+            action: 'sophia_confirm_resolution',
+            requestId: String(request.id),
+            msteams: {
+              type: 'messageBack',
+              displayText: 'Sí, Confirmar y Calificar',
+              text: `__sophia_confirm_resolution:${request.id}`,
+              value: { action: 'sophia_confirm_resolution', requestId: String(request.id) }
+            }
+          }
+        },
+        {
+          type: 'Action.Submit',
+          title: '🔄 No, Reabrir Ticket (Sigue fallando)',
+          style: 'destructive',
+          data: {
+            action: 'sophia_reopen_ticket',
+            requestId: String(request.id),
+            msteams: {
+              type: 'messageBack',
+              displayText: 'No, Reabrir Ticket',
+              text: `__sophia_reopen_ticket:${request.id}`,
+              value: { action: 'sophia_reopen_ticket', requestId: String(request.id) }
+            }
+          }
+        }
+      ]
+    }
+  };
+}
+
+function isSolutionConfirmationRequest(message = '') {
+  const text = normalizeComparableText(message);
+  if (text.startsWith('__sophia_confirm_resolution:') || text.startsWith('__sophia_reopen_ticket:')) return true;
+  return /\b(confirmar resolucion|confirmar solución|confirmar cierre|reabrir ticket|ticket resuelto|mis tickets resueltos)\b/.test(text);
+}
+
+async function handleSolutionConfirmationTurn({
+  message,
+  user,
+  onText,
+  onCard,
+  onWorking
+}) {
+  if (!isSolutionConfirmationRequest(message)) return false;
+
+  if (message.startsWith('__sophia_confirm_resolution:')) {
+    const parts = message.split(':');
+    const requestId = parts[1];
+    onCard(createCsatSurveyAdaptiveCard(requestId, `Ticket #${requestId}`));
+    return true;
+  }
+
+  if (message.startsWith('__sophia_reopen_ticket:')) {
+    const parts = message.split(':');
+    const requestId = parts[1];
+
+    await onWorking?.({ content: `Solicitando reapertura del ticket #${requestId}...` });
+
+    try {
+      const noteText = '🔄 [Solicitud de Reapertura de Usuario]: El usuario indica que la falla persiste y requiere atención adicional.';
+      await callMcpTool('sdp_add_note', { request_id: requestId, note_text: noteText });
+      await auditToolCall({ user, toolName: 'sdp_add_note', args: { request_id: requestId, note_text: noteText }, outcome: 'success' });
+
+      onText(`🔄 **Ticket #${requestId} reabierto con éxito.**\n\nHemos registrado una nota para el técnico asignado indicando que el inconveniente persiste. Se contactará contigo a la brevedad.`);
+    } catch (error) {
+      console.warn('[SolutionConfirmation] Error reabriendo ticket:', error.message);
+      onText(`Registramos tu solicitud de reapertura para el ticket #${requestId}. El equipo técnico revisará el caso.`);
+    }
+    return true;
+  }
+
+  await onWorking?.({ content: 'Buscando tickets resueltos pendientes de confirmación...' });
+
+  try {
+    const listResult = await callMcpTool('sdp_list_requests', { filter_by: 'Open_Requests' });
+    const parsed = JSON.parse(listResult.content[0].text);
+    const requests = Array.isArray(parsed?.requests) ? parsed.requests : [];
+
+    const resolvedRequests = requests.filter((r) => {
+      const status = normalizeComparableText(getDisplayName(r.status));
+      return status.includes('resuelt') || status.includes('resolved');
+    });
+
+    if (resolvedRequests.length === 0) {
+      onText('No tienes tickets pendientes de confirmación en este momento.');
+      return true;
+    }
+
+    onText(`Tienes ${resolvedRequests.length} ticket${resolvedRequests.length === 1 ? '' : 's'} resuelto${resolvedRequests.length === 1 ? '' : 's'} pendiente${resolvedRequests.length === 1 ? '' : 's'} de confirmación:`);
+
+    for (const req of resolvedRequests.slice(0, 3)) {
+      onCard(createSolutionConfirmationAdaptiveCard(req));
+    }
+  } catch (error) {
+    console.warn('[SolutionConfirmation] Error buscando tickets resueltos:', error.message);
+    onText('No pude consultar la lista de tickets resueltos en este momento.');
+  }
+
+  return true;
+}
+
 function formatIsoDateTime(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -5002,6 +5163,16 @@ async function runSupportTurn({
     message,
     user,
     session,
+    onText,
+    onCard,
+    onWorking
+  })) {
+    return;
+  }
+
+  if (await handleSolutionConfirmationTurn({
+    message,
+    user,
     onText,
     onCard,
     onWorking
@@ -7472,6 +7643,12 @@ function getTeamsText(activity) {
     if (activity.value.action === 'sophia_reminder_reply' && activity.value.requestId) {
       const noteText = activity.value.reminder_note_text || activity.value.note_text || '';
       return `__sophia_reminder_reply:${activity.value.requestId}:${noteText}`;
+    }
+    if (activity.value.action === 'sophia_confirm_resolution' && activity.value.requestId) {
+      return `__sophia_confirm_resolution:${activity.value.requestId}`;
+    }
+    if (activity.value.action === 'sophia_reopen_ticket' && activity.value.requestId) {
+      return `__sophia_reopen_ticket:${activity.value.requestId}`;
     }
   }
 

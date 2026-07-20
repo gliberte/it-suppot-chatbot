@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.19.0] - 2026-07-20
+
+### Added
+- **Adjunto Automático de Evidencias Visuales (Opción 4):**
+  - Integrada la vinculación de imágenes y capturas de pantalla adjuntas en Teams a las descripciones y notas de tickets en ServiceDesk Plus.
+- **Flujo de Confirmación de Solución y Cierre de Tickets (Opción 5):**
+  - Creada la tarjeta adaptativa interactiva `createSolutionConfirmationAdaptiveCard` con botones `[✔ Sí, Confirmar y Calificar]` y `[🔄 No, Reabrir Ticket]`.
+  - Creado el manejador de turno `handleSolutionConfirmationTurn` en `server.js` para procesar confirmaciones directas, encuestas CSAT post-cierre y solicitudes automáticas de reapertura con nota para el técnico.
+
 ## [0.18.1] - 2026-07-20
 
 ### Fixed
