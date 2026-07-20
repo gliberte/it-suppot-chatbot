@@ -40,7 +40,8 @@ let runtimeStateSaveTimer = null;
 const READ_ONLY_CHAT_TOOLS = new Set([
   'sdp_list_requests',
   'sdp_get_request_details',
-  'sdp_search_user'
+  'sdp_search_user',
+  'web_search_support'
 ]);
 
 const CONFIRMATION_WORDS = new Set(['confirmar', 'confirma', 'confirmo', 'confírmalo', 'confirmalo', 'si', 'sí', 'ok', 'dale']);
@@ -124,6 +125,13 @@ function requireAuth(req, res, next) {
 }
 
 async function callMcpTool(name, args = {}) {
+  if (name === 'web_search_support') {
+    const text = await performWebSearchSupport(args.query || args.search_text || args.text || '');
+    return {
+      content: [{ type: 'text', text }]
+    };
+  }
+
   const result = await mcpClient.request(
     {
       method: "tools/call",
@@ -2887,6 +2895,82 @@ async function getRagContextForMessage(message, user) {
   }
 }
 
+function sanitizeWebSearchQuery(query = '') {
+  if (!query || typeof query !== 'string') return '';
+  return query
+    .replace(/\b(Barraza|BAC|Baco|Barraza Móvil|Barraza Movil|SAP|ServiceDesk|SDP|MCI)\b/gi, '')
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g, '')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function performWebSearchSupport(rawQuery) {
+  const cleanQuery = sanitizeWebSearchQuery(rawQuery);
+  if (!cleanQuery) {
+    return JSON.stringify({
+      status: 'error',
+      message: 'La consulta de búsqueda web no es válida o contiene únicamente términos internos corporativos.'
+    });
+  }
+
+  try {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error de conexión HTTP (${response.status})`);
+    }
+
+    const html = await response.text();
+    const results = [];
+    const regex = /<a class="result__url" href="([^"]+)".*?>(.*?)<\/a>.*?<a class="result__snippet[^"]*"[^>]*>(.*?)<\/a>/gs;
+    let match;
+
+    while ((match = regex.exec(html)) !== null && results.length < 3) {
+      let rawLink = match[1].trim();
+      if (rawLink.includes('uddg=')) {
+        const extracted = rawLink.split('uddg=')[1]?.split('&')[0];
+        if (extracted) rawLink = decodeURIComponent(extracted);
+      }
+      const title = match[2].replace(/<[^>]*>/g, '').trim();
+      const snippet = match[3].replace(/<[^>]*>/g, '').trim();
+
+      results.push({
+        title,
+        url: rawLink.startsWith('//') ? `https:${rawLink}` : rawLink,
+        snippet
+      });
+    }
+
+    if (!results.length) {
+      return JSON.stringify({
+        status: 'no_results',
+        query: cleanQuery,
+        message: 'No se encontraron resultados específicos en la web para esta consulta técnica.'
+      });
+    }
+
+    return JSON.stringify({
+      status: 'success',
+      query: cleanQuery,
+      sources_found: results.length,
+      results
+    });
+  } catch (error) {
+    console.warn('[WebSearch] Error al buscar en la web:', error.message);
+    return JSON.stringify({
+      status: 'error',
+      query: cleanQuery,
+      message: `No se pudo completar la búsqueda en la web: ${error.message}`
+    });
+  }
+}
+
 function isListedTicketFollowUpReviewRequest(message = '') {
   const normalized = normalizeComparableText(message);
   if (!normalized) return false;
@@ -4877,9 +4961,15 @@ function getSummarySystemInstruction(options = {}) {
       ? [
           'Para búsqueda de usuario, las opciones deben orientar a consultar tickets como solicitante, consultar tickets como Técnico asignado o buscar MCI relacionadas.'
         ]
-      : [
-          'Para listas de tickets o MCI, las opciones deben orientar a abrir detalle por ID, refinar tickets por estado/prioridad/persona, refinar MCI por Líder de MCI/avance/predictiva, o continuar con una acción segura permitida.'
-        ];
+      : toolName === 'web_search_support'
+        ? [
+            'Para resultados de búsqueda web de soporte, presenta 2 o 3 pasos sencillos y claros de solución basados en la información recuperada.',
+            'Menciona explícitamente el dominio oficial de la fuente de forma natural (ej. "de acuerdo con la documentación oficial de Microsoft Support...").',
+            'Pregunta amablemente al usuario si estos pasos resuelven el problema o si desea que procedas a preparar una solicitud de ticket.'
+          ]
+        : [
+            'Para listas de tickets o MCI, las opciones deben orientar a abrir detalle por ID, refinar tickets por estado/prioridad/persona, refinar MCI por Líder de MCI/avance/predictiva, o continuar con una acción segura permitida.'
+          ];
 
   const channelRules = channel === 'teams'
     ? [

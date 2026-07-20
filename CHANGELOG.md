@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.12.0] - 2026-07-20
+
+### Added
+- **Nivel 3 de Inteligencia: Búsqueda Web de Soporte General (`web_search_support`):**
+  - Creada e integrada la herramienta `web_search_support` en `server.js` y `agent-orchestrator.js` para consultar fuentes técnicas oficiales (Microsoft Support, HP, Zebra) ante errores generales de software/hardware (códigos de error de Windows/Office/Outlook/Excel).
+  - Incluye sanitizador de seguridad (`sanitizeWebSearchQuery`) que remueve nombres de la empresa, correos, nombres de empleados e IPs privadas antes de consultar la web.
+  - Formateador de respuestas con citación de fuentes oficiales.
+
 ## [0.11.1] - 2026-07-20
 
 ### Added
