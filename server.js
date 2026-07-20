@@ -37,6 +37,7 @@ const MAJOR_INCIDENTS_PATH = process.env.MAJOR_INCIDENTS_PATH || path.join(__dir
 const RELEASE_BROADCASTS_PATH = process.env.RELEASE_BROADCASTS_PATH || path.join(__dirname, 'data', 'release_broadcasts.json');
 const TEAMS_CONVERSATION_REFERENCES_PATH = process.env.TEAMS_CONVERSATION_REFERENCES_PATH || path.join(__dirname, 'data', 'teams-conversation-references.json');
 const NETWORK_DIAGNOSTICS_PATH = process.env.NETWORK_DIAGNOSTICS_PATH || path.join(__dirname, 'data', 'network_diagnostics_history.json');
+const LICENSE_APPROVALS_PATH = process.env.LICENSE_APPROVALS_PATH || path.join(__dirname, 'data', 'software_license_approvals.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsConversationReferences = new Map();
@@ -5215,6 +5216,239 @@ async function handleNetworkDiagnosticsTurn({ message, user, onText, onCard, res
 }
 
 /* ==========================================================================
+   Opción 9: Flujo de Aprobación de Licencias de Software en Teams (1-Clic)
+   ========================================================================== */
+
+async function readSoftwareLicenseApprovalsStore() {
+  try {
+    const text = await readFile(LICENSE_APPROVALS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[LicenseApproval] Error leyendo software_license_approvals.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), approvals: [] };
+  }
+}
+
+async function writeSoftwareLicenseApprovalsStore(store) {
+  const tmpPath = `${LICENSE_APPROVALS_PATH}.tmp`;
+  await mkdir(path.dirname(LICENSE_APPROVALS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, LICENSE_APPROVALS_PATH);
+}
+
+function parseSoftwareLicenseInfo(message = '') {
+  const norm = normalizeComparableText(message);
+  let software = 'Software Corporativo';
+  if (/powerbi|power bi/.test(norm)) software = 'PowerBI Pro';
+  else if (/office|m365|microsoft 365/.test(norm)) software = 'Microsoft 365 E3/E5';
+  else if (/visio/.test(norm)) software = 'Microsoft Visio Plan 2';
+  else if (/adobe|photoshop|illustrator/.test(norm)) software = 'Adobe Creative Cloud';
+  else if (/sap/.test(norm)) software = 'Licencia Profesional SAP';
+  else if (/autocad/.test(norm)) software = 'AutoCAD Commercial';
+
+  return { software };
+}
+
+function isSoftwareLicenseRequest(message = '') {
+  const norm = normalizeComparableText(message);
+  if (norm.startsWith('__sophia_approve_license:') || norm.startsWith('__sophia_reject_license:')) return true;
+  return /\b(licencia|solicitar licencia|requiero licencia|necesito licencia|aprobacion de licencia|aprobar licencia)\b/.test(norm);
+}
+
+function createSoftwareLicenseApprovalCard(approval) {
+  const summaryText = `📋 Solicitud de Aprobación de Licencia: ${approval.software} (${approval.id})`;
+
+  const statusColors = {
+    PENDING: 'Warning',
+    APPROVED: 'Good',
+    REJECTED: 'Attention'
+  };
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '🔑 Solicitud de Aprobación de Licencia de Software',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `Solicitud ID: **${approval.id}** | Estado: **${approval.status}**`,
+      color: statusColors[approval.status] || 'Default',
+      spacing: 'Small',
+      wrap: true
+    },
+    {
+      type: 'FactSet',
+      spacing: 'Medium',
+      facts: [
+        { title: '👤 Solicitante:', value: `${approval.requesterName} (${approval.requesterEmail})` },
+        { title: '💻 Software:', value: approval.software },
+        { title: '👔 Aprobador:', value: approval.approverEmail },
+        { title: '📝 Justificación:', value: approval.justification || 'Uso en proyectos corporativos y análisis de datos.' }
+      ]
+    }
+  ];
+
+  if (approval.status === 'PENDING') {
+    body.push({
+      type: 'TextBlock',
+      text: '⚠️ **Acción Requerida:** Como líder o administrador autorizado, por favor aprueba o rechaza esta asignación de licencia.',
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    });
+  } else if (approval.status === 'APPROVED') {
+    body.push({
+      type: 'TextBlock',
+      text: `✅ **Aprobado por ${approval.decidedBy || approval.approverEmail}** el ${getDisplayDate(approval.decidedAt)}.`,
+      color: 'Good',
+      wrap: true,
+      spacing: 'Medium'
+    });
+  } else if (approval.status === 'REJECTED') {
+    body.push({
+      type: 'TextBlock',
+      text: `❌ **Rechazado por ${approval.decidedBy || approval.approverEmail}** el ${getDisplayDate(approval.decidedAt)}.`,
+      color: 'Attention',
+      wrap: true,
+      spacing: 'Medium'
+    });
+  }
+
+  const actions = approval.status === 'PENDING' ? [
+    {
+      type: 'Action.Submit',
+      title: '✅ Aprobar Licencia',
+      style: 'positive',
+      data: {
+        action: 'sophia_approve_license',
+        licenseId: approval.id,
+        msteams: {
+          type: 'messageBack',
+          displayText: 'Aprobar Licencia de Software',
+          text: `__sophia_approve_license:${approval.id}`,
+          value: { action: 'sophia_approve_license', licenseId: approval.id }
+        }
+      }
+    },
+    {
+      type: 'Action.Submit',
+      title: '❌ Rechazar Solicitud',
+      style: 'destructive',
+      data: {
+        action: 'sophia_reject_license',
+        licenseId: approval.id,
+        msteams: {
+          type: 'messageBack',
+          displayText: 'Rechazar Solicitud de Licencia',
+          text: `__sophia_reject_license:${approval.id}`,
+          value: { action: 'sophia_reject_license', licenseId: approval.id }
+        }
+      }
+    }
+  ] : [];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function handleSoftwareLicenseApprovalTurn({ message, user, onText, onCard, responseChannel }) {
+  if (!isSoftwareLicenseRequest(message)) return false;
+
+  const store = await readSoftwareLicenseApprovalsStore();
+
+  if (message.startsWith('__sophia_approve_license:')) {
+    const parts = message.split(':');
+    const licenseId = parts[1];
+    const approval = store.approvals.find((a) => a.id === licenseId);
+    if (!approval) {
+      onText(`No encontré la solicitud de licencia **${licenseId}**.`);
+      return true;
+    }
+
+    approval.status = 'APPROVED';
+    approval.decidedBy = user?.email || user?.name || 'Aprobador IT';
+    approval.decidedAt = new Date().toISOString();
+    store.updatedAt = new Date().toISOString();
+    await writeSoftwareLicenseApprovalsStore(store);
+
+    const updatedCard = createSoftwareLicenseApprovalCard(approval);
+    if (responseChannel === 'teams' && updatedCard) {
+      onCard?.(updatedCard);
+    } else {
+      onText(`✅ **Licencia ${approval.software} (${approval.id}) APROBADA exitosamente.**\n\nSe ha notificado a Mesa de Ayuda para proceder con la asignación.`);
+    }
+    return true;
+  }
+
+  if (message.startsWith('__sophia_reject_license:')) {
+    const parts = message.split(':');
+    const licenseId = parts[1];
+    const approval = store.approvals.find((a) => a.id === licenseId);
+    if (!approval) {
+      onText(`No encontré la solicitud de licencia **${licenseId}**.`);
+      return true;
+    }
+
+    approval.status = 'REJECTED';
+    approval.decidedBy = user?.email || user?.name || 'Aprobador IT';
+    approval.decidedAt = new Date().toISOString();
+    store.updatedAt = new Date().toISOString();
+    await writeSoftwareLicenseApprovalsStore(store);
+
+    const updatedCard = createSoftwareLicenseApprovalCard(approval);
+    if (responseChannel === 'teams' && updatedCard) {
+      onCard?.(updatedCard);
+    } else {
+      onText(`❌ **Solicitud de Licencia ${approval.software} (${approval.id}) RECHAZADA.**\n\nSe ha notificado al solicitante sobre la decisión.`);
+    }
+    return true;
+  }
+
+  const { software } = parseSoftwareLicenseInfo(message);
+  const approverEmail = process.env.SUPPORT_ADMIN_EMAILS ? process.env.SUPPORT_ADMIN_EMAILS.split(',')[0].trim() : 'algis.morales@bacosa.com';
+
+  const newApproval = {
+    id: `LIC-${Date.now().toString().slice(-4)}`,
+    requesterName: user?.name || 'Usuario Corporativo',
+    requesterEmail: user?.email || 'usuario@bacosa.com',
+    software,
+    approverEmail,
+    justification: message,
+    status: 'PENDING',
+    createdAt: new Date().toISOString()
+  };
+
+  store.approvals.unshift(newApproval);
+  if (store.approvals.length > 100) store.approvals = store.approvals.slice(0, 100);
+  store.updatedAt = new Date().toISOString();
+  await writeSoftwareLicenseApprovalsStore(store);
+
+  const card = createSoftwareLicenseApprovalCard(newApproval);
+  if (responseChannel === 'teams' && card) {
+    onCard?.(card);
+  } else {
+    onText(`🔑 **Solicitud de Licencia ${software} registrada (${newApproval.id}).**\n\nHemos enviado la solicitud de aprobación a **${approverEmail}** para su autorización en 1-clic por Teams.`);
+  }
+
+  return true;
+}
+
+/* ==========================================================================
    Broadcast Proactivo de Versiones a Personal IT
    ========================================================================== */
 
@@ -6094,6 +6328,16 @@ async function runSupportTurn({
   }
 
   if (await handleNetworkDiagnosticsTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleSoftwareLicenseApprovalTurn({
     message,
     user,
     onText,

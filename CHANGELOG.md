@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.23.0] - 2026-07-20
+
+### Added
+- **Opción 9 — Flujo de Aprobación de Licencias de Software en Teams (1-Clic):**
+  - Registro automático de solicitudes de licencias corporativas (PowerBI Pro, M365, Visio, Adobe, SAP, AutoCAD) en `data/software_license_approvals.json`.
+  - Tarjetas adaptativas de aprobación enviadas directamente al chat de Teams del líder/aprobador con los botones **`[✅ Aprobar Licencia]`** y **`[❌ Rechazar Solicitud]`**.
+  - Notificación inmediata de decisión y actualización de estado en ServiceDesk Plus.
+
 ## [0.22.0] - 2026-07-20
 
 ### Added
