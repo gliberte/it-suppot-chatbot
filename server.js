@@ -1399,14 +1399,18 @@ function createMciUpdateConfirmationBlock(args = {}) {
   const rows = [['MCI', args.request_id ? `#${args.request_id}` : '-']];
   const fieldLabels = {
     current_date: 'Fecha de actualización',
+    udf_date_1508: 'Fecha de actualización',
     description: 'Descripción',
     predictive: 'Predictiva',
+    udf_sline_2102: 'Predictiva',
     progress: 'Avance',
+    udf_long_1801: 'Avance',
     status: 'Estado',
     stage: 'Etapa',
     previous_stage: 'Etapa anterior',
     due_date: 'Fecha tope',
     leader: 'Líder de MCI',
+    udf_pick_1503: 'Líder de MCI',
     mci_priority: 'Prioridad MCI',
     subject: 'Asunto'
   };
@@ -1770,8 +1774,10 @@ function normalizeMciUpdateFields(fields = {}) {
     linder: 'leader',
     lider_mci: 'leader',
     mci_leader: 'leader',
+    udf_pick_1503: 'leader',
     prioridad_mci: 'mci_priority',
     mci_priority: 'mci_priority',
+    udf_pick_1501: 'mci_priority',
     priorizar: 'prioritize',
     prioritize: 'prioritize',
     mci: 'mci',
@@ -1793,15 +1799,19 @@ function normalizeMciUpdateFields(fields = {}) {
     fecha_de_ultima_actualizacion: 'current_date',
     ultima_actualizacion: 'current_date',
     current_date: 'current_date',
+    udf_date_1508: 'current_date',
     etapa: 'stage',
     stage: 'stage',
+    udf_pick_1502: 'stage',
     etapa_anterior: 'previous_stage',
     previous_stage: 'previous_stage',
     avance: 'progress',
     porcentaje_avance: 'progress',
     progress: 'progress',
+    udf_long_1801: 'progress',
     predictiva: 'predictive',
     predictive: 'predictive',
+    udf_sline_2102: 'predictive',
     tecnico_asignado: 'assigned_technician',
     assigned_technician: 'assigned_technician',
     estado: 'status',
@@ -1813,8 +1823,8 @@ function normalizeMciUpdateFields(fields = {}) {
   };
 
   for (const [key, value] of Object.entries(fields || {})) {
-    if (['request_id', 'comments'].includes(key)) continue;
-    const normalizedKey = fieldAliases[normalizeFieldAlias(key)] || key;
+    if (['request_id', 'comments', 'fields', 'tool_name', 'tool_args'].includes(key)) continue;
+    const normalizedKey = fieldAliases[normalizeFieldAlias(key)] || fieldAliases[key] || key;
     if (normalizedKey === 'progress') {
       normalized[normalizedKey] = parseMciProgressValue(value);
     } else if (normalizedKey === 'status') {
@@ -5537,6 +5547,11 @@ function prepareConfirmedActionArgs(action) {
     if (!args.udf_fields?.udf_pick_2701) {
       throw new Error('No pude completar el técnico asignado obligatorio (udf_pick_2701). Revisa SDP_DEFAULT_UDF_PICK_2701 o la ruta de clasificación antes de confirmar.');
     }
+  }
+
+  if (action.toolName === 'sdp_update_mci') {
+    args.fields = normalizeMciUpdateFields(args.fields || args);
+    applyRelativeMciDatesFromMessage(args.fields, action.userMessage || '');
   }
 
   return args;

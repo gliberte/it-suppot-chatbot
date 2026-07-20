@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.19.1] - 2026-07-20
+
+### Fixed
+- **Mapeo de Campos UDF en Actualizaciones de MCI (`sdp_update_mci`):**
+  - Mapeado el campo UDF de fecha `udf_date_1508` a su nombre de campo lógico `current_date` en `normalizeMciUpdateFields` y `createMciUpdateConfirmationBlock`.
+  - Corregido `prepareConfirmedActionArgs` para normalizar y formatear fechas relativas de MCI (`current_date`) antes de llamar a la API de ServiceDesk Plus al presionar el botón "Confirmar".
+
 ## [0.19.0] - 2026-07-20
 
 ### Added
