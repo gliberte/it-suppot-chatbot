@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.21.1] - 2026-07-20
+
+### Fixed
+- **Resiliencia de Conexión CLI Loopback (`127.0.0.1`):**
+  - Actualizados los scripts `scripts/broadcast-release.js` y `scripts/trigger-reminders.js` para priorizar la IP de loopback `127.0.0.1` sobre `localhost`, resolviendo fallos de resolución de DNS en Node 18+ cuando el servidor se reinicia o escucha exclusivamente en IPv4.
+
 ## [0.21.0] - 2026-07-20
 
 ### Added
