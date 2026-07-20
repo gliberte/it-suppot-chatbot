@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.19.3] - 2026-07-20
+
+### Fixed
+- **Aislamiento de Despliegue de Dashboard Ejecutivo (`isExecutiveItReportRequest`):**
+  - Excluidas solicitudes de edición, actualización o consulta de tickets/MCI específicos (`actualizar`, `modificar`, `editar`, `#ID`) de la regla de captura del Dashboard Ejecutivo.
+  - Asegurado que peticiones como *"actualizar la descripción de la MCI"* o *"actualizar esta MCI al día de hoy"* pasen directamente al flujo de actualización de MCI (`sdp_update_mci`) sin desplegar el informe gerencial.
+
 ## [0.19.2] - 2026-07-20
 
 ### Fixed

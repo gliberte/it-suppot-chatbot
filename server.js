@@ -3721,10 +3721,18 @@ async function handleExecutiveItTurn({ message, user, onText, onCard, onWorking,
 
 function isExecutiveItReportRequest(message = '') {
   const normalized = normalizeComparableText(message);
+
+  if (/\b(actualizar|actualiza|actualizo|modificar|modifica|modifico|cambiar|cambia|cambio|editar|edita|edito|agrega|agregar)\b/.test(normalized)) {
+    return false;
+  }
+  if (/#?\d{4,8}\b/.test(normalized)) {
+    return false;
+  }
+
   if (/\b(dashboard|dashboarding|dashboards)\b/.test(normalized)) return true;
   if (/\b(salud del servicio|salud it|resumen ejecutivo|panorama ejecutivo|metricas de soporte|reporte ejecutivo)\b/.test(normalized)) return true;
-  return /\b(reporte|resumen|panorama|estado|informe|gerencial|ejecutivo|gestion|gestión|salud|dashboard|metricas|métricas|volumen|carga)\b/.test(normalized) &&
-    /\b(it|soporte|tickets|tecnicos|técnicos|seguimientos|mci|mesa|operacion|operación|servicio)\b/.test(normalized);
+
+  return /\b(reporte gerencial|reporte ejecutivo|resumen gerencial|resumen ejecutivo|panorama de soporte|informe ejecutivo|informe gerencial)\b/.test(normalized);
 }
 
 async function buildExecutiveItReport(user) {
