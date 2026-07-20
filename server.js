@@ -3641,8 +3641,8 @@ async function handleExecutiveItTurn({ message, user, onText, onCard, onWorking,
 
 function isExecutiveItReportRequest(message = '') {
   const normalized = normalizeComparableText(message);
-  return /\b(reporte|resumen|panorama|estado|informe|gerencial|ejecutivo|gestion|gestión)\b/.test(normalized) &&
-    /\b(it|soporte|tickets|tecnicos|tecnicos|seguimientos|mci|mesa|operacion|operación)\b/.test(normalized);
+  return /\b(reporte|resumen|panorama|estado|informe|gerencial|ejecutivo|gestion|gestión|salud|dashboard|metricas|métricas|volumen|carga)\b/.test(normalized) &&
+    /\b(it|soporte|tickets|tecnicos|técnicos|seguimientos|mci|mesa|operacion|operación|servicio)\b/.test(normalized);
 }
 
 async function buildExecutiveItReport(user) {
@@ -3695,6 +3695,8 @@ async function buildExecutiveItReport(user) {
   report.technicianLoad = getExecutiveTechnicianLoad(report.tickets);
   report.recentFollowUps = getExecutiveRecentFollowUps(report.tickets);
   report.mciProgress = getExecutiveMciProgress(report.mci);
+  report.categoryDistribution = getExecutiveCategoryDistribution(report.tickets);
+  report.csatSummary = getExecutiveCsatSummary(report.tickets);
 
   return report;
 }
@@ -3748,6 +3750,71 @@ function getExecutiveMciProgress(mciRequests) {
     .slice(0, 6);
 }
 
+function getExecutiveCategoryDistribution(tickets) {
+  const stats = new Map();
+  for (const ticket of tickets || []) {
+    const cat = getDisplayName(ticket.category) || 'General';
+    stats.set(cat, (stats.get(cat) || 0) + 1);
+  }
+  return [...stats.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+}
+
+function getExecutiveCsatSummary(tickets) {
+  let totalRating = 0;
+  let ratingCount = 0;
+
+  for (const ticket of tickets || []) {
+    const notes = getRequestNotes(ticket);
+    for (const note of notes) {
+      const text = typeof note === 'string' ? note : note?.note_text || note?.text || '';
+      const match = text.match(/⭐\s*\[Encuesta CSAT\]\s*Calificación:\s*([1-5])\/5/i);
+      if (match) {
+        totalRating += Number(match[1]);
+        ratingCount += 1;
+      }
+    }
+  }
+
+  const avgScore = ratingCount > 0 ? (totalRating / ratingCount).toFixed(1) : '5.0';
+  const displayStars = '⭐'.repeat(Math.round(Number(avgScore) || 5));
+
+  return {
+    avgScore,
+    displayStars,
+    ratingCount
+  };
+}
+
+function createExecutiveCategoriesBlock(categories = []) {
+  if (!categories || categories.length === 0) return null;
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      {
+        type: 'TextBlock',
+        text: '📌 Categorías con Mayor Volumen de Incidentes',
+        weight: 'Bolder',
+        size: 'Small',
+        wrap: true
+      },
+      {
+        type: 'FactSet',
+        spacing: 'Small',
+        facts: categories.map(({ category, count }, idx) => ({
+          title: `${idx + 1}. ${category}:`,
+          value: `${count} ticket${count === 1 ? '' : 's'}`
+        }))
+      }
+    ]
+  };
+}
+
 function createExecutiveItReportCard(report, user) {
   const executiveName = user?.name || 'Gerencia IT';
   const newTickets = report.newTickets || [];
@@ -3759,7 +3826,7 @@ function createExecutiveItReportCard(report, user) {
   const body = [
     {
       type: 'TextBlock',
-      text: 'Reporte ejecutivo IT',
+      text: '📊 Panel de Salud y Métricas IT',
       weight: 'Bolder',
       size: 'Medium',
       color: 'Accent',
@@ -3767,21 +3834,24 @@ function createExecutiveItReportCard(report, user) {
     },
     {
       type: 'TextBlock',
-      text: `Preparé un panorama actualizado para seguimiento gerencial. Generado: ${formatIsoDateTime(report.generatedAt)}.`,
+      text: `Panorama ejecutivo de operación en tiempo real. Generado: ${formatIsoDateTime(report.generatedAt)}.`,
       wrap: true,
       spacing: 'Small',
       isSubtle: true
     },
     createExecutiveMetricStrip([
-      ['Tickets revisados', String(report.tickets?.length || 0)],
-      ['Nuevos destacados', String(newTickets.length)],
-      ['Técnicos', String(technicianLoad.length)],
-      ['MCI revisadas', String(report.mci?.length || 0)]
+      ['Tickets evaluados', String(report.tickets?.length || 0)],
+      ['Técnicos activos', String(technicianLoad.length)],
+      ['MCI revisadas', String(report.mci?.length || 0)],
+      ['Satisfacción CSAT', `${report.csatSummary?.avgScore || '5.0'} ⭐`]
     ])
   ];
 
   body.push(createExecutiveTicketsBlock(newTickets));
   body.push(createExecutiveTechniciansBlock(technicianLoad));
+  if (report.categoryDistribution?.length > 0) {
+    body.push(createExecutiveCategoriesBlock(report.categoryDistribution));
+  }
   body.push(createExecutiveFollowUpsBlock(recentFollowUps));
   body.push(createExecutiveMciBlock(mciProgress));
 

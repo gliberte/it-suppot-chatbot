@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.18.0] - 2026-07-20
+
+### Added
+- **Panel de Salud y Métricas del Servicio IT (Opción 3):**
+  - Enriquecido el reporte ejecutivo conversacional con métricas de distribución de categorías con mayor volumen de incidentes (`getExecutiveCategoryDistribution`).
+  - Añadido el cálculo consolidado del nivel de satisfacción CSAT (`getExecutiveCsatSummary`) con visualización de estrellas y promedio acumulado.
+  - Creado el bloque adaptativo `createExecutiveCategoriesBlock` y ampliados los patrones de detección conversacionales (*"salud del servicio IT"*, *"dashboard de soporte"*, *"métricas IT"*).
+
 ## [0.17.0] - 2026-07-20
 
 ### Added
