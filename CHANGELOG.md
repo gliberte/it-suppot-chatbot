@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.13.0] - 2026-07-20
+
+### Added
+- **Línea de Tiempo y Seguimiento Visual del Ticket/MCI (Opción 1):**
+  - Creadas las funciones generadoras de indicadores de estado `buildTicketStatusTimeline` y `buildMciStatusTimeline` en `server.js`.
+  - Integrado un bloque visual de progreso en las tarjetas adaptativas de detalle de ticket y MCI (`[✔ Creado] ➔ [🔵 En Proceso] ➔ [🟡 En Espera] ➔ [🟢 Resuelto]`).
+  - Actualizadas las instrucciones de formateo de resúmenes en `getSummarySystemInstruction` para incluir la línea de tiempo en el flujo conversacional.
+
 ## [0.12.0] - 2026-07-20
 
 ### Added

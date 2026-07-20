@@ -4952,7 +4952,8 @@ function getSummarySystemInstruction(options = {}) {
 
   const toolRules = toolName === 'sdp_get_request_details'
     ? [
-        'Para detalle de ticket, no escribas tablas Markdown en una sola línea. Usa secciones breves: **Resumen**, **Detalle**, **Descripción** y **Opciones**.',
+        'Para detalle de ticket, incluye siempre una sección **Progreso** o **Línea de Tiempo** con el estado actual en formato de indicador visual (ej. `[✔ Creado] ➔ [🔵 En Proceso] ➔ [⚪ En Espera] ➔ [⚪ Resuelto / Cerrado]`).',
+        'No escribas tablas Markdown en una sola línea. Usa secciones breves: **Resumen**, **Progreso**, **Detalle**, **Descripción** y **Opciones**.',
         'En **Detalle**, usa viñetas cortas de una línea por campo si el canal no garantiza tablas. Ejemplo: "- Estado: En Proceso".',
         'Si el resultado incluye notas o seguimientos, agrega una sección **Seguimientos** con las notas más recientes, sin exceder 5 entradas.',
         'Las opciones deben orientar a ver resolución, agregar seguimiento, crear una solicitud relacionada o consultar tickets similares si aplica.'
@@ -5877,6 +5878,47 @@ function getMciCommentValue(request) {
   ).trim();
 }
 
+function buildTicketStatusTimeline(statusName = '') {
+  const norm = normalizeComparableText(statusName);
+
+  if (norm.includes('cancel')) {
+    return '[✔ Creado] ➔ [🔴 Cancelado]';
+  }
+
+  if (norm.includes('resuelto') || norm.includes('resolved')) {
+    return '[✔ Creado] ➔ [✔ En Proceso] ➔ [✔ En Espera] ➔ [🟢 Resuelto]';
+  }
+
+  if (norm.includes('cerrado') || norm.includes('closed')) {
+    return '[✔ Creado] ➔ [✔ En Proceso] ➔ [✔ En Espera] ➔ [🟢 Cerrado]';
+  }
+
+  if (norm.includes('espera') || norm.includes('hold') || norm.includes('pending') || norm.includes('suspend')) {
+    return '[✔ Creado] ➔ [✔ En Proceso] ➔ [🟡 En Espera] ➔ [⚪ Resuelto / Cerrado]';
+  }
+
+  if (norm.includes('proceso') || norm.includes('progreso') || norm.includes('progress') || norm.includes('asigna')) {
+    return '[✔ Creado] ➔ [🔵 En Proceso] ➔ [⚪ En Espera] ➔ [⚪ Resuelto / Cerrado]';
+  }
+
+  return '[🔵 Creado] ➔ [⚪ En Proceso] ➔ [⚪ En Espera] ➔ [⚪ Resuelto / Cerrado]';
+}
+
+function buildMciStatusTimeline(progressStr = '', statusName = '') {
+  const normStatus = normalizeComparableText(statusName);
+  const numericProgress = parseInt(String(progressStr).replace(/\D/g, ''), 10) || 0;
+
+  if (normStatus.includes('cerrad') || normStatus.includes('completa') || normStatus.includes('resuelt') || numericProgress >= 100) {
+    return '[✔ Inicio] ➔ [✔ En Avance 100%] ➔ [🟢 Completado]';
+  }
+
+  if (numericProgress > 0) {
+    return `[✔ Inicio] ➔ [🔵 En Avance ${numericProgress}%] ➔ [⚪ Completado]`;
+  }
+
+  return '[🔵 Inicio (0%)] ➔ [⚪ En Avance] ➔ [⚪ Completado]';
+}
+
 function createTicketDetailsAdaptiveCard(toolOutput) {
   let data;
   try {
@@ -5923,6 +5965,25 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
       text: subject,
       wrap: true,
       spacing: 'Small'
+    },
+    {
+      type: 'Container',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: 'Progreso del Ticket',
+          weight: 'Bolder',
+          size: 'Small',
+          isSubtle: true
+        },
+        {
+          type: 'TextBlock',
+          text: buildTicketStatusTimeline(getDisplayName(request.status)),
+          wrap: true,
+          spacing: 'None'
+        }
+      ]
     },
     {
       type: 'Container',
@@ -5995,6 +6056,25 @@ function createMciDetailsAdaptiveCard(request) {
       text: subject,
       wrap: true,
       spacing: 'Small'
+    },
+    {
+      type: 'Container',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: 'Línea de Tiempo del Proyecto MCI',
+          weight: 'Bolder',
+          size: 'Small',
+          isSubtle: true
+        },
+        {
+          type: 'TextBlock',
+          text: buildMciStatusTimeline(getMciProgressValue(request), getDisplayName(request.status)),
+          wrap: true,
+          spacing: 'None'
+        }
+      ]
     },
     {
       type: 'Container',
