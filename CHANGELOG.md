@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.10.8] - 2026-07-20
+
+### Fixed
+- Corregida la duplicación de encabezados (`📌 Problema o Solicitud:`) en `formatStructuredTicketDescription` cuando la IA o el usuario reenvían descripciones con títulos preexistentes.
+- Corregida la función `stripHtml` en `server.js` para preservar saltos de línea (`\n\n`) y saltos de párrafo/lista, evitando que las descripciones y notas se aplanen en un solo bloque continuo dentro de las tarjetas adaptativas de Teams y visor de SDP.
+
 ## [0.10.7] - 2026-07-20
 
 ### Added

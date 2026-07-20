@@ -2187,7 +2187,7 @@ function createTicketClassificationReason(routing, topEvidence) {
 function formatStructuredTicketDescription(rawText) {
   if (!rawText || typeof rawText !== 'string') return '';
 
-  let text = rawText.trim();
+  let text = String(rawText).trim();
   if (!text) return '';
 
   let priorityTag = '';
@@ -2197,36 +2197,47 @@ function formatStructuredTicketDescription(rawText) {
     text = text.replace(priorityMatch[1], '').trim();
   }
 
-  const hasHeaders = /(📌|🔍|⚡|Problema|Detalle|Impacto):/i.test(text);
+  // 1. Clean duplicated headers (e.g. "📌 Problema o Solicitud: 📌 Problema o Solicitud: 📌 **Problema o Solicitud**:")
+  text = text
+    .replace(/(?:📌\s*(?:\*\*)?Problema o Solicitud(?:\*\*)?:?\s*)+/gi, '📌 **Problema o Solicitud**:\n')
+    .replace(/(?:🔍\s*(?:\*\*)?Detalle y Síntomas(?:\*\*)?:?\s*(?:-\s*)?)+/gi, '🔍 **Detalle y Síntomas**:\n')
+    .replace(/(?:⚡\s*(?:\*\*)?Impacto Operativo(?:\*\*)?:?\s*)+/gi, '⚡ **Impacto Operativo**:\n')
+    .replace(/(?:-\s*){2,}/g, '- ');
 
-  let formatted = '';
+  // 2. Ensure double line breaks between section headers
+  text = text
+    .replace(/([^\n])\s*(📌 \*\*Problema o Solicitud\*\*:)/g, '$1\n\n$2')
+    .replace(/([^\n])\s*(🔍 \*\*Detalle y Síntomas\*\*:)/g, '$1\n\n$2')
+    .replace(/([^\n])\s*(⚡ \*\*Impacto Operativo\*\*:)/g, '$1\n\n$2');
 
-  if (hasHeaders) {
-    formatted = text
-      .replace(/(\n|^)(📌|🔍|⚡|Problema|Detalle|Impacto):/gi, '\n\n$2:')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  } else {
+  const hasHeaders = /(📌|🔍|⚡|\*\*Problema|\*\*Detalle|\*\*Impacto)/i.test(text);
+
+  if (!hasHeaders) {
     const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
 
     if (sentences.length <= 1) {
-      formatted = `📌 Problema o Solicitud:\n${text}`;
+      text = `📌 **Problema o Solicitud**:\n${text}`;
     } else {
       const firstSentence = sentences[0];
       const restSentences = sentences.slice(1);
 
-      formatted = [
-        `📌 Problema o Solicitud:\n${firstSentence}`,
-        `🔍 Detalle y Síntomas:\n${restSentences.map((s) => (s.startsWith('-') ? s : `- ${s}`)).join('\n')}`
+      text = [
+        `📌 **Problema o Solicitud**:\n${firstSentence}`,
+        `🔍 **Detalle y Síntomas**:\n${restSentences.map((s) => (s.startsWith('-') ? s : `- ${s}`)).join('\n')}`
       ].join('\n\n');
     }
   }
 
+  text = text
+    .replace(/\n-\s*/g, '\n- ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
   if (priorityTag) {
-    formatted = `${formatted}\n\n${priorityTag}`;
+    text = `${text}\n\n${priorityTag}`;
   }
 
-  return formatted.trim();
+  return text.trim();
 }
 
 function applyTicketClassificationToArgs(args, classification, originalMessage = '') {
@@ -2805,7 +2816,17 @@ function redactSensitiveText(text) {
 }
 
 function stripHtml(text) {
-  return String(text).replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  return String(text)
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ \n/g, '\n')
+    .replace(/\n /g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function truncateText(text, maxLength) {
