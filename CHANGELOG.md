@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.11.1] - 2026-07-20
+
+### Added
+- **Sugerencias de Auto-Solución Rápida (Opción A):**
+  - Integrado un bloque `💡 Sugerencia de Auto-Solución Rápida:` dentro de la Fase 1 de borrador del ticket en `agent-orchestrator.js`.
+  - Sophia ahora extrae automáticamente 1 o 2 pasos prácticos de auto-recuperación desde los playbooks RAG (Outlook, Impresoras, Red, etc.) para ofrecerlos al usuario antes de emitir la confirmación final.
+
 ## [0.11.0] - 2026-07-20
 
 ### Added
