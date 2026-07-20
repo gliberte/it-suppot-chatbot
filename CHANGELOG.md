@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.18.1] - 2026-07-20
+
+### Fixed
+- **Acceso y Activación del Dashboard Ejecutivo en Teams:**
+  - Flexibilizada la regla de autorización `isItExecutiveUser` para permitir el acceso a administradores de soporte (`isSupportAdmin`) y permitir el despliegue cuando la variable de entorno de ejecutivos está abierta.
+  - Ampliados los patrones de coincidencia `isExecutiveItReportRequest` para responder de inmediato a comandos como `"dashboard"`, `"ver dashboard"`, `"salud del servicio IT"`, etc.
+
 ## [0.18.0] - 2026-07-20
 
 ### Added

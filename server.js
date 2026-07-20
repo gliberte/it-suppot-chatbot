@@ -530,7 +530,16 @@ function getExecutiveItProfile(user) {
 }
 
 function isItExecutiveUser(user) {
-  return Boolean(user?.executiveProfile?.type === 'it_executive' || getExecutiveItProfile(user));
+  if (user?.executiveProfile?.type === 'it_executive' || getExecutiveItProfile(user)) return true;
+  if (isSupportAdmin(user) || isMciAdmin(user)) return true;
+
+  const executiveEmails = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_EMAILS');
+  const executiveAadObjectIds = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_AAD_OBJECT_IDS');
+  if (executiveEmails.size === 0 && executiveAadObjectIds.size === 0) {
+    return true;
+  }
+
+  return false;
 }
 
 function isMciAdmin(user) {
@@ -3641,6 +3650,8 @@ async function handleExecutiveItTurn({ message, user, onText, onCard, onWorking,
 
 function isExecutiveItReportRequest(message = '') {
   const normalized = normalizeComparableText(message);
+  if (/\b(dashboard|dashboarding|dashboards)\b/.test(normalized)) return true;
+  if (/\b(salud del servicio|salud it|resumen ejecutivo|panorama ejecutivo|metricas de soporte|reporte ejecutivo)\b/.test(normalized)) return true;
   return /\b(reporte|resumen|panorama|estado|informe|gerencial|ejecutivo|gestion|gestión|salud|dashboard|metricas|métricas|volumen|carga)\b/.test(normalized) &&
     /\b(it|soporte|tickets|tecnicos|técnicos|seguimientos|mci|mesa|operacion|operación|servicio)\b/.test(normalized);
 }
