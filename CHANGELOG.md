@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.11.0] - 2026-07-20
+
+### Added
+- **Proceso de Creación de Tickets en 2 Fases:**
+  - **Fase 1 (Pre-redacción y Pulido):** Sophia primero presenta en texto normal la propuesta estructurada del **Asunto** y la **Descripción** (📌 Problema, 🔍 Detalle y Síntomas, ⚡ Impacto) e inicia un diálogo de retroalimentación conversacional para ajustar cualquier detalle.
+  - **Fase 2 (Tarjeta de Confirmación Final):** Únicamente cuando el usuario aprueba explícitamente la redacción o pide generar la solicitud, Sophia invoca `sdp_create_request` y muestra la tarjeta adaptativa final con los botones `[Confirmar]` y `[Cancelar]`.
+
 ## [0.10.10] - 2026-07-20
 
 ### Fixed
