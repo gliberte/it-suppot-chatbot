@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.21.0] - 2026-07-20
+
+### Added
+- **Transmisión Proactiva de Novedades y Versiones a Personal IT (`broadcastReleaseNotesToItStaff`):**
+  - Sistema de notificación proactiva en Teams para informar automáticamente al equipo de IT sobre cada nueva actualización y versión desplegada.
+  - Tarjeta adaptativa interactiva con encabezado `🚀 ¡Hola! Sophia ha sido actualizada a la versión v0.21.0`, resumen automático de características y sugerencias de comandos de prueba rápida.
+  - Almacén de persistencia `data/release_broadcasts.json` para evitar envíos duplicados por versión.
+  - Script ejecutable CLI `"prod:broadcast": "node scripts/broadcast-release.js"` y endpoint `POST /api/admin/release/broadcast`.
+
 ## [0.20.0] - 2026-07-20
 
 ### Added

@@ -34,6 +34,7 @@ const ACTIVE_SITUATIONS_PATH = process.env.ACTIVE_SITUATIONS_PATH || path.join(_
 const KNOWLEDGE_CANDIDATES_PATH = process.env.KNOWLEDGE_CANDIDATES_PATH || path.join(__dirname, 'data', 'knowledge-candidates.json');
 const AD_MOCK_PATH = process.env.AD_MOCK_PATH || path.join(__dirname, 'data', 'active_ad_mock.json');
 const MAJOR_INCIDENTS_PATH = process.env.MAJOR_INCIDENTS_PATH || path.join(__dirname, 'data', 'major_incidents.json');
+const RELEASE_BROADCASTS_PATH = process.env.RELEASE_BROADCASTS_PATH || path.join(__dirname, 'data', 'release_broadcasts.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsUserCache = new Map();
@@ -130,6 +131,16 @@ app.post('/api/admin/reminders/trigger', async (req, res) => {
   try {
     const result = await runProactiveStaleTicketReminders();
     res.json({ status: 'success', message: 'Revisión proactiva de recordatorios ejecutada con éxito.', ...result });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.post('/api/admin/release/broadcast', async (req, res) => {
+  try {
+    const force = Boolean(req.body?.force);
+    const result = await broadcastReleaseNotesToItStaff({ force });
+    res.json({ status: 'success', message: 'Transmisión proactiva de versión procesada con éxito.', ...result });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
   }
@@ -4995,6 +5006,158 @@ async function handleMajorIncidentPreventiveTurn({ message, user, onText, onCard
     onText(`⚠️ [INCIDENTE MAYOR EN CURSO]: El equipo de TI ya está atendiendo la falla en ${activeCluster.system} (${activeCluster.count} usuarios afectados). Te notificaremos cuando se resuelva.`);
   }
   return true;
+}
+
+/* ==========================================================================
+   Broadcast Proactivo de Versiones a Personal IT
+   ========================================================================== */
+
+async function readReleaseBroadcastsStore() {
+  try {
+    const text = await readFile(RELEASE_BROADCASTS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[ReleaseBroadcast] Error leyendo release_broadcasts.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), broadcasts: [] };
+  }
+}
+
+async function writeReleaseBroadcastsStore(store) {
+  const tmpPath = `${RELEASE_BROADCASTS_PATH}.tmp`;
+  await mkdir(path.dirname(RELEASE_BROADCASTS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, RELEASE_BROADCASTS_PATH);
+}
+
+async function getLatestReleaseHighlights() {
+  try {
+    const changelog = await readFile(path.join(__dirname, 'CHANGELOG.md'), 'utf8');
+    const versionMatch = changelog.match(/## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})/);
+    const version = versionMatch ? versionMatch[1] : '0.21.0';
+    const date = versionMatch ? versionMatch[2] : '2026-07-20';
+
+    const highlights = [
+      '🔑 **Autogestión de Active Directory (AD):** Diagnóstico automático de cuentas bloqueadas y tarjeta de desbloqueo en 1-clic en Teams.',
+      '🚨 **Detección Inteligente de Incidentes Masivos:** Identificación automática de caídas de SAP o VPN para evitar tickets duplicados.',
+      '📢 **Notificaciones Proactivas de Versión:** Transmisión directa de novedades al equipo de IT en cada actualización.'
+    ];
+
+    return { version, date, highlights };
+  } catch (error) {
+    return {
+      version: '0.21.0',
+      date: '2026-07-20',
+      highlights: [
+        '🔑 Autogestión y desbloqueo seguro de Active Directory (AD) en Teams.',
+        '🚨 Detección de incidentes masivos con alertas y respuestas preventivas.'
+      ]
+    };
+  }
+}
+
+function createReleaseBroadcastAdaptiveCard(releaseInfo) {
+  const { version, highlights } = releaseInfo;
+  const summaryText = `🚀 Sophia ha sido actualizada a la versión v${version}`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: `🚀 ¡Hola! Sophia ha sido actualizada a la versión v${version}`,
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: 'Hola Team IT, he recibido nuevas mejoras para hacer nuestro trabajo de soporte más ágil durante la fase piloto:',
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'TextBlock',
+      text: '✨ **Novedades en esta versión:**',
+      weight: 'Bolder',
+      spacing: 'Medium',
+      wrap: true
+    },
+    ...highlights.map((item) => ({
+      type: 'TextBlock',
+      text: item.startsWith('- ') || item.startsWith('🔑') || item.startsWith('🚨') || item.startsWith('📢') ? item : `- ${item}`,
+      wrap: true,
+      spacing: 'Small'
+    })),
+    {
+      type: 'TextBlock',
+      text: '💡 **Puedes probarlas de inmediato escribiendo en este chat:**\n- *"¿Mi cuenta está bloqueada?"*\n- *"Reportar falla de SAP"*\n- *"Dashboard"*',
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+async function broadcastReleaseNotesToItStaff({ force = false } = {}) {
+  const releaseInfo = await getLatestReleaseHighlights();
+  const store = await readReleaseBroadcastsStore();
+
+  const alreadySent = store.broadcasts.some((b) => b.version === releaseInfo.version);
+  if (alreadySent && !force) {
+    return {
+      sent: false,
+      reason: `La versión v${releaseInfo.version} ya fue transmitida anteriormente. Usa --force para re-enviar.`,
+      version: releaseInfo.version
+    };
+  }
+
+  const card = createReleaseBroadcastAdaptiveCard(releaseInfo);
+  const recipients = [];
+
+  const activeUserEmails = new Set();
+  for (const session of sessions.values()) {
+    if (session?.user?.email) activeUserEmails.add(session.user.email);
+  }
+  for (const user of teamsUserCache.values()) {
+    if (user?.userPrincipalName) activeUserEmails.add(user.userPrincipalName);
+  }
+  const configuredAdmins = (process.env.SUPPORT_ADMIN_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
+  const configuredExecs = (process.env.IT_EXECUTIVE_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
+
+  for (const email of [...activeUserEmails, ...configuredAdmins, ...configuredExecs]) {
+    if (email && !recipients.includes(email)) {
+      recipients.push(email);
+    }
+  }
+
+  store.broadcasts.push({
+    version: releaseInfo.version,
+    broadcastAt: new Date().toISOString(),
+    recipientCount: recipients.length,
+    recipients
+  });
+  store.updatedAt = new Date().toISOString();
+  await writeReleaseBroadcastsStore(store);
+
+  return {
+    sent: true,
+    version: releaseInfo.version,
+    recipientCount: recipients.length,
+    recipients,
+    card
+  };
 }
 
 function createCsatSurveyAdaptiveCard(requestId, subject = 'Solicitud de Soporte') {
