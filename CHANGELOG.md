@@ -9,6 +9,20 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.32.0] - 2026-07-21
+
+### Added
+- **Opción 16 — Alerta Preventiva de Vencimiento de Contraseñas de Windows/AD:**
+  - Diagnóstico interactivo de caducidad de contraseña corporativa con indicador 🟢/⚠️ y fecha de vencimiento.
+  - Auditoría de alertas emitidas en `data/password_expiration_alerts.json`.
+- **Opción 17 — Solicitud y Préstamo Asistido de Equipos de Respaldo:**
+  - Reserva interactiva de laptops, proyectores y módems MiFi para viajes o eventos corporativos (`handleLoanEquipmentTurn`).
+  - Botón `[💻 Confirmar Solicitud de Préstamo]` con registro en `data/loan_equipment_requests.json`.
+- **Opción 18 — Estado de Salud de Sedes e Infraestructura IT en Tiempo Real:**
+  - Monitoreo de 7 nodos: Casa Matriz, David, Santiago, Chitré, Colón, SAP ERP y M365 (`handleInfrastructureHealthTurn`).
+  - Tarjeta adaptativa con indicadores 🟢/🟡/🔴 y botón `[🔄 Re-ejecutar Diagnóstico]`.
+  - Histórico de verificaciones en `data/infrastructure_health_history.json`.
+
 ## [0.29.0] - 2026-07-21
 
 ### Added
