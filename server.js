@@ -4931,6 +4931,12 @@ async function writeMajorIncidentsStore(store) {
 
 function extractMajorIncidentSystem(message = '') {
   const norm = normalizeComparableText(message);
+
+  // Ignorar si el usuario está buscando, consultando o pidiendo reportes de tickets/MCI
+  if (/\b(muestrame|muestra|ver|buscar|buscame|busca|listar|lista|dame|cuales|cuanto|cuantos|reporte|reportes|ticket|tickets|mci|mcis)\b/.test(norm)) {
+    return null;
+  }
+
   if (/\b(sap)\b/.test(norm)) return 'SAP';
   if (/\b(vpn|forticlient)\b/.test(norm)) return 'FortiClient VPN';
   if (/\b(internet|enlace|red|wifi)\b/.test(norm)) return 'Red / Internet';

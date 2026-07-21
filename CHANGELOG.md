@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.33.4] - 2026-07-21
+
+### Fixed
+- **Filtro de Consultas en Detección de Incidentes Masivos (`extractMajorIncidentSystem`):**
+  - Excluidas las solicitudes de búsqueda, consulta o reportería de tickets (*"muéstrame los tickets..."*, *"ver tickets de internet..."*, *"buscar solicitudes..."*) del motor de conteo de afectaciones en tiempo real (Opción 7).
+  - Prevenido el falso positivo donde una consulta administrativa o reporte de incidentes pasados registraba un nuevo reporte de usuario afectado o desplegaba la tarjeta de prevención de duplicidad en lugar de listar los tickets en SDP.
+
 ## [0.33.3] - 2026-07-21
 
 ### Fixed
@@ -115,7 +122,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión "version": "0.33.3", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.33.4", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
