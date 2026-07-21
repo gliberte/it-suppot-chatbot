@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.32.1] - 2026-07-21
+
+### Fixed
+- **Dashboard Ejecutivo personalizado para Gerente IT (`createExecutiveItReportCard`):**
+  - Eliminada la sección de carga por técnico individual para el perfil ejecutivo gerencial (Yariela Saucedo).
+  - Métricas superiores ajustadas al contexto gerencial: Tickets Totales, Tickets Abiertos, MCI Activas y CSAT Promedio.
+  - Opciones de seguimiento reemplazadas por acciones estratégicas: avance MCI por líder y CSAT de la semana.
+  - Los administradores operativos (técnicos) mantienen la vista completa con carga individual.
+
 ## [0.32.0] - 2026-07-21
 
 ### Added
