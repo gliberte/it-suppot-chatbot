@@ -4945,7 +4945,7 @@ function extractMajorIncidentSystem(message = '') {
   return null;
 }
 
-async function trackAndDetectMajorIncidentCluster(message = '', user) {
+async function trackAndDetectMajorIncidentCluster(message = '', user, createdRequestId = null) {
   const system = extractMajorIncidentSystem(message);
   if (!system) return null;
 
@@ -4958,7 +4958,8 @@ async function trackAndDetectMajorIncidentCluster(message = '', user) {
   store.recentReports.push({
     system,
     timestamp: new Date().toISOString(),
-    userEmail: user?.email || 'desconocido'
+    userEmail: user?.email || 'desconocido',
+    requestId: createdRequestId || null
   });
 
   const matchingReports = store.recentReports.filter((rep) => rep.system === system);
@@ -5069,7 +5070,7 @@ async function handleMajorIncidentPreventiveTurn({ message, user, onText, onCard
     return true;
   }
 
-  await trackAndDetectMajorIncidentCluster(message, user);
+  // Únicamente consulta si existe una alerta de incidente mayor activa creada previamente por tickets confirmados
   const activeCluster = await getActiveMajorIncidentForMessage(message);
 
   if (!activeCluster) return false;
@@ -8007,7 +8008,7 @@ async function runSupportTurn({
     return;
   }
 
-  if (await handleMajorIncidentPreventiveTurn({
+  if (await handleNetworkDiagnosticsTurn({
     message,
     user,
     onText,
@@ -8017,7 +8018,7 @@ async function runSupportTurn({
     return;
   }
 
-  if (await handleNetworkDiagnosticsTurn({
+  if (await handleMajorIncidentPreventiveTurn({
     message,
     user,
     onText,
@@ -8289,6 +8290,13 @@ async function executeConfirmedAction(action, user, session = null) {
       category: confirmedArgs.category,
       subcategory: confirmedArgs.subcategory
     }, 'created');
+
+    // Registrar afectación para incidentes mayores ÚNICAMENTE tras crear exitosamente un ticket en SDP
+    const ticketText = `${confirmedArgs.subject || ''} ${confirmedArgs.description || ''} ${confirmedArgs.category || ''}`;
+    trackAndDetectMajorIncidentCluster(ticketText, user, createdRequestId).catch((err) => {
+      console.warn('[MajorIncident] Error registrando ticket creado:', err.message);
+    });
+
     return formatCreatedTicketSummary({ requestId: createdRequestId, args: confirmedArgs });
   }
   if (action.toolName !== 'sdp_update_mci' && confirmedArgs?.request_id) {

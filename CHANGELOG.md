@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.34.0] - 2026-07-21
+
+### Fixed / Changed
+- **Detección de Incidentes Masivos exclusiva para Tickets Creados (`trackAndDetectMajorIncidentCluster`):**
+  - Removido el registro automático de incidentes durante la conversación, chats o diagnósticos conversacionales.
+  - La contabilización de afectaciones en tiempo real (Opción 7) ahora ocurre **ÚNICAMENTE tras la creación confirmada de un ticket real en ServiceDesk Plus** (`sdp_create_request`).
+  - Prevenido al 100% que consultas como *"diagnostico de red"*, *"verificar sap"* o preguntas en el chat activen falsas alertas de incidente mayor o cuenten como reportes de usuarios afectados.
+
 ## [0.33.4] - 2026-07-21
 
 ### Fixed
@@ -122,7 +130,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.33.4", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.34.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
