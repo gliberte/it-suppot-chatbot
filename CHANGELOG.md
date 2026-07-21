@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.33.0] - 2026-07-21
+
+### Added
+- **Base de Conocimientos RAG sobre Barraza & Cía, S.A. (`knowledge/empresa-barraza-productos.md`):**
+  - Incorporada información corporativa: Historia desde 1957, lema, compromiso de sostenibilidad y trazabilidad de manufactura nacional.
+  - Catálogo de las 4 categorías químicas principales: Detergentes, Suavizantes, Lavaplatos y Desinfectantes.
+  - Segmentación de mercado: Diferencias entre catálogo Hogar (Home) e Institucional (Institutional 2024-2025) con normativas y MSDS.
+  - Nuevos lanzamientos: New Multipurpose, New Disinfectant y New Image (Nueva Imagen).
+  - Canales oficiales de contacto técnico y comercial (Tel: 2673325, Email: `barraza@bacosa.com`).
+
 ## [0.32.1] - 2026-07-21
 
 ### Fixed
@@ -82,7 +92,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión (v0.22.0, v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión (v0.33.0, v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
