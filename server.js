@@ -6544,6 +6544,270 @@ function formatIsoDateTime(value) {
   });
 }
 
+function isCapabilitiesHelpRequest(message) {
+  const text = String(message || '').toLowerCase().trim();
+  if (!text) return false;
+
+  const patterns = [
+    /qu[eé]\s+(puedes|sabes|haces)\s+hacer/,
+    /qu[eé]\s+haces/,
+    /cu[aá]les\s+son\s+tus\s+(capacidades|funciones|habilidades|caracter[ií]sticas)/,
+    /qu[eé]\s+funcionalidades\s+tienes/,
+    /qu[eé]\s+servicios\s+ofreces/,
+    /c[oó]mo\s+me\s+puedes\s+ayudar/,
+    /para\s+qu[eé]\s+sirves/,
+    /qu[eé]\s+puedo\s+pedirte/,
+    /^ayuda$/,
+    /^help$/,
+    /^capacidades$/
+  ];
+
+  return patterns.some((p) => p.test(text));
+}
+
+function createCapabilitiesHelpAdaptiveCard(user) {
+  const summaryText = `🤖 Guía Completa de Capacidades de Sophia (Soporte IT Corporativo)`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '🤖 Guía Completa de Capacidades de Sophia (Beta)',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: 'Soy tu asistente inteligente de Soporte IT en Barraza y Cía. Estoy capacitada para resolver y gestionar tus requerimientos tecnológicos de forma inmediata. A continuación verás lo que puedo hacer por ti con ejemplos reales:',
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'Container',
+      style: 'emphasis',
+      spacing: 'Medium',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '🎙️ **1. Procesamiento de Notas de Voz (Audio-to-Ticket)**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Envíame una nota de voz por Teams si estás en planta o en movimiento. Transcribiré tu mensaje y crearé el ticket adjuntando el audio.\n👉 *Ejemplo:* Enviar un audio diciendo: *"Sophia, la impresora Zebra de etiquetas en la bodega 3 se atascó"*.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'Container',
+      style: 'default',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '🔑 **2. Autogestión de Cuentas y Desbloqueo de Active Directory**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Verifico el estado de tu usuario de Windows/Active Directory y procedo con el desbloqueo en tiempo real.\n👉 *Ejemplo:* *"Mi usuario de Windows está bloqueado y no puedo iniciar sesión"*.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'Container',
+      style: 'emphasis',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '📡 **3. Auto-Diagnóstico de Red e Impresoras Nivel 1**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Ejecuto pruebas en tiempo real de conectividad a servidores SAP, VPN FortiClient, Gateway e Impresoras Zebra/HP.\n👉 *Ejemplo:* *"Diagnostica mi red e impresoras"*.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'Container',
+      style: 'default',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '📝 **4. Solicitud y Aprobación de Licencias de Software (1-Clic)**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Gestión y despacho de solicitudes de licencias (PowerBI Pro, M365, Visio, Adobe, SAP, AutoCAD) al chat del aprobador.\n👉 *Ejemplo:* *"Necesito una licencia de PowerBI Pro para el área de contabilidad"*.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'Container',
+      style: 'emphasis',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '🎫 **5. Consulta, Seguimiento y Creación de Tickets SDP**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Consulta el estado de tus solicitudes en ServiceDesk Plus o crea nuevos tickets con clasificación determinística.\n👉 *Ejemplo:* *"¿Cuál es el estado de mi ticket #12345?"* o *"Crea un ticket porque mi mouse no funciona"*.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'Container',
+      style: 'default',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '🖼️ **6. Análisis Inteligente de Capturas e Imágenes Adjuntas**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Analizo imágenes con mensajes de error o fallas de pantalla y las incluyo como evidencia técnica en la solicitud.\n👉 *Ejemplo:* Adjuntar una foto de un error de SAP y escribir *"Analiza esta falla"*.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'Container',
+      style: 'emphasis',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '🔄 **7. Confirmación de Cierre y Reapertura de Solicitudes (1-Clic)**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Te notifico cuando un ticket es resuelto y te permite confirmar el cierre o reabrirlo con 1 solo clic.\n👉 *Ejemplo:* Botones interactivos **[✅ Confirmar Solución]** / **[🔄 Reabrir Ticket]**.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'Container',
+      style: 'default',
+      spacing: 'Small',
+      items: [
+        {
+          type: 'TextBlock',
+          text: '🚨 **8. Detección Preventiva de Incidentes Masivos (MCI)**',
+          weight: 'Bolder',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: 'Identifico caídas de servicios generales (ej. corte de fibra, caída de SAP) y prevengo la duplicidad de tickets notificándote.\n👉 *Ejemplo:* *"Hay problemas generales con SAP en toda la planta"*.',
+          wrap: true,
+          isSubtle: true
+        }
+      ]
+    },
+    {
+      type: 'TextBlock',
+      text: '💡 **¿Cómo empezar?** Escríbeme directamente tu consulta o problema y te guiaré paso a paso.',
+      wrap: true,
+      spacing: 'Medium',
+      weight: 'Bolder',
+      color: 'Accent'
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+async function handleCapabilitiesHelpTurn({ message, user, onText, onCard, responseChannel }) {
+  if (!isCapabilitiesHelpRequest(message)) return false;
+
+  const cardResult = createCapabilitiesHelpAdaptiveCard(user);
+  if (responseChannel === 'teams') {
+    await onCard?.(cardResult);
+  } else {
+    const markdownText = [
+      '# 🤖 Guía Completa de Capacidades de Sophia (Beta)',
+      '',
+      'Soy tu asistente inteligente de Soporte IT en Barraza y Cía. Estoy capacitada para resolver y gestionar tus requerimientos tecnológicos de forma inmediata. A continuación verás lo que puedo hacer por ti con ejemplos reales:',
+      '',
+      '### 🎙️ 1. Procesamiento de Notas de Voz (Audio-to-Ticket)',
+      'Envíame una nota de voz por Teams si estás en planta o en movimiento. Transcribiré tu mensaje y crearé el ticket adjuntando el audio.',
+      '👉 *Ejemplo:* Enviar un audio diciendo: *"Sophia, la impresora Zebra de etiquetas en la bodega 3 se atascó"*.',
+      '',
+      '### 🔑 2. Autogestión de Cuentas y Desbloqueo de Active Directory',
+      'Verifico el estado de tu usuario de Windows/Active Directory y procedo con el desbloqueo en tiempo real.',
+      '👉 *Ejemplo:* *"Mi usuario de Windows está bloqueado y no puedo iniciar sesión"*.',
+      '',
+      '### 📡 3. Auto-Diagnóstico de Red e Impresoras Nivel 1',
+      'Ejecuto pruebas en tiempo real de conectividad a servidores SAP, VPN FortiClient, Gateway e Impresoras Zebra/HP.',
+      '👉 *Ejemplo:* *"Diagnostica mi red e impresoras"*.',
+      '',
+      '### 📝 4. Solicitud y Aprobación de Licencias de Software (1-Clic)',
+      'Gestión y despacho de solicitudes de licencias (PowerBI Pro, M365, Visio, Adobe, SAP, AutoCAD) al chat del aprobador.',
+      '👉 *Ejemplo:* *"Necesito una licencia de PowerBI Pro para el área de contabilidad"*.',
+      '',
+      '### 🎫 5. Consulta, Seguimiento y Creación de Tickets SDP',
+      'Consulta el estado de tus solicitudes en ServiceDesk Plus o crea nuevos tickets con clasificación determinística.',
+      '👉 *Ejemplo:* *"¿Cuál es el estado de mi ticket #12345?"* o *"Crea un ticket porque mi mouse no funciona"*.',
+      '',
+      '### 🖼️ 6. Análisis Inteligente de Capturas e Imágenes Adjuntas',
+      'Analizo imágenes con mensajes de error o fallas de pantalla y las incluyo como evidencia técnica en la solicitud.',
+      '👉 *Ejemplo:* Adjuntar una foto de un error de SAP y escribir *"Analiza esta falla"*.',
+      '',
+      '### 🔄 7. Confirmación de Cierre y Reapertura de Solicitudes (1-Clic)',
+      'Te notifico cuando un ticket es resuelto y te permite confirmar el cierre o reabrirlo con 1 solo clic.',
+      '👉 *Ejemplo:* Botones interactivos **[✅ Confirmar Solución]** / **[🔄 Reabrir Ticket]**.',
+      '',
+      '### 🚨 8. Detección Preventiva de Incidentes Masivos (MCI)',
+      'Identifico caídas de servicios generales (ej. corte de fibra, caída de SAP) y prevengo la duplicidad de tickets notificándote.',
+      '👉 *Ejemplo:* *"Hay problemas generales con SAP en toda la planta"*.'
+    ].join('\n');
+
+    await onText?.(markdownText);
+  }
+
+  return true;
+}
+
 async function runSupportTurn({
   message,
   user,
@@ -6559,6 +6823,16 @@ async function runSupportTurn({
   responseChannel = 'web'
 }) {
   onStatus?.('Sophia está analizando tu solicitud...');
+
+  if (await handleCapabilitiesHelpTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
 
   if (await handleExecutiveItTurn({
     message,
