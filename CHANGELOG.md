@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.35.2] - 2026-07-21
+
+### Added
+- **Conocimiento RAG sobre el Origen e Historia del Nombre "Sophia" (`knowledge/historia-nombre-sophia.md`):**
+  - Incorporada la respuesta estructurada y elegante para preguntas sobre el origen del nombre (*"¿Por qué te llamas Sophia?"* / *"¿Quién te puso ese nombre y por qué?"*).
+  - Incluye desglose etimológico (del griego *Σοφία* - Sabiduría), contextos filosóficos (Grecia Antigua, Filosofía, Hagia Sophia, Tradición Gnóstica) y cualidades asociadas a su identidad operacionales (Ponderación, Empatía y Elegancia/Claridad).
+
 ## [0.35.1] - 2026-07-21
 
 ### Improved
@@ -146,7 +153,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.35.1", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.35.2", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
