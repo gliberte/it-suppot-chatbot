@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.33.1] - 2026-07-21
+
+### Added
+- **Base de Conocimientos RAG sobre Marcas y Portafolio de Barraza & Cía (`knowledge/empresa-barraza-marcas.md`):**
+  - Mapeo completo de las marcas corporativas por categoría: Sip, Spum, 10, Romeo, Rocío, 4D, Julieta, Americano, Sip Bebé y EcoGreen.
+  - Formatos de presentación (polvo, líquido, barra, crema).
+  - Detalle especializado de la línea *Sip Bebé* (inocuidad química superior y limpiador de biberones) y *Sip EcoGreen* (sustentabilidad y ahorro de agua).
+  - Contexto de sustitución de importaciones y resiliencia de la cadena de suministro panameña desde 1957.
+
 ## [0.33.0] - 2026-07-21
 
 ### Added
@@ -92,7 +101,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión (v0.33.0, v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión ("version": "0.33.1", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
