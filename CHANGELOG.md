@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.26.0] - 2026-07-21
+
+### Added
+- **Opción 12 — Sugerencias Inteligentes de Auto-Resolución por Categoría (Deflection KBA):**
+  - Motor de detección de consultas desviables (`isDeflectionEligibleRequest` / `getDeflectionMatch`) para fallas comunes de Nivel 1 (Outlook, FortiClient VPN, Barraza Móvil, Wi-Fi).
+  - Tarjeta adaptativa interactiva de auto-solución de 30 segundos con botones de 1-clic `[✅ Solucionado (No crear ticket)]` y `[🎫 Crear Ticket de Soporte]`.
+  - Histórico de auditoría y medición de desvío en `data/deflection_history.json`.
+
 ## [0.25.0] - 2026-07-21
 
 ### Added

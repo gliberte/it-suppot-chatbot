@@ -40,6 +40,7 @@ const NETWORK_DIAGNOSTICS_PATH = process.env.NETWORK_DIAGNOSTICS_PATH || path.jo
 const LICENSE_APPROVALS_PATH = process.env.LICENSE_APPROVALS_PATH || path.join(__dirname, 'data', 'software_license_approvals.json');
 const AUDIO_TRANSCRIPTIONS_PATH = process.env.AUDIO_TRANSCRIPTIONS_PATH || path.join(__dirname, 'data', 'audio_transcriptions_history.json');
 const WEEKLY_REPORTS_PATH = process.env.WEEKLY_REPORTS_PATH || path.join(__dirname, 'data', 'weekly_reports_history.json');
+const DEFLECTION_HISTORY_PATH = process.env.DEFLECTION_HISTORY_PATH || path.join(__dirname, 'data', 'deflection_history.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsConversationReferences = new Map();
@@ -5960,6 +5961,224 @@ async function sendWeeklyExecutiveReportToExecutives({ force = false } = {}) {
   };
 }
 
+/* ==========================================================================
+   Opción 12: Sugerencias Inteligentes de Auto-Resolución por Categoría (Deflection KBA)
+   ========================================================================== */
+
+async function readDeflectionHistoryStore() {
+  try {
+    const text = await readFile(DEFLECTION_HISTORY_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Deflection] Error leyendo deflection_history.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), deflections: [] };
+  }
+}
+
+async function writeDeflectionHistoryStore(store) {
+  const tmpPath = `${DEFLECTION_HISTORY_PATH}.tmp`;
+  await mkdir(path.dirname(DEFLECTION_HISTORY_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, DEFLECTION_HISTORY_PATH);
+}
+
+const DEFLECTION_KNOWLEDGE_BASE = [
+  {
+    key: 'outlook_sync',
+    name: 'Outlook / Correo M365',
+    keywords: ['outlook', 'no recibe correo', 'no envía correo', 'correo desconectado', 'sincronizar correo', 'bandeja de entrada'],
+    steps: [
+      '1️⃣ **Verificar Modo Sin Conexión:** En la barra inferior de Outlook, asegúrate de que no diga "Trabajando sin conexión". Si aparece, haz clic en la pestaña "Enviar y recibir" ➔ desactiva "Trabajar sin conexión".',
+      '2️⃣ **Re-autenticar Cuenta:** Cierra Outlook, presiona `Windows + R`, escribe `outlook.exe /cleanreminders` o vuelve a iniciar sesión si te pide credenciales M365.'
+    ]
+  },
+  {
+    key: 'vpn_forticlient',
+    name: 'FortiClient VPN',
+    keywords: ['vpn', 'forticlient', 'desconectado vpn', 'no conecta vpn', 'remoto vpn'],
+    steps: [
+      '1️⃣ **Revisar Credenciales:** Asegúrate de usar tu usuario corporativo de Windows sin el `@bacosa.com` y con tu contraseña actual.',
+      '2️⃣ **Reiniciar Servicio FortiClient:** Haz clic derecho en el icono del escudo de FortiClient en la barra de tareas ➔ Selecciona "Desconectar" ➔ Espera 5 segundos y vuelve a presionar "Conectar".'
+    ]
+  },
+  {
+    key: 'barraza_movil',
+    name: 'Barraza Móvil / App Rutas',
+    keywords: ['barraza movil', 'rutas no sincronizan', 'app celular rutas', 'pedidos no bajan'],
+    steps: [
+      '1️⃣ **Verificar Datos/Wi-Fi:** Confirma que el teléfono tenga señal 4G/5G activa o esté conectado al Wi-Fi corporativo.',
+      '2️⃣ **Forzar Sincronización:** En el menú principal de Barraza Móvil, presiona el icono de tres puntos ➔ "Sincronización manual" ➔ Reinicia la app.'
+    ]
+  },
+  {
+    key: 'wifi_slow',
+    name: 'Wi-Fi Corporativo / Lentitud',
+    keywords: ['wifi lento', 'internet lento', 'red sin acceso', 'sin wifi'],
+    steps: [
+      '1️⃣ **Olvidar Red y Reconectar:** Ve a la configuración de Wi-Fi de tu equipo ➔ Selecciona la red corporativa ➔ Presiona "Olvidar red" y vuelve a conectarte ingresando tu clave.',
+      '2️⃣ **Reiniciar Adaptador:** Activa el "Modo Avión" durante 10 segundos y luego desactívalo para refrescar la dirección IP asignada por el router.'
+    ]
+  }
+];
+
+function getDeflectionMatch(message) {
+  const text = String(message || '').toLowerCase().trim();
+  if (!text || text.length < 5) return null;
+
+  for (const item of DEFLECTION_KNOWLEDGE_BASE) {
+    if (item.keywords.some((kw) => text.includes(kw))) {
+      return item;
+    }
+  }
+  return null;
+}
+
+function createDeflectionAdaptiveCard(deflectionMatch, originalMessage, user) {
+  const deflectionId = `DEF-${Date.now().toString(36).toUpperCase()}`;
+  const summaryText = `💡 Sugerencia de Solución Rápida: ${deflectionMatch.name}`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: `💡 Auto-Solución Rápida (30s): ${deflectionMatch.name}`,
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: 'Antes de generar un ticket en ServiceDesk Plus, prueba estos pasos sencillos para resolver tu problema de inmediato:',
+      wrap: true,
+      spacing: 'Small'
+    },
+    ...deflectionMatch.steps.map((step) => ({
+      type: 'TextBlock',
+      text: step,
+      wrap: true,
+      spacing: 'Small'
+    })),
+    {
+      type: 'TextBlock',
+      text: '¿Pudiste resolver el problema con estos pasos?',
+      weight: 'Bolder',
+      spacing: 'Medium',
+      wrap: true
+    }
+  ];
+
+  const actions = [
+    {
+      type: 'Action.Submit',
+      title: '✅ Solucionado (No crear ticket)',
+      data: {
+        action: '__sophia_deflection_resolved',
+        deflectionId,
+        categoryKey: deflectionMatch.key,
+        userEmail: user?.email || 'usuario@bacosa.com'
+      }
+    },
+    {
+      type: 'Action.Submit',
+      title: '🎫 Crear Ticket de Soporte',
+      data: {
+        action: '__sophia_deflection_create_ticket',
+        deflectionId,
+        originalMessage,
+        categoryKey: deflectionMatch.key,
+        userEmail: user?.email || 'usuario@bacosa.com'
+      }
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function recordDeflectionEvent(eventData) {
+  try {
+    const store = await readDeflectionHistoryStore();
+    store.deflections = store.deflections || [];
+    store.deflections.unshift({
+      ...eventData,
+      timestamp: new Date().toISOString()
+    });
+    if (store.deflections.length > 200) store.deflections = store.deflections.slice(0, 200);
+    store.updatedAt = new Date().toISOString();
+    await writeDeflectionHistoryStore(store);
+  } catch (err) {
+    console.warn('[Deflection] Error registrando evento:', err.message);
+  }
+}
+
+async function handleDeflectionTurn({ message, user, onText, onCard, responseChannel }) {
+  const text = String(message || '').trim();
+
+  if (text.startsWith('__sophia_deflection_resolved:')) {
+    const parts = text.split(':');
+    const deflectionId = parts[1] || 'DEF-AUTO';
+    const categoryKey = parts[2] || 'general';
+
+    await recordDeflectionEvent({
+      id: deflectionId,
+      categoryKey,
+      userEmail: user?.email || 'usuario@bacosa.com',
+      outcome: 'resolved'
+    });
+
+    onText?.('🎉 **¡Excelente! Me alegra que hayas podido resolverlo de inmediato.**\n\nHe registrado la solución asistida. Si llegas a necesitar más ayuda en el futuro, no dudes en escribirme.');
+    return true;
+  }
+
+  if (text.startsWith('__sophia_deflection_create_ticket:')) {
+    const parts = text.split(':');
+    const deflectionId = parts[1] || 'DEF-AUTO';
+
+    await recordDeflectionEvent({
+      id: deflectionId,
+      userEmail: user?.email || 'usuario@bacosa.com',
+      outcome: 'ticket_created'
+    });
+
+    return false;
+  }
+
+  if (text.startsWith('__sophia_') || text.toLowerCase().startsWith('crea un ticket') || text.toLowerCase().startsWith('solicito')) {
+    return false;
+  }
+
+  const match = getDeflectionMatch(text);
+  if (!match) return false;
+
+  const cardResult = createDeflectionAdaptiveCard(match, text, user);
+  if (responseChannel === 'teams') {
+    await onCard?.(cardResult);
+  } else {
+    const markdownText = [
+      `💡 **Auto-Solución Rápida (30s): ${match.name}**`,
+      '',
+      'Antes de generar un ticket en ServiceDesk Plus, prueba estos pasos sencillos:',
+      ...match.steps,
+      '',
+      '¿Estos pasos resolvieron tu problema? Si necesitas que cree el ticket en ServiceDesk Plus, confírmame para proceder.'
+    ].join('\n');
+    await onText?.(markdownText);
+  }
+
+  return true;
+}
+
 function createCsatSurveyAdaptiveCard(requestId, subject = 'Solicitud de Soporte') {
   const ticketId = `#${requestId}`;
   return {
@@ -6825,6 +7044,16 @@ async function runSupportTurn({
   onStatus?.('Sophia está analizando tu solicitud...');
 
   if (await handleCapabilitiesHelpTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleDeflectionTurn({
     message,
     user,
     onText,
@@ -9410,6 +9639,13 @@ function getTeamsText(activity) {
     }
     if (activity.value.action === 'sophia_reopen_ticket' && activity.value.requestId) {
       return `__sophia_reopen_ticket:${activity.value.requestId}`;
+    }
+    if (activity.value.action === '__sophia_deflection_resolved') {
+      return `__sophia_deflection_resolved:${activity.value.deflectionId}:${activity.value.categoryKey}`;
+    }
+    if (activity.value.action === '__sophia_deflection_create_ticket') {
+      const origMsg = activity.value.originalMessage || 'Solicitud de soporte desatendida';
+      return `__sophia_deflection_create_ticket:${activity.value.deflectionId}:${origMsg}`;
     }
   }
 
