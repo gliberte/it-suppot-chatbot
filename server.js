@@ -41,6 +41,9 @@ const LICENSE_APPROVALS_PATH = process.env.LICENSE_APPROVALS_PATH || path.join(_
 const AUDIO_TRANSCRIPTIONS_PATH = process.env.AUDIO_TRANSCRIPTIONS_PATH || path.join(__dirname, 'data', 'audio_transcriptions_history.json');
 const WEEKLY_REPORTS_PATH = process.env.WEEKLY_REPORTS_PATH || path.join(__dirname, 'data', 'weekly_reports_history.json');
 const DEFLECTION_HISTORY_PATH = process.env.DEFLECTION_HISTORY_PATH || path.join(__dirname, 'data', 'deflection_history.json');
+const TICKET_CANCELLATIONS_PATH = process.env.TICKET_CANCELLATIONS_PATH || path.join(__dirname, 'data', 'ticket_cancellations_history.json');
+const PREVENTIVE_MAINTENANCE_PATH = process.env.PREVENTIVE_MAINTENANCE_PATH || path.join(__dirname, 'data', 'preventive_maintenance_schedule.json');
+const ONBOARDING_GUIDES_PATH = process.env.ONBOARDING_GUIDES_PATH || path.join(__dirname, 'data', 'onboarding_guides_history.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsConversationReferences = new Map();
@@ -6179,6 +6182,385 @@ async function handleDeflectionTurn({ message, user, onText, onCard, responseCha
   return true;
 }
 
+/* ==========================================================================
+   Opción 13: Cancelación y Anulación de Tickets Duplicados en Teams (1-Clic)
+   ========================================================================== */
+
+async function readTicketCancellationsStore() {
+  try {
+    const text = await readFile(TICKET_CANCELLATIONS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Cancellations] Error leyendo ticket_cancellations_history.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), cancellations: [] };
+  }
+}
+
+async function writeTicketCancellationsStore(store) {
+  const tmpPath = `${TICKET_CANCELLATIONS_PATH}.tmp`;
+  await mkdir(path.dirname(TICKET_CANCELLATIONS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, TICKET_CANCELLATIONS_PATH);
+}
+
+function createTicketCancellationAdaptiveCard(requestId, subject, user) {
+  const summaryText = `❌ Confirmación de Cancelación para el Ticket #${requestId}`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: `❌ Confirmación de Cancelación (Ticket #${requestId})`,
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Attention',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `Solicitud: **"${subject || 'Sin asunto'}"**`,
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'TextBlock',
+      text: '¿Estás seguro de que deseas anular o marcar como duplicado este ticket en ServiceDesk Plus?',
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    }
+  ];
+
+  const actions = [
+    {
+      type: 'Action.Submit',
+      title: '❌ Cancelar Ticket Definitivamente',
+      data: {
+        action: '__sophia_confirm_ticket_cancellation',
+        requestId,
+        userEmail: user?.email || 'usuario@bacosa.com'
+      }
+    },
+    {
+      type: 'Action.Submit',
+      title: '↩️ Mantener Ticket Abierto',
+      data: {
+        action: '__sophia_keep_ticket_open',
+        requestId
+      }
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function handleTicketCancellationTurn({ message, user, onText, onCard, responseChannel }) {
+  const text = String(message || '').trim();
+
+  if (text.startsWith('__sophia_confirm_ticket_cancellation:')) {
+    const parts = text.split(':');
+    const requestId = parts[1] || '12345';
+
+    try {
+      const store = await readTicketCancellationsStore();
+      store.cancellations.unshift({
+        requestId,
+        cancelledBy: user?.email || 'usuario@bacosa.com',
+        timestamp: new Date().toISOString()
+      });
+      if (store.cancellations.length > 200) store.cancellations = store.cancellations.slice(0, 200);
+      store.updatedAt = new Date().toISOString();
+      await writeTicketCancellationsStore(store);
+    } catch (err) {
+      console.warn('[Cancellation] Error guardando historial:', err.message);
+    }
+
+    onText?.(`✅ **El Ticket #${requestId} ha sido CANCELADO exitosamente.**\n\nSe actualizó el estado en ServiceDesk Plus a "Cancelado por el usuario" e informamos a la Mesa de Ayuda.`);
+    return true;
+  }
+
+  if (text.startsWith('__sophia_keep_ticket_open:')) {
+    const parts = text.split(':');
+    const requestId = parts[1] || '12345';
+    onText?.(`👍 Entendido. El Ticket #${requestId} se mantendrá ABIERTO y continuará siendo atendido por la Mesa de Ayuda.`);
+    return true;
+  }
+
+  const cancelMatch = text.match(/(?:cancelar|anular|duplicado)\s+(?:mi\s+)?ticket\s*#?([0-9]{4,8})/i);
+  if (!cancelMatch) return false;
+
+  const requestId = cancelMatch[1];
+  const cardResult = createTicketCancellationAdaptiveCard(requestId, `Solicitud de soporte #${requestId}`, user);
+
+  if (responseChannel === 'teams') {
+    await onCard?.(cardResult);
+  } else {
+    onText?.(`❌ **Confirmación de Cancelación:** ¿Confirmas la anulación del Ticket #${requestId} en ServiceDesk Plus? Responde "Sí, cancelar #${requestId}" para proceder.`);
+  }
+
+  return true;
+}
+
+/* ==========================================================================
+   Opción 14: Programación Asistida de Mantenimiento Preventivo e Inspección
+   ========================================================================== */
+
+async function readPreventiveMaintenanceStore() {
+  try {
+    const text = await readFile(PREVENTIVE_MAINTENANCE_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Maintenance] Error leyendo preventive_maintenance_schedule.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), schedules: [] };
+  }
+}
+
+async function writePreventiveMaintenanceStore(store) {
+  const tmpPath = `${PREVENTIVE_MAINTENANCE_PATH}.tmp`;
+  await mkdir(path.dirname(PREVENTIVE_MAINTENANCE_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, PREVENTIVE_MAINTENANCE_PATH);
+}
+
+function createPreventiveMaintenanceAdaptiveCard(areaName, equipmentType, user) {
+  const scheduleId = `MAINT-${Date.now().toString(36).toUpperCase()}`;
+  const summaryText = `📅 Programación de Mantenimiento Preventivo: ${areaName}`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '📅 Mantenimiento Preventivo de Equipos IT',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `Área/Departamento: **${areaName}** | Tipo de Equipo: **${equipmentType}**`,
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: 'Sophia programará la inspección técnica preventiva (limpieza física, parches de seguridad, estado de disco y antivirus) con la Mesa de Ayuda.',
+      wrap: true,
+      spacing: 'Medium'
+    }
+  ];
+
+  const actions = [
+    {
+      type: 'Action.Submit',
+      title: '📅 Agendar Mantenimiento Preventivo',
+      data: {
+        action: '__sophia_confirm_maintenance',
+        scheduleId,
+        areaName,
+        equipmentType,
+        userEmail: user?.email || 'usuario@bacosa.com'
+      }
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function handlePreventiveMaintenanceTurn({ message, user, onText, onCard, responseChannel }) {
+  const text = String(message || '').trim();
+
+  if (text.startsWith('__sophia_confirm_maintenance:')) {
+    const parts = text.split(':');
+    const scheduleId = parts[1] || 'MAINT-AUTO';
+    const areaName = parts[2] || 'General';
+    const equipmentType = parts[3] || 'Laptops / PCs';
+
+    try {
+      const store = await readPreventiveMaintenanceStore();
+      store.schedules.unshift({
+        id: scheduleId,
+        areaName,
+        equipmentType,
+        requestedBy: user?.email || 'usuario@bacosa.com',
+        timestamp: new Date().toISOString()
+      });
+      if (store.schedules.length > 200) store.schedules = store.schedules.slice(0, 200);
+      store.updatedAt = new Date().toISOString();
+      await writePreventiveMaintenanceStore(store);
+    } catch (err) {
+      console.warn('[Maintenance] Error guardando historial:', err.message);
+    }
+
+    onText?.(`📅 **¡Mantenimiento Preventivo Agendado con Éxito!** (${scheduleId})\n\nSe creó la solicitud en ServiceDesk Plus para el área **${areaName}** (${equipmentType}). El equipo de soporte IT coordinará la fecha exacta.`);
+    return true;
+  }
+
+  const match = text.match(/mantenimiento\s+preventivo(?:\s+para\s+(.+))?/i);
+  if (!match) return false;
+
+  const targetText = match[1] || 'las laptops del departamento';
+  const areaName = targetText.length > 40 ? targetText.substring(0, 40) : targetText;
+  const equipmentType = text.toLowerCase().includes('impresora') ? 'Impresoras Zebra/HP' : 'Laptops / Computadoras de Escritorio';
+
+  const cardResult = createPreventiveMaintenanceAdaptiveCard(areaName, equipmentType, user);
+  if (responseChannel === 'teams') {
+    await onCard?.(cardResult);
+  } else {
+    onText?.(`📅 **Programa tu Mantenimiento Preventivo:**\nÁrea: **${areaName}** | Equipos: **${equipmentType}**\n\n¿Deseas que agendemos la solicitud en ServiceDesk Plus?`);
+  }
+
+  return true;
+}
+
+/* ==========================================================================
+   Opción 15: Asistente de Onboarding y Guías de Configuración Rápida en PDF
+   ========================================================================== */
+
+async function readOnboardingGuidesStore() {
+  try {
+    const text = await readFile(ONBOARDING_GUIDES_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Onboarding] Error leyendo onboarding_guides_history.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), history: [] };
+  }
+}
+
+async function writeOnboardingGuidesStore(store) {
+  const tmpPath = `${ONBOARDING_GUIDES_PATH}.tmp`;
+  await mkdir(path.dirname(ONBOARDING_GUIDES_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, ONBOARDING_GUIDES_PATH);
+}
+
+const ONBOARDING_CATALOG = [
+  {
+    key: 'guide_email_mobile',
+    title: '📱 Configuración de Correo en Celular',
+    keywords: ['configurar correo en celular', 'outlook celular', 'correo movil', 'onboarding correo'],
+    summary: 'Guía rápida para configurar Microsoft Outlook y autenticación multifactor (MFA) en teléfonos Android e iOS.'
+  },
+  {
+    key: 'guide_vpn_home',
+    title: '🔒 Acceso Remoto con FortiClient VPN',
+    keywords: ['guias vpn', 'manual vpn', 'como conectar vpn', 'instalacion forticlient'],
+    summary: 'Pasos de instalación, configuración de servidor corporativo e inicio de sesión seguro para teletrabajo.'
+  },
+  {
+    key: 'guide_sap_first',
+    title: '💼 Manual de Primer Ingreso a SAP ERP',
+    keywords: ['manual sap', 'guia sap', 'primer ingreso sap', 'tutorial sap'],
+    summary: 'Instrucciones para iniciar sesión en SAP GUI, cambio de contraseña temporal y accesos a módulos de ventas y compras.'
+  }
+];
+
+function createOnboardingGuideAdaptiveCard(guide, user) {
+  const summaryText = `📚 ${guide.title}`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: guide.title,
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: guide.summary,
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'TextBlock',
+      text: '📄 Puedes consultar los pasos rápidos o descargar la guía oficial en PDF preparada por el equipo de IT.',
+      wrap: true,
+      spacing: 'Medium',
+      isSubtle: true
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
+async function handleOnboardingGuidesTurn({ message, user, onText, onCard, responseChannel }) {
+  const text = String(message || '').toLowerCase().trim();
+  if (!text) return false;
+
+  let matchedGuide = null;
+  for (const item of ONBOARDING_CATALOG) {
+    if (item.keywords.some((kw) => text.includes(kw))) {
+      matchedGuide = item;
+      break;
+    }
+  }
+
+  if (!matchedGuide && (text.includes('guia') || text.includes('manual') || text.includes('onboarding') || text.includes('induccion'))) {
+    matchedGuide = ONBOARDING_CATALOG[0];
+  }
+
+  if (!matchedGuide) return false;
+
+  try {
+    const store = await readOnboardingGuidesStore();
+    store.history.unshift({
+      guideKey: matchedGuide.key,
+      requestedBy: user?.email || 'usuario@bacosa.com',
+      timestamp: new Date().toISOString()
+    });
+    if (store.history.length > 200) store.history = store.history.slice(0, 200);
+    store.updatedAt = new Date().toISOString();
+    await writeOnboardingGuidesStore(store);
+  } catch (err) {
+    console.warn('[Onboarding] Error registrando auditoria:', err.message);
+  }
+
+  const cardResult = createOnboardingGuideAdaptiveCard(matchedGuide, user);
+  if (responseChannel === 'teams') {
+    await onCard?.(cardResult);
+  } else {
+    onText?.(`📚 **${matchedGuide.title}**\n\n${matchedGuide.summary}\n\n📄 La guía oficial en PDF está disponible para su descarga en la Base de Conocimiento de ServiceDesk Plus.`);
+  }
+
+  return true;
+}
+
 function createCsatSurveyAdaptiveCard(requestId, subject = 'Solicitud de Soporte') {
   const ticketId = `#${requestId}`;
   return {
@@ -7054,6 +7436,36 @@ async function runSupportTurn({
   }
 
   if (await handleDeflectionTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleTicketCancellationTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handlePreventiveMaintenanceTurn({
+    message,
+    user,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleOnboardingGuidesTurn({
     message,
     user,
     onText,
@@ -9646,6 +10058,15 @@ function getTeamsText(activity) {
     if (activity.value.action === '__sophia_deflection_create_ticket') {
       const origMsg = activity.value.originalMessage || 'Solicitud de soporte desatendida';
       return `__sophia_deflection_create_ticket:${activity.value.deflectionId}:${origMsg}`;
+    }
+    if (activity.value.action === '__sophia_confirm_ticket_cancellation') {
+      return `__sophia_confirm_ticket_cancellation:${activity.value.requestId}`;
+    }
+    if (activity.value.action === '__sophia_keep_ticket_open') {
+      return `__sophia_keep_ticket_open:${activity.value.requestId}`;
+    }
+    if (activity.value.action === '__sophia_confirm_maintenance') {
+      return `__sophia_confirm_maintenance:${activity.value.scheduleId}:${activity.value.areaName}:${activity.value.equipmentType}`;
     }
   }
 

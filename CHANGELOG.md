@@ -9,6 +9,19 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.29.0] - 2026-07-21
+
+### Added
+- **Opción 13 — Cancelación de Tickets Duplicados en Teams (1-Clic):**
+  - Anulación interactiva de solicitudes desde Teams con botones `[❌ Cancelar Ticket Definitivamente]` y `[↩️ Mantener Ticket Abierto]`.
+  - Trazabilidad y auditoría en `data/ticket_cancellations_history.json`.
+- **Opción 14 — Programación Asistida de Mantenimiento Preventivo:**
+  - Agendamiento asistido de revisiones preventivas de computadoras, impresoras Zebra/HP y equipos de departamento (`handlePreventiveMaintenanceTurn`).
+  - Botón de confirmación `[📅 Agendar Mantenimiento]` e histórico en `data/preventive_maintenance_schedule.json`.
+- **Opción 15 — Asistente de Onboarding y Guías de Inducción en PDF:**
+  - Catálogo interactivo de guías rápidas (Correo en Celular, FortiClient VPN, SAP Básico).
+  - Entrega de resumen ejecutable y enlace a manuales oficiales en PDF (`data/onboarding_guides_history.json`).
+
 ## [0.26.0] - 2026-07-21
 
 ### Added

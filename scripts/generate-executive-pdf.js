@@ -4,13 +4,13 @@ import { execSync } from 'child_process';
 
 const artifactDir = '/Users/luissolano/.gemini/antigravity/brain/990c748d-49d5-4134-af7a-b06a8c88c7f0';
 const htmlPath = path.join(artifactDir, 'Informe_Ejecutivo_Sophia.html');
-const pdfPath = path.join(artifactDir, 'Informe_Ejecutivo_Sophia_v0.26.0.pdf');
+const pdfPath = path.join(artifactDir, 'Informe_Ejecutivo_Sophia_v0.29.0.pdf');
 
 const htmlContent = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Informe Ejecutivo de Avances y Mejoras - Sophia (v0.26.0)</title>
+  <title>Informe Ejecutivo de Avances y Mejoras - Sophia (v0.29.0)</title>
   <style>
     @page {
       size: A4;
