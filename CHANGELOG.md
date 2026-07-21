@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.35.1] - 2026-07-21
+
+### Improved
+- **Indicador Visual Continuo de Retroalimentación en Teams (`context.sendActivity({ type: 'typing' })`):**
+  - Implementado un temporizador de pulso activo (`typingInterval` cada 3.5 segundos) durante el procesamiento de respuestas de Sophia en Teams.
+  - Ahora Microsoft Teams mantendrá la animación visual continua de **"Sophia está escribiendo..."** durante búsquedas largas en SDP, RAG, procesamiento de audio/imágenes o generación de reportes ejecutivos, evitando la sensación de congelamiento o demora sin respuesta.
+
 ## [0.35.0] - 2026-07-21
 
 ### Added
@@ -139,7 +146,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.35.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.35.1", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

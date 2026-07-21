@@ -11081,27 +11081,39 @@ async function handleTeamsMessage(context) {
 
   const chunks = [];
   await context.sendActivity({ type: 'typing' });
-  await runSupportTurn({
-    message: messageForSophia,
-    user,
-    session,
-    history: session.history,
-    createPendingActionForUser: (action) => createPendingAction(session, action),
-    onStatus: () => {},
-    onText: (content) => chunks.push(content),
-    onCard: (card) => chunks.push(card),
-    onWorking: async (content) => {
-      await context.sendActivity({ type: 'typing' });
-      await sendTeamsReply(context, content);
-    },
-    onConfirmationRequired: (data) => {
-      const summaryText = chunks.filter((chunk) => typeof chunk === 'string').join('').trim();
-      chunks.length = 0;
-      chunks.push(createTeamsConfirmationCard({ ...data, summaryText }));
-    },
-    streamSummary: false,
-    responseChannel: 'teams'
-  });
+
+  // Temporizador de pulso 'typing' continuo para Teams (mantiene 'Sophia está escribiendo...' activo en operaciones de más de 4 seg)
+  const typingInterval = setInterval(() => {
+    context.sendActivity({ type: 'typing' }).catch(() => {});
+  }, 3500);
+
+  try {
+    await runSupportTurn({
+      message: messageForSophia,
+      user,
+      session,
+      history: session.history,
+      createPendingActionForUser: (action) => createPendingAction(session, action),
+      onStatus: async (statusText) => {
+        await context.sendActivity({ type: 'typing' });
+      },
+      onText: (content) => chunks.push(content),
+      onCard: (card) => chunks.push(card),
+      onWorking: async (content) => {
+        await context.sendActivity({ type: 'typing' });
+        await sendTeamsReply(context, content);
+      },
+      onConfirmationRequired: (data) => {
+        const summaryText = chunks.filter((chunk) => typeof chunk === 'string').join('').trim();
+        chunks.length = 0;
+        chunks.push(createTeamsConfirmationCard({ ...data, summaryText }));
+      },
+      streamSummary: false,
+      responseChannel: 'teams'
+    });
+  } finally {
+    clearInterval(typingInterval);
+  }
 
   const cardResponse = chunks.find((chunk) => chunk?.type === 'adaptive_card');
   if (cardResponse) {
