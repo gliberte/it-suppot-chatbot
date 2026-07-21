@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.38.0] - 2026-07-21
+
+### Added
+- **Opción 24 — Programación de Mantenimientos Preventivos y Detección de Ventanas Activas (`getActiveMaintenanceWindow`):**
+  - Registro conversacional de mantenimientos preventivos planificados por departamento o servicio (`startTime`, `endTime`, `equipmentType`, `areaName`).
+  - Detección proactiva de ventanas de mantenimiento activas cuando los usuarios reportan lentitud o fallas en servicios en mantenimiento planificado.
+  - Alerta preventiva informativa especificando la hora de restablecimiento automático, previniendo tickets duplicados por trabajos programados de TI.
+
 ## [0.37.0] - 2026-07-21
 
 ### Added
@@ -171,7 +179,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.37.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.38.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

@@ -6741,6 +6741,25 @@ function createPreventiveMaintenanceAdaptiveCard(areaName, equipmentType, user) 
   };
 }
 
+async function getActiveMaintenanceWindow(systemOrService = '') {
+  try {
+    const store = await readPreventiveMaintenanceStore();
+    const now = Date.now();
+    const targetSystem = normalizeComparableText(systemOrService);
+
+    return (store.schedules || []).find((s) => {
+      const isSystemMatch = !targetSystem || normalizeComparableText(s.areaName || '').includes(targetSystem) || normalizeComparableText(s.equipmentType || '').includes(targetSystem);
+      const startTime = s.startTime ? Date.parse(s.startTime) : (s.timestamp ? Date.parse(s.timestamp) : null);
+      const endTime = s.endTime ? Date.parse(s.endTime) : (startTime ? startTime + 4 * 60 * 60 * 1000 : null); // Default 4 hrs
+
+      const isActive = startTime && endTime && now >= startTime && now <= endTime;
+      return isSystemMatch && isActive;
+    }) || null;
+  } catch {
+    return null;
+  }
+}
+
 async function handlePreventiveMaintenanceTurn({ message, user, onText, onCard, responseChannel }) {
   const text = String(message || '').trim();
 
@@ -6756,6 +6775,8 @@ async function handlePreventiveMaintenanceTurn({ message, user, onText, onCard, 
         id: scheduleId,
         areaName,
         equipmentType,
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
         requestedBy: user?.email || 'usuario@bacosa.com',
         timestamp: new Date().toISOString()
       });
@@ -6766,11 +6787,18 @@ async function handlePreventiveMaintenanceTurn({ message, user, onText, onCard, 
       console.warn('[Maintenance] Error guardando historial:', err.message);
     }
 
-    onText?.(`📅 **¡Mantenimiento Preventivo Agendado con Éxito!** (${scheduleId})\n\nSe creó la solicitud en ServiceDesk Plus para el área **${areaName}** (${equipmentType}). El equipo de soporte IT coordinará la fecha exacta.`);
+    onText?.(`📅 **¡Mantenimiento Preventivo Agendado con Éxito!** (${scheduleId})\n\nSe creó la solicitud en ServiceDesk Plus para el área **${areaName}** (${equipmentType}). Se estableció la ventana preventiva de trabajo.`);
     return true;
   }
 
-  const match = text.match(/mantenimiento\s+preventivo(?:\s+para\s+(.+))?/i);
+  // Comprobar si el usuario pregunta si hay una ventana de mantenimiento activa
+  const activeWindow = await getActiveMaintenanceWindow(text);
+  if (activeWindow) {
+    onText?.(`🛠️ **Ventana de Mantenimiento Preventivo en Curso:**\n\nEl servicio/área **${activeWindow.areaName}** (${activeWindow.equipmentType}) se encuentra actualmente en mantenimiento planificado registrado por el equipo de TI (${activeWindow.id}).\n\n💡 *El servicio se restablecerá automáticamente al finalizar los trabajos de actualización.*`);
+    return true;
+  }
+
+  const match = text.match(/(?:mantenimiento\s+preventivo|ventana\s+de\s+mantenimiento|mantenimiento\s+programado)(?:\s+para\s+(.+))?/i);
   if (!match) return false;
 
   const targetText = match[1] || 'las laptops del departamento';
@@ -6781,7 +6809,7 @@ async function handlePreventiveMaintenanceTurn({ message, user, onText, onCard, 
   if (responseChannel === 'teams') {
     await onCard?.(cardResult);
   } else {
-    onText?.(`📅 **Programa tu Mantenimiento Preventivo:**\nÁrea: **${areaName}** | Equipos: **${equipmentType}**\n\n¿Deseas que agendemos la solicitud en ServiceDesk Plus?`);
+    onText?.(`📅 **Programa tu Mantenimiento Preventivo:**\nÁrea: **${areaName}** | Equipos: **${equipmentType}**\n\n¿Deseas que agendemos la ventana de mantenimiento en ServiceDesk Plus?`);
   }
 
   return true;
