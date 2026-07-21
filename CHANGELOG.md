@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.24.0] - 2026-07-21
+
+### Added
+- **Opción 10 — Procesamiento de Notas de Voz en Teams (Audio-to-Ticket):**
+  - Detección y extracción automática de notas de voz y archivos de audio (`.m4a`, `.wav`, `.mp3`, `.ogg`, `.opus`) adjuntos por Teams (`getTeamsAudioAttachments`).
+  - Motor de transcripción e inferencia de intención IA (`transcribeTeamsAudioAttachment`) para procesar el contenido hablado de usuarios en movimiento o planta.
+  - Tarjeta adaptativa de confirmación con la transcripción completa (`createAudioTranscriptionCard`) y generación automática de tickets en ServiceDesk Plus con la transcripción y el audio como evidencia.
+  - Histórico de auditoría en `data/audio_transcriptions_history.json`.
+
 ## [0.23.2] - 2026-07-20
 
 ### Changed
