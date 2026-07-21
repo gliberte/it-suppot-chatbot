@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.33.2] - 2026-07-21
+
+### Fixed
+- **Habilitación de Consultas Corporativas y de Negocio en Gemini (`agent-orchestrator.js`):**
+  - Actualizado el `SYSTEM_PROMPT` de Gemini para indicarle explícitamente que Sophia es también la asistente de la Base de Conocimientos Corporativa de Barraza & Cía.
+  - Instrucción para responder consultas de productos, marcas, catálogo e historia directamente desde `retrieved_knowledge` cuando el RAG recupere los fragmentos, eliminando la negativa de *"no manejo información de negocio"*.
+
 ## [0.33.1] - 2026-07-21
 
 ### Added
@@ -101,7 +108,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión ("version": "0.33.1", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión ("version": "0.33.2", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
