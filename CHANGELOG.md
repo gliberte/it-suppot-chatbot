@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.37.0] - 2026-07-21
+
+### Added
+- **Opción 23 — Generación y Exportación de Reportes en Excel / CSV (`generateTicketsCsvReport`):**
+  - Generador automático de consolidados en formato CSV estructurado en UTF-8 con codificación BOM (`\uFEFF`) para apertura directa y limpia en Microsoft Excel.
+  - Endpoint de descargas seguras `/exports` servido desde la carpeta estática del servidor web.
+  - Tarjeta adaptativa de 1-clic `createReportExportAdaptiveCard` con botón `[📥 Descargar Reporte (CSV/Excel)]`.
+  - Control de acceso reservado para Gerencia IT y Administradores de Soporte.
+  - Almacén de auditoría de reportes en `data/report_exports_history.json`.
+
 ## [0.36.0] - 2026-07-21
 
 ### Added
@@ -161,7 +171,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.36.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.37.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

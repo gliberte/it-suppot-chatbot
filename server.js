@@ -83,6 +83,7 @@ const REQUEST_SCOPED_MUTATION_TOOLS = new Set([
 
 app.use(cors({ origin: CLIENT_ORIGIN }));
 app.use(express.json());
+app.use('/exports', express.static(path.join(__dirname, 'public', 'exports')));
 
 const PORT = 3001;
 
@@ -7286,6 +7287,181 @@ async function handleInfrastructureHealthTurn({ message, user, onText, onCard, r
   return true;
 }
 
+/* ==========================================================================
+   Opción 23: Generación y Exportación de Reportes en Excel / CSV
+   ========================================================================== */
+
+const REPORT_EXPORTS_PATH = process.env.REPORT_EXPORTS_PATH || path.join(__dirname, 'data', 'report_exports_history.json');
+
+async function readReportExportsStore() {
+  try {
+    const text = await readFile(REPORT_EXPORTS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[ReportExport] Error leyendo report_exports_history.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), exports: [] };
+  }
+}
+
+async function writeReportExportsStore(store) {
+  const tmpPath = `${REPORT_EXPORTS_PATH}.tmp`;
+  await mkdir(path.dirname(REPORT_EXPORTS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, REPORT_EXPORTS_PATH);
+}
+
+function escapeCsvField(val) {
+  if (val === null || val === undefined) return '""';
+  const str = String(val).replace(/"/g, '""');
+  return `"${str}"`;
+}
+
+async function generateTicketsCsvReport(user, scope = 'open') {
+  const listResult = await callMcpTool('sdp_list_requests', {
+    filter_by: scope === 'open' ? 'Open_Requests' : 'All_Requests',
+    limit: 100
+  });
+
+  const data = JSON.parse(listResult.content?.[0]?.text || '{}');
+  const requests = Array.isArray(data.requests) ? data.requests : [];
+
+  const headers = ['ID Ticket', 'Asunto', 'Estado', 'Prioridad', 'Solicitante', 'Técnico Asignado', 'Categoría', 'Subcategoría', 'Fecha Creación'];
+  const rows = [headers.map(escapeCsvField).join(',')];
+
+  for (const req of requests) {
+    const row = [
+      req.id || '-',
+      req.subject || 'Sin asunto',
+      getDisplayName(req.status) || '-',
+      getDisplayName(req.priority) || '-',
+      getDisplayName(req.requester) || '-',
+      getDisplayName(req.technician) || getAssignedTechnicianValue(req) || 'Sin asignar',
+      getDisplayName(req.category) || '-',
+      getDisplayName(req.subcategory) || '-',
+      getDisplayDate(req.created_time) || '-'
+    ];
+    rows.push(row.map(escapeCsvField).join(','));
+  }
+
+  // UTF-8 BOM para apertura perfecta en Excel
+  const csvContent = '\uFEFF' + rows.join('\n');
+  const exportId = `REP-${Date.now().toString(36).toUpperCase()}`;
+  const filename = `reporte_tickets_${scope}_${Date.now()}.csv`;
+  const exportDir = path.join(__dirname, 'public', 'exports');
+  await mkdir(exportDir, { recursive: true });
+  const filePath = path.join(exportDir, filename);
+  await writeFile(filePath, csvContent, 'utf8');
+
+  try {
+    const store = await readReportExportsStore();
+    store.exports.unshift({
+      exportId,
+      filename,
+      rowCount: requests.length,
+      scope,
+      requestedBy: user?.email || 'usuario@bacosa.com',
+      timestamp: new Date().toISOString()
+    });
+    if (store.exports.length > 200) store.exports = store.exports.slice(0, 200);
+    store.updatedAt = new Date().toISOString();
+    await writeReportExportsStore(store);
+  } catch (err) {
+    console.warn('[ReportExport] Error guardando historial:', err.message);
+  }
+
+  return {
+    exportId,
+    filename,
+    rowCount: requests.length,
+    downloadUrl: `/exports/${filename}`
+  };
+}
+
+function createReportExportAdaptiveCard(reportResult) {
+  const summaryText = `📄 Reporte de Tickets Generado (${reportResult.exportId})`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '📊 Exportación de Reporte Generada',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `Compilamos **${reportResult.rowCount} registros** en formato CSV/Excel UTF-8 con codificación compatible para apertura directa.`,
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'TextBlock',
+      text: `🆔 ID de Reporte: **${reportResult.exportId}** | Archivo: \`${reportResult.filename}\``,
+      isSubtle: true,
+      size: 'Small',
+      wrap: true,
+      spacing: 'Medium'
+    }
+  ];
+
+  const actions = [
+    {
+      type: 'Action.OpenUrl',
+      title: '📥 Descargar Reporte (CSV/Excel)',
+      url: `${process.env.PUBLIC_URL || 'https://sophia.bacosa.com'}${reportResult.downloadUrl}`
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
+async function handleReportExportTurn({ message, user, onText, onCard, responseChannel }) {
+  const text = String(message || '').toLowerCase().trim();
+  if (!text) return false;
+
+  const isExport = /\b(exportar|exporta|descargar|descarga|generar|genera)\b.*\b(excel|csv|reporte|informe)\b/.test(text) ||
+                   /\b(reporte|informe)\b.*\b(excel|csv)\b/.test(text);
+
+  if (!isExport) return false;
+
+  const isExecOrAdmin = Boolean(getExecutiveItProfile(user)) || isSupportAdmin(user);
+  if (!isExecOrAdmin) {
+    onText?.('🔒 La exportación de reportes consolidados en Excel/CSV está reservada para Gerencia IT y Administradores de Soporte.');
+    return true;
+  }
+
+  const scope = text.includes('todos') || text.includes('historial') || text.includes('completo') ? 'all' : 'open';
+
+  try {
+    const result = await generateTicketsCsvReport(user, scope);
+    const card = createReportExportAdaptiveCard(result);
+
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      onText?.(`📄 **Reporte de Tickets Generado (${result.exportId}):**\n\nSe exportaron **${result.rowCount} registros** a Excel/CSV.\nEnlace de descarga: ${process.env.PUBLIC_URL || 'https://sophia.bacosa.com'}${result.downloadUrl}`);
+    }
+    return true;
+  } catch (err) {
+    console.error('[ReportExport] Error generando reporte:', err.message);
+    onText?.(`⚠️ No pude generar el reporte en Excel/CSV: ${err.message}`);
+    return true;
+  }
+}
+
 function createCsatSurveyAdaptiveCard(requestId, subject = 'Solicitud de Soporte') {
   const ticketId = `#${requestId}`;
   return {
@@ -8164,6 +8340,16 @@ async function runSupportTurn({
     message,
     user,
     activity: session?.lastActivity,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleReportExportTurn({
+    message,
+    user,
     onText,
     onCard,
     responseChannel
