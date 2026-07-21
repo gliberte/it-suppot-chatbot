@@ -3970,6 +3970,14 @@ function createExecutiveItReportCard(report, user) {
   const mciProgress = report.mciProgress || [];
   const summaryText = `Reporte ejecutivo IT para ${executiveName}.`;
 
+  // Para el perfil ejecutivo (Yariela / Gerente IT) no se enumeran técnicos individualmente
+  const isExecutiveProfile = Boolean(getExecutiveItProfile(user));
+
+  const openCount = (report.tickets || []).filter((t) => {
+    const s = normalizeComparableText(getDisplayName(t.status));
+    return !s.includes('cerrad') && !s.includes('closed') && !s.includes('resuelt');
+  }).length;
+
   const body = [
     {
       type: 'TextBlock',
@@ -3986,16 +3994,30 @@ function createExecutiveItReportCard(report, user) {
       spacing: 'Small',
       isSubtle: true
     },
-    createExecutiveMetricStrip([
-      ['Tickets evaluados', String(report.tickets?.length || 0)],
-      ['Técnicos activos', String(technicianLoad.length)],
-      ['MCI revisadas', String(report.mci?.length || 0)],
-      ['Satisfacción CSAT', `${report.csatSummary?.avgScore || '5.0'} ⭐`]
-    ])
+    createExecutiveMetricStrip(
+      isExecutiveProfile
+        ? [
+            ['Tickets Totales', String(report.tickets?.length || 0)],
+            ['Tickets Abiertos', String(openCount)],
+            ['MCI Activas', String(report.mci?.length || 0)],
+            ['CSAT Promedio', `${report.csatSummary?.avgScore || '5.0'} ⭐`]
+          ]
+        : [
+            ['Tickets evaluados', String(report.tickets?.length || 0)],
+            ['Técnicos activos', String(technicianLoad.length)],
+            ['MCI revisadas', String(report.mci?.length || 0)],
+            ['Satisfacción CSAT', `${report.csatSummary?.avgScore || '5.0'} ⭐`]
+          ]
+    )
   ];
 
   body.push(createExecutiveTicketsBlock(newTickets));
-  body.push(createExecutiveTechniciansBlock(technicianLoad));
+
+  // Sección de técnicos: solo para administradores operativos, no para perfil ejecutivo gerencial
+  if (!isExecutiveProfile) {
+    body.push(createExecutiveTechniciansBlock(technicianLoad));
+  }
+
   if (report.categoryDistribution?.length > 0) {
     body.push(createExecutiveCategoriesBlock(report.categoryDistribution));
   }
@@ -4012,6 +4034,20 @@ function createExecutiveItReportCard(report, user) {
     });
   }
 
+  const followUpOptions = isExecutiveProfile
+    ? [
+        'Muéstrame tickets nuevos de hoy',
+        'Muéstrame avance de MCI por líder',
+        'Muéstrame seguimientos recientes',
+        'Dame el CSAT de la semana'
+      ]
+    : [
+        'Muéstrame tickets nuevos de hoy',
+        'Muéstrame tickets sin avance por técnico',
+        'Muéstrame seguimientos recientes',
+        'Muéstrame avance de MCI por líder'
+      ];
+
   body.push({
     type: 'Container',
     spacing: 'Medium',
@@ -4025,12 +4061,7 @@ function createExecutiveItReportCard(report, user) {
       },
       {
         type: 'TextBlock',
-        text: [
-          'Muéstrame tickets nuevos de hoy',
-          'Muéstrame tickets sin avance por técnico',
-          'Muéstrame seguimientos recientes',
-          'Muéstrame avance de MCI por líder'
-        ].map((option) => `- ${option}`).join('\n'),
+        text: followUpOptions.map((option) => `- ${option}`).join('\n'),
         wrap: true,
         spacing: 'Small',
         isSubtle: true
