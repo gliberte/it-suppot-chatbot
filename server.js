@@ -174,10 +174,25 @@ async function callMcpTool(name, args = {}) {
     };
   }
 
+  const normalizedArgs = { ...args };
+  if (name === 'sdp_search_user') {
+    const searchText = args.search_text || args.query || args.user_name || args.user_email || args.email || args.name || args.text || '';
+    normalizedArgs.search_text = searchText;
+  }
+  if (name === 'sdp_get_request_details') {
+    const reqId = args.request_id || args.id || args.ticket_id || args.requestId || '';
+    normalizedArgs.request_id = reqId;
+  }
+  if (name === 'sdp_get_requests') {
+    if (args.query || args.search || args.text) {
+      normalizedArgs.search_text = args.search_text || args.query || args.search || args.text;
+    }
+  }
+
   const result = await mcpClient.request(
     {
       method: "tools/call",
-      params: { name, arguments: args },
+      params: { name, arguments: normalizedArgs },
     },
     CallToolResultSchema
   );
