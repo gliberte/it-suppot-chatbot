@@ -5165,7 +5165,7 @@ async function runNetworkDiagnostics(user) {
 
 function isNetworkDiagnosticsRequest(message = '') {
   const norm = normalizeComparableText(message);
-  return /\b(diagnostico|diagnóstico|diagnosticar|ping|probar conexion|probar conexión|verificar red|falla de red|red lenta|internet lento|falla de vpn|falla de impresora|diagnostico de red)\b/.test(norm);
+  return /\b(diagnostico|diagnóstico|diagnosticar|ping|probar conexion|probar conexión|verificar red|falla de red|red lenta|internet lento|falla de vpn|falla de impresora|diagnostico de red|chequeo en tiempo real|monitoreo en tiempo real|chequeo real|chequeo de red|chequeo sap|verificar sap)\b/.test(norm);
 }
 
 function createNetworkDiagnosticsCard(result) {

@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.33.3] - 2026-07-21
+
+### Fixed
+- **Reconocimiento de Peticiones de Diagnóstico y Chequeo en Tiempo Real (`isNetworkDiagnosticsRequest`):**
+  - Ampliados los patrones de captura conversacional para frases como *"Chequeo en tiempo real sap"*, *"chequeo real"*, *"monitoreo en tiempo real"*, *"verificar sap"* y *"chequeo de red"*.
+  - Ahora el backend captura estas solicitudes en Nivel 1 ejecutando `handleNetworkDiagnosticsTurn` y desplegando la Adaptive Card con la latencia real de los servidores (SAP ERP, Gateway local, FortiClient VPN, M365, Impresoras).
+
 ## [0.33.2] - 2026-07-21
 
 ### Fixed
@@ -108,7 +115,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión ("version": "0.33.2", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión "version": "0.33.3", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
