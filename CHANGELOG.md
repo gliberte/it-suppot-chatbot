@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.35.0] - 2026-07-21
+
+### Added
+- **Opción 21 — Validación de Identidad por OTP (6 dígitos) para Acciones Críticas de AD:**
+  - Generación de códigos numéricos de seguridad de 6 dígitos con validez de 5 minutos (`generateSecurityOtpChallenge`).
+  - Almacén de trazabilidad y auditoría de retos en `data/security_otp_challenges.json`.
+  - Tarjeta adaptativa interactiva `createOtpChallengeAdaptiveCard` con campo para ingresar código y botón de 1-clic `[🔐 Validar Código OTP]`.
+  - Integración obligatoria de seguridad antes de autorizar el desbloqueo de cuenta en Active Directory (`handleSecurityOtpTurn` / `handleAdAccountTurn`).
+
 ## [0.34.0] - 2026-07-21
 
 ### Fixed / Changed
@@ -130,7 +139,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.34.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.35.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

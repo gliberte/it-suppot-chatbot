@@ -47,6 +47,7 @@ const ONBOARDING_GUIDES_PATH = process.env.ONBOARDING_GUIDES_PATH || path.join(_
 const PASSWORD_EXPIRATION_ALERTS_PATH = process.env.PASSWORD_EXPIRATION_ALERTS_PATH || path.join(__dirname, 'data', 'password_expiration_alerts.json');
 const LOAN_EQUIPMENT_REQUESTS_PATH = process.env.LOAN_EQUIPMENT_REQUESTS_PATH || path.join(__dirname, 'data', 'loan_equipment_requests.json');
 const INFRASTRUCTURE_HEALTH_PATH = process.env.INFRASTRUCTURE_HEALTH_PATH || path.join(__dirname, 'data', 'infrastructure_health_history.json');
+const SECURITY_OTP_CHALLENGES_PATH = process.env.SECURITY_OTP_CHALLENGES_PATH || path.join(__dirname, 'data', 'security_otp_challenges.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsConversationReferences = new Map();
@@ -4879,14 +4880,182 @@ function createAdAccountCard(account, isUnlocked = false) {
   };
 }
 
+/* ==========================================================================
+   Opción 21: Validación de Identidad por OTP para Acciones Críticas de AD
+   ========================================================================== */
+
+async function readSecurityOtpStore() {
+  try {
+    const text = await readFile(SECURITY_OTP_CHALLENGES_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[SecurityOTP] Error leyendo security_otp_challenges.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), challenges: [] };
+  }
+}
+
+async function writeSecurityOtpStore(store) {
+  const tmpPath = `${SECURITY_OTP_CHALLENGES_PATH}.tmp`;
+  await mkdir(path.dirname(SECURITY_OTP_CHALLENGES_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, SECURITY_OTP_CHALLENGES_PATH);
+}
+
+async function generateSecurityOtpChallenge(user, actionType = 'UNLOCK_ACCOUNT') {
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const challengeId = `OTP-${Date.now().toString(36).toUpperCase()}`;
+  const now = Date.now();
+  const expiresAt = now + 5 * 60 * 1000; // 5 minutos de validez
+
+  const challenge = {
+    challengeId,
+    code,
+    userEmail: user?.email || 'desconocido@bacosa.com',
+    userName: user?.name || 'Usuario',
+    actionType,
+    attempts: 0,
+    maxAttempts: 3,
+    status: 'pending',
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(expiresAt).toISOString()
+  };
+
+  const store = await readSecurityOtpStore();
+  store.challenges = store.challenges || [];
+  store.challenges.unshift(challenge);
+  if (store.challenges.length > 200) store.challenges = store.challenges.slice(0, 200);
+  store.updatedAt = new Date().toISOString();
+  await writeSecurityOtpStore(store);
+
+  console.log(`[SecurityOTP] Código OTP generado para ${challenge.userEmail}: ${code} (ID: ${challengeId})`);
+  return challenge;
+}
+
+async function verifySecurityOtpChallenge(challengeId, inputCode) {
+  const store = await readSecurityOtpStore();
+  const challenge = (store.challenges || []).find((c) => c.challengeId === challengeId);
+
+  if (!challenge) {
+    return { success: false, reason: 'Reto de seguridad no encontrado o caducado.' };
+  }
+
+  if (challenge.status !== 'pending') {
+    return { success: false, reason: `Este código de seguridad ya fue ${challenge.status === 'verified' ? 'utilizado' : 'invalidado'}.` };
+  }
+
+  if (Date.now() > Date.parse(challenge.expiresAt)) {
+    challenge.status = 'expired';
+    await writeSecurityOtpStore(store);
+    return { success: false, reason: 'El código de seguridad ha expirado (validez: 5 minutos). Solicita uno nuevo.' };
+  }
+
+  challenge.attempts += 1;
+
+  if (challenge.code !== String(inputCode).trim()) {
+    if (challenge.attempts >= challenge.maxAttempts) {
+      challenge.status = 'failed';
+      await writeSecurityOtpStore(store);
+      return { success: false, reason: 'Has superado el máximo de 3 intentos fallidos. Solicita un nuevo código.' };
+    }
+    await writeSecurityOtpStore(store);
+    return { success: false, reason: `Código incorrecto. Intento ${challenge.attempts} de ${challenge.maxAttempts}.` };
+  }
+
+  challenge.status = 'verified';
+  challenge.verifiedAt = new Date().toISOString();
+  await writeSecurityOtpStore(store);
+
+  return { success: true, challenge };
+}
+
+function createOtpChallengeAdaptiveCard(challenge, errorMessage = null) {
+  const summaryText = `🔐 Validación de Seguridad por Código OTP (${challenge.challengeId})`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '🔐 Verificación de Identidad Requerida',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: `Para completar la acción de **${challenge.actionType === 'UNLOCK_ACCOUNT' ? 'Desbloqueo de Cuenta AD' : 'Reseteo de Contraseña'}**, hemos enviado un código de 6 dígitos a tu correo corporativo.`,
+      wrap: true,
+      spacing: 'Small'
+    },
+    {
+      type: 'TextBlock',
+      text: `🆔 Código de Referencia: **${challenge.challengeId}** | Validez: **5 minutos**`,
+      isSubtle: true,
+      size: 'Small',
+      wrap: true,
+      spacing: 'Medium'
+    }
+  ];
+
+  if (errorMessage) {
+    body.push({
+      type: 'TextBlock',
+      text: `⚠️ ${errorMessage}`,
+      color: 'Attention',
+      weight: 'Bolder',
+      wrap: true,
+      spacing: 'Medium'
+    });
+  }
+
+  body.push({
+    type: 'Input.Text',
+    id: 'otpCode',
+    placeholder: 'Ingresa el código de 6 dígitos (ej: 123456)',
+    maxLength: 6,
+    spacing: 'Medium'
+  });
+
+  const actions = [
+    {
+      type: 'Action.Submit',
+      title: '🔐 Validar Código OTP',
+      style: 'positive',
+      data: {
+        action: 'sophia_verify_otp',
+        challengeId: challenge.challengeId,
+        msteams: {
+          type: 'messageBack',
+          displayText: 'Validando Código OTP...',
+          text: `__sophia_verify_otp:${challenge.challengeId}`,
+          value: { action: 'sophia_verify_otp', challengeId: challenge.challengeId }
+        }
+      }
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body,
+      actions
+    }
+  };
+}
+
 async function handleAdAccountTurn({ message, user, onText, onCard, responseChannel }) {
   if (message.startsWith('__sophia_ad_unlock:')) {
-    const unlocked = await unlockAdAccountForUser(user);
-    const card = createAdAccountCard(unlocked, true);
+    const challenge = await generateSecurityOtpChallenge(user, 'UNLOCK_ACCOUNT');
+    const card = createOtpChallengeAdaptiveCard(challenge);
     if (responseChannel === 'teams' && card) {
       onCard?.(card);
     } else {
-      onText(`✅ Tu cuenta de Active Directory (${unlocked.samAccountName}) ha sido desbloqueada exitosamente.`);
+      onText(`🔐 Para desbloquear tu cuenta de AD, hemos enviado un código OTP de 6 dígitos a **${challenge.userEmail}**. (Código de referencia: ${challenge.challengeId}). Responde con tu código de 6 dígitos.`);
     }
     return true;
   }
@@ -4903,6 +5072,56 @@ async function handleAdAccountTurn({ message, user, onText, onCard, responseChan
       : `🟢 Tu cuenta de Active Directory (${account.samAccountName}) se encuentra activa sin bloqueos.`
     );
   }
+  return true;
+}
+
+async function handleSecurityOtpTurn({ message, user, activity, onText, onCard, responseChannel }) {
+  let challengeId = null;
+  let inputCode = null;
+
+  if (message.startsWith('__sophia_verify_otp:')) {
+    const parts = message.split(':');
+    challengeId = parts[1];
+    inputCode = activity?.value?.otpCode || parts[2];
+  } else if (/^\s*([A-Za-z0-9-]+)\s+(\d{6})\s*$/.test(message)) {
+    const match = message.match(/^\s*([A-Za-z0-9-]+)\s+(\d{6})\s*$/);
+    challengeId = match[1];
+    inputCode = match[2];
+  } else if (/^\s*(\d{6})\s*$/.test(message)) {
+    inputCode = message.trim();
+    // Buscar reto pendiente reciente del usuario
+    const store = await readSecurityOtpStore();
+    const pending = (store.challenges || []).find((c) => (c.userEmail === user?.email || c.userName === user?.name) && c.status === 'pending');
+    if (pending) challengeId = pending.challengeId;
+  }
+
+  if (!challengeId || !inputCode) return false;
+
+  const result = await verifySecurityOtpChallenge(challengeId, inputCode);
+
+  if (!result.success) {
+    const store = await readSecurityOtpStore();
+    const challenge = (store.challenges || []).find((c) => c.challengeId === challengeId);
+    if (challenge && responseChannel === 'teams') {
+      const card = createOtpChallengeAdaptiveCard(challenge, result.reason);
+      onCard?.(card);
+    } else {
+      onText(`⚠️ Validación de seguridad fallida: ${result.reason}`);
+    }
+    return true;
+  }
+
+  // Código OTP validado con éxito: Ejecutar la acción crítica de AD
+  if (result.challenge.actionType === 'UNLOCK_ACCOUNT') {
+    const unlocked = await unlockAdAccountForUser(user);
+    const card = createAdAccountCard(unlocked, true);
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      onText(`✅ ¡Verificación de seguridad exitosa! Tu cuenta de Active Directory (${unlocked.samAccountName}) ha sido desbloqueada.`);
+    }
+  }
+
   return true;
 }
 
@@ -7866,6 +8085,17 @@ async function runSupportTurn({
     return;
   }
 
+  if (await handleSecurityOtpTurn({
+    message,
+    user,
+    activity: session?.lastActivity,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
   if (await handleDeflectionTurn({
     message,
     user,
@@ -10541,6 +10771,9 @@ function getTeamsText(activity) {
     }
     if (activity.value.action === '__sophia_refresh_infra_health') {
       return `__sophia_refresh_infra_health`;
+    }
+    if (activity.value.action === '__sophia_verify_otp') {
+      return `__sophia_verify_otp:${activity.value.challengeId}:${activity.value.otpCode || ''}`;
     }
   }
 
