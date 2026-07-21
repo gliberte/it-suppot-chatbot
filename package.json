@@ -1,7 +1,7 @@
 {
   "name": "it-support-chatbot",
   "private": true,
-  "version": "0.24.0",
+  "version": "0.25.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,6 +29,7 @@
     "prod:version": "node scripts/prod-version.js",
     "prod:reminders": "node scripts/trigger-reminders.js",
     "prod:broadcast": "node scripts/broadcast-release.js",
+    "prod:weekly-report": "node scripts/send-weekly-report.js",
     "release:broadcast": "node scripts/broadcast-release.js",
     "pm2:start": "pm2 start ecosystem.config.cjs",
     "pm2:restart": "pm2 restart sophia --update-env",

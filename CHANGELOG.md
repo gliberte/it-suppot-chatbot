@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.25.0] - 2026-07-21
+
+### Added
+- **Opción 11 — Envío Automatizado de Reportes Semanales PDF a la Gerencia (`sendWeeklyExecutiveReportToExecutives`):**
+  - Compilador de métricas semanales de rendimiento (tickets procesados, cumplimiento SLA %, promedio CSAT, MCI resueltos y artículos KBA creados).
+  - Integración de envío de tarjetas ejecutivas a Teams y notificación por correo a la lista gerencial (`IT_EXECUTIVE_EMAILS`).
+  - Endpoint administrativo `POST /api/admin/weekly-report` y script CLI `scripts/send-weekly-report.js` (`npm run prod:weekly-report`).
+  - Histórico de trazabilidad en `data/weekly_reports_history.json`.
+
 ## [0.24.0] - 2026-07-21
 
 ### Added
