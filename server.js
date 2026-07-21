@@ -1439,12 +1439,87 @@ function createCreateRequestConfirmationBlock(args = {}, user) {
     items.push(createDetailTextBlock('Descripción', stripHtml(args.description), { maxLength: 3000 }));
   }
 
+  // Opción 22: Alerta visual de ticket duplicado si se detectó una coincidencia previa del mismo usuario
+  if (args.duplicateMatch) {
+    const dup = args.duplicateMatch;
+    items.push({
+      type: 'Container',
+      spacing: 'Medium',
+      separator: true,
+      items: [
+        {
+          type: 'TextBlock',
+          text: '⚠️ Posible Solicitud Duplicada Detectada',
+          weight: 'Bolder',
+          color: 'Warning',
+          size: 'Medium',
+          wrap: true
+        },
+        {
+          type: 'TextBlock',
+          text: `Encontramos que ya tienes el ticket **#${dup.id}** ("${dup.subject}") abierto con estado **${dup.status}**.`,
+          wrap: true,
+          spacing: 'Small'
+        },
+        {
+          type: 'TextBlock',
+          text: '💡 **Recomendación:** Puedes agregar este nuevo detalle como una actualización al ticket existente para no duplicar el trabajo de TI, o confirmar la creación de una nueva solicitud independiente.',
+          isSubtle: true,
+          wrap: true,
+          spacing: 'Small'
+        }
+      ]
+    });
+  }
+
   return {
     type: 'Container',
     spacing: 'Medium',
     separator: true,
     items
   };
+}
+
+async function checkForDuplicateRequest(args = {}, user) {
+  try {
+    const subject = normalizeComparableText(args.subject || '');
+    const userEmail = String(user?.email || '').toLowerCase();
+    const userName = normalizeComparableText(user?.name || user?.displayName || '');
+
+    const listResult = await callMcpTool('sdp_list_requests', {
+      filter_by: 'Open_Requests',
+      limit: 25
+    });
+    const data = JSON.parse(listResult.content?.[0]?.text || '{}');
+    const openRequests = Array.isArray(data.requests) ? data.requests : [];
+
+    for (const req of openRequests) {
+      const reqRequesterEmail = String(req.requester?.email_id || req.requester?.email || '').toLowerCase();
+      const reqRequesterName = normalizeComparableText(getDisplayName(req.requester) || '');
+
+      const isSameUser = (userEmail && reqRequesterEmail === userEmail) || (userName && reqRequesterName.includes(userName));
+
+      if (isSameUser && req.id) {
+        const reqSubject = normalizeComparableText(req.subject || '');
+        const sameCategory = args.category && normalizeComparableText(getDisplayName(req.category)) === normalizeComparableText(args.category);
+
+        // Coincidencia por similitud de asunto o misma categoría abierta
+        const subjectMatch = subject && reqSubject && (subject.includes(reqSubject) || reqSubject.includes(subject));
+
+        if (subjectMatch || sameCategory) {
+          return {
+            id: req.id,
+            subject: req.subject || 'Sin asunto',
+            status: getDisplayName(req.status) || 'Abierto',
+            createdTime: req.created_time?.display_value || req.created_time || 'Reciente'
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[DuplicateCheck] Error verificando solicitudes duplicadas:', error.message);
+  }
+  return null;
 }
 
 function createMciUpdateConfirmationBlock(args = {}) {
@@ -8333,6 +8408,13 @@ async function runSupportTurn({
       await auditToolCall({ user, toolName: aiDecision.tool_name, args: preparedArgs, outcome: 'diagnostic_requested' });
       onText(diagnosticPrompt);
       return;
+    }
+
+    if (aiDecision.tool_name === 'sdp_create_request') {
+      const duplicateMatch = await checkForDuplicateRequest(preparedArgs, user);
+      if (duplicateMatch) {
+        preparedArgs.duplicateMatch = duplicateMatch;
+      }
     }
 
     const actionId = createPendingActionForUser({

@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.36.0] - 2026-07-21
+
+### Added
+- **Opción 22 — Detección y Prevención de Tickets Duplicados en Tiempo Real (`checkForDuplicateRequest`):**
+  - Búsqueda preventiva en ServiceDesk Plus de solicitudes abiertas del mismo usuario con coincidencia semántica de asunto o categoría.
+  - Inyección de banner preventivo en la tarjeta de confirmación de Teams (`createCreateRequestConfirmationBlock`) advirtiendo la existencia de un ticket abierto previo (ej. Ticket `#14820 - Falla de acceso a SAP`).
+  - Orientación al usuario para unificar comentarios o decidir la creación de una solicitud independiente.
+
 ## [0.35.2] - 2026-07-21
 
 ### Added
@@ -153,7 +161,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.35.2", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.36.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
