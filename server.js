@@ -115,6 +115,9 @@ async function executeSapHanaQuery(sqlQuery) {
   const sapEndpointUrl = process.env.SAP_HANA_GATEWAY_URL || 'http://192.170.1.209:5678/webhook/sap-hana-query';
   const sapApiKey = process.env.SAP_HANA_GATEWAY_KEY || '';
 
+  console.log(`[SAP Gateway] Iniciando consulta a: ${sapEndpointUrl}`);
+  console.log(`[SAP Gateway] Query SQL:`, sqlQuery);
+
   try {
     const response = await axios.post(
       sapEndpointUrl,
@@ -128,6 +131,7 @@ async function executeSapHanaQuery(sqlQuery) {
       }
     );
 
+    console.log(`[SAP Gateway] Respuesta recibida (${response.status} ${response.statusText}):`, JSON.stringify(response.data).substring(0, 300));
     const resultData = response.data;
     const textOutput = typeof resultData === 'string' ? resultData : JSON.stringify(resultData);
 
@@ -135,8 +139,9 @@ async function executeSapHanaQuery(sqlQuery) {
       content: [{ type: 'text', text: textOutput }]
     };
   } catch (error) {
-    console.error('[SAP Gateway] Error consultando pasarela SAP HANA:', error.message);
-    throw new Error(`Error en la consulta a la pasarela de SAP HANA: ${error.message}`);
+    const detail = error.response ? `HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}` : error.message;
+    console.error('[SAP Gateway Error Detallado]:', detail);
+    throw new Error(`Error en la consulta a la pasarela de SAP HANA: ${detail}`);
   }
 }
 

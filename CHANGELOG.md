@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.40.1] - 2026-07-22
+
+### Added
+- **Enriquecimiento de Logs de Diagnóstico para SAP Gateway (`executeSapHanaQuery`):**
+  - Añadido registro explícito en consola con los prefijos `[SAP Gateway]` y `[SAP Gateway Error Detallado]` registrando la URL destino, la sentencia SQL ejecutada, el código HTTP de respuesta y el payload exacto de error en caso de fallos.
+
 ## [0.40.0] - 2026-07-22
 
 ### Added
@@ -213,7 +219,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.40.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.40.1", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
