@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.39.1] - 2026-07-22
+
+### Fixed
+- **Mensaje de Error Discreto para Consultas SAP (`sap_hana_query`):**
+  - Personalizada la respuesta en caso de falla de conexión con la base de datos de SAP HANA para evitar exponer el nombre interno de la herramienta `sap_hana_query` o mencionar ServiceDesk Plus, respondiendo de forma sutil y natural: *"No pude consultar la información de SAP en este momento. Por favor verifica los datos ingresados o intenta nuevamente en unos minutos."*
+
 ## [0.39.0] - 2026-07-22
 
 ### Added
@@ -187,7 +193,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.39.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.39.1", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

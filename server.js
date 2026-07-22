@@ -8722,7 +8722,11 @@ async function runSupportTurn({
     }
   } catch (error) {
     console.error(`[Bridge] Error crítico ejecutando herramienta ${aiDecision.tool_name}:`, error.message);
-    onText(`No pude completar esa consulta porque falló la conexión con **${aiDecision.tool_name}**. Puedes intentarlo de nuevo o pedirme una búsqueda más acotada mientras validamos ServiceDesk Plus.`);
+    if (aiDecision.tool_name === 'sap_hana_query') {
+      onText('No pude consultar la información de SAP en este momento. Por favor verifica los datos ingresados o intenta nuevamente en unos minutos.');
+    } else {
+      onText(`No pude completar esa consulta porque falló la conexión con **${aiDecision.tool_name}**. Puedes intentarlo de nuevo o pedirme una búsqueda más acotada mientras validamos ServiceDesk Plus.`);
+    }
   }
 }
 
