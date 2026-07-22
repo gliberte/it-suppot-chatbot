@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.0] - 2026-07-22
+
+### Fixed
+- **Optimización Total de Agregar Notas y Eliminación de Textos Duplicados (`sdp_add_note`):**
+  - Removido `sdp_add_note` de `TOOLS_REQUIRING_CONFIRMATION`. Ahora agregar una nota aclaratoria a un ticket se ejecuta directamente de forma instantánea sin requerir confirmación explícita ni generar error `4002`.
+  - Corregido `createTeamsConfirmationCardBody` para evitar la duplicación de texto entre `intro` y `summaryText` en las tarjetas de confirmación.
+
 ## [0.41.5] - 2026-07-22
 
 ### Fixed
@@ -279,7 +286,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.5", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.42.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

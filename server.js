@@ -67,7 +67,6 @@ const CONFIRMATION_WORDS = new Set(['confirmar', 'confirma', 'confirmo', 'confí
 const CANCEL_WORDS = new Set(['cancelar', 'cancela', 'no']);
 const TOOLS_REQUIRING_CONFIRMATION = new Set([
   'sdp_create_request',
-  'sdp_add_note',
   'sdp_resolve_request',
   'sdp_assign_request',
   'sdp_update_request',
@@ -75,7 +74,6 @@ const TOOLS_REQUIRING_CONFIRMATION = new Set([
   'sdp_execute_automation_action'
 ]);
 const REQUEST_SCOPED_MUTATION_TOOLS = new Set([
-  'sdp_add_note',
   'sdp_resolve_request',
   'sdp_assign_request',
   'sdp_update_request',
@@ -1425,10 +1423,10 @@ function createTeamsConfirmationCardBody({ toolName, args = {}, user, intro, sum
     body.push(createCreateRequestConfirmationBlock(args, user));
   } else if (toolName === 'sdp_update_mci') {
     body.push(createMciUpdateConfirmationBlock(args));
-  } else {
+  } else if (summaryText && stripHtml(summaryText) !== stripHtml(intro)) {
     body.push({
       type: 'TextBlock',
-      text: truncateText(stripHtml(summaryText || 'Preparé la acción solicitada.'), 900),
+      text: truncateText(stripHtml(summaryText), 900),
       wrap: true,
       spacing: 'Small'
     });
