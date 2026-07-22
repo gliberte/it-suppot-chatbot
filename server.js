@@ -6663,7 +6663,7 @@ function createTicketCancellationAdaptiveCard(requestId, subject, user) {
   };
 }
 
-async function handleTicketCancellationTurn({ message, user, onText, onCard, responseChannel }) {
+async function handleTicketCancellationTurn({ message, user, session, onText, onCard, responseChannel }) {
   const text = String(message || '').trim();
 
   if (text.startsWith('__sophia_confirm_ticket_cancellation:')) {
@@ -8484,6 +8484,17 @@ async function runSupportTurn({
 }) {
   onStatus?.('Sophia está analizando tu solicitud...');
 
+  if (await handleTicketCancellationTurn({
+    message,
+    user,
+    session,
+    onText,
+    onCard,
+    responseChannel
+  })) {
+    return;
+  }
+
   if (await handleCapabilitiesHelpTurn({
     message,
     user,
@@ -8528,6 +8539,7 @@ async function runSupportTurn({
   if (await handleTicketCancellationTurn({
     message,
     user,
+    session,
     onText,
     onCard,
     responseChannel

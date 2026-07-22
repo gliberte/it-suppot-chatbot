@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.41.5] - 2026-07-22
+
+### Fixed
+- **Prioridad Máxima del Interceptor de Cancelación de Tickets (`runSupportTurn`):**
+  - Movido `handleTicketCancellationTurn` a la primera posición de la cadena de interceptores en `runSupportTurn`. Esto evita que las peticiones de cierre conversacionales pasen al orquestador de Gemini y sigan invocando mutaciones de la API restringidas por ServiceDesk Plus.
+
 ## [0.41.4] - 2026-07-22
 
 ### Fixed
@@ -273,7 +279,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.4", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.5", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
