@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.40.4] - 2026-07-22
+
+### Fixed
+- **Formato Estructurado de Payload n8n para SAP HANA (`executeSapHanaQuery`):**
+  - Ajustado el cuerpo de la petición POST a n8n enviando `{ action: 'sendMessage', sessionId: ..., chatInput: sqlQuery }` y extrayendo directamente el atributo `response.data.output`.
+  - Verificada y validada la respuesta HTTP 200 OK en vivo obteniendo datos reales del esquema `C2910638_BARCIA_PRD`.
+
 ## [0.40.3] - 2026-07-22
 
 ### Fixed
@@ -231,7 +238,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.40.3", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.40.4", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

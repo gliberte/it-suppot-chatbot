@@ -122,18 +122,22 @@ async function executeSapHanaQuery(sqlQuery) {
   try {
     const response = await axios.post(
       sapEndpointUrl,
-      { query: sqlQuery },
+      {
+        action: 'sendMessage',
+        sessionId: `sophia_sap_${Date.now()}`,
+        chatInput: sqlQuery
+      },
       {
         headers: {
           'Content-Type': 'application/json',
           ...(sapApiKey ? { 'x-api-key': sapApiKey } : {})
         },
-        timeout: 15000
+        timeout: 25000
       }
     );
 
     console.log(`[SAP Gateway] Respuesta recibida (${response.status} ${response.statusText}):`, JSON.stringify(response.data).substring(0, 300));
-    const resultData = response.data;
+    const resultData = response.data?.output || response.data;
     const textOutput = typeof resultData === 'string' ? resultData : JSON.stringify(resultData);
 
     return {
