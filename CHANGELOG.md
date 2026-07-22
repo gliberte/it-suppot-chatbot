@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.2] - 2026-07-22
+
+### Fixed
+- **Habilitación de `sdp_add_note` en `READ_ONLY_CHAT_TOOLS` (`server.js`):**
+  - Añadido `sdp_add_note` al conjunto de herramientas autorizadas para ejecución directa en el chat (`READ_ONLY_CHAT_TOOLS`), resolviendo definitivamente el mensaje de rechazo *"No puedo ejecutar esa herramienta porque no está autorizada para el chat."*.
+  - Se mantiene la validación estricta de seguridad en `assertToolAllowedForUser` para asegurar que solo el solicitante original, el técnico asignado o un admin puedan agregar notas a un ticket.
+
 ## [0.42.1] - 2026-07-22
 
 ### Fixed
@@ -293,7 +300,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.42.1", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.42.2", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
