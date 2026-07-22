@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.4] - 2026-07-22
+
+### Fixed
+- **Detección ampliada de solicitudes de cierre de ticket (`handleTicketCancellationTurn`):**
+  - El regex de detección ahora captura variantes naturales en español que antes fallaban silenciosamente: *"solicito se cierre el ticket"*, *"ya no es necesario"*, *"era una prueba"*, *"quiero cancelar esta solicitud"*, *"por favor cierra el ticket"*, *"quisiera cerrar mi solicitud"*, etc.
+  - Antes, estos mensajes pasaban al AI general que intentaba usar `sdp_add_note` directamente y fallaba con el error genérico.
+- **Mensaje de error mejorado para `sdp_add_note`:**
+  - Cambiado el mensaje genérico confuso *"No pude completar esa consulta porque falló la conexión con sdp_add_note"* por uno contextual y útil que indica que el técnico asignado puede agregar la nota directamente en el portal.
+
 ## [0.42.3] - 2026-07-22
 
 ### Changed
@@ -308,12 +317,17 @@ Formato recomendado:
 - **Enriquecimiento de Tarjetas de Notificación Proactiva de Versión (`createReleaseBroadcastAdaptiveCard`):**
   - Añadido resumen visual de todas las capacidades clave activas (Aprobación de Licencias, Auto-Diagnóstico de Red Nivel 1, Autogestión de AD, Detector de Incidentes Masivos, Dashboard Ejecutivo y Análisis de Evidencias por Imagen).
   - Actualizadas las sugerencias de frases de prueba con ejemplos prácticos para cada módulo.
+## [0.42.4] - 2026-07-22
+
+### Fixed
+- **Optimización del Parser de Novedades (`getLatestReleaseHighlights`):**
+  - Corregida la extracción de versiones en `CHANGELOG.md` para garantizar el despliegue correcto de las notas de la versión `0.42.4` en las tarjetas de broadcast de Teams.
 
 ## [0.23.1] - 2026-07-20
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.42.2", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión (v0.42.4, v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

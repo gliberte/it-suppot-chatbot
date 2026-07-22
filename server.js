@@ -6708,7 +6708,14 @@ async function handleTicketCancellationTurn({ message, user, session, onText, on
     return true;
   }
 
-  const cancelMatch = text.match(/(?:cancelar|anular|duplicado|cierra|cerrar)\s+(?:este\s+|mi\s+)?ticket(?:\s*#?\s*([0-9]{4,8}))?/i);
+  // Patrones ampliados de cierre/cancelación en lenguaje natural
+  const cancelMatch =
+    text.match(/(?:cancelar|anular|cierra|cerrar)\s+(?:este\s+|el\s+|mi\s+)?(?:ticket|solicitud)(?:\s*#?\s*([0-9]{4,8}))?/i) ||
+    text.match(/solicito\s+se\s+(?:cierre|cancele|anule)\s+(?:el\s+|este\s+)?(?:ticket|solicitud)/i) ||
+    text.match(/(?:ya\s+no\s+es\s+necesario|era\s+una\s+prueba|no\s+es\s+necesario)(?:[.,].*)?(?:ticket|solicitud)?/i) ||
+    text.match(/(?:ticket|solicitud)\s*#?([0-9]{4,8})?\s+(?:ya\s+no\s+es\s+necesario|era\s+una\s+prueba|quiero\s+cerrar|quiero\s+cancelar)/i) ||
+    text.match(/(?:quiero|quisiera|deseo|por\s+favor)\s+(?:cancelar|cerrar|anular)\s+(?:este\s+|el\s+|mi\s+|esta\s+)?(?:ticket|solicitud)/i) ||
+    text.match(/duplicado/i);
   if (!cancelMatch) return false;
 
   const requestId = cancelMatch[1] || session?.lastMentionedRequestId || '13491';
@@ -9126,8 +9133,10 @@ async function runSupportTurn({
     console.error(`[Bridge] Error crítico ejecutando herramienta ${aiDecision.tool_name}:`, error.message);
     if (aiDecision.tool_name === 'sap_hana_query') {
       onText('No pude consultar la información de SAP en este momento. Por favor verifica los datos ingresados o intenta nuevamente en unos minutos.');
+    } else if (aiDecision.tool_name === 'sdp_add_note') {
+      onText('Tuve un problema al registrar la nota en ServiceDesk Plus. Por favor intenta de nuevo en unos segundos. Si el problema persiste, el técnico asignado puede agregar la nota directamente en el portal.');
     } else {
-      onText(`No pude completar esa consulta porque falló la conexión con **${aiDecision.tool_name}**. Puedes intentarlo de nuevo o pedirme una búsqueda más acotada mientras validamos ServiceDesk Plus.`);
+      onText(`Tuve un problema al consultar la herramienta **${aiDecision.tool_name}**. Por favor intenta de nuevo en unos segundos.`);
     }
   }
 }
