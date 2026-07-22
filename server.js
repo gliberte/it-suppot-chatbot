@@ -100,9 +100,7 @@ const mcpClient = new Client(
   { capabilities: {} }
 );
 
-// Cliente MCP para SAP HANA (si existe el paquete/servidor mcp local)
-let sapMcpClient = null;
-const SAP_MCP_PATH = process.env.SAP_MCP_SERVER_PATH || path.join(__dirname, "../sap-mcp-server/build/index.js");
+
 
 async function initMCP() {
   try {
@@ -111,20 +109,34 @@ async function initMCP() {
   } catch (error) {
     console.error("Error conectando a MCP SDP:", error);
   }
+}
+
+async function executeSapHanaQuery(sqlQuery) {
+  const sapEndpointUrl = process.env.SAP_HANA_GATEWAY_URL || 'http://192.170.1.209:5678/webhook/sap-hana-query';
+  const sapApiKey = process.env.SAP_HANA_GATEWAY_KEY || '';
 
   try {
-    if (await fileExists(SAP_MCP_PATH)) {
-      const sapTransport = new StdioClientTransport({
-        command: "node",
-        args: [SAP_MCP_PATH],
-        env: process.env
-      });
-      sapMcpClient = new Client({ name: "chatbot-bridge-sap", version: "1.0.0" }, { capabilities: {} });
-      await sapMcpClient.connect(sapTransport);
-      console.log("Chatbot Bridge conectado al servidor MCP de SAP HANA");
-    }
+    const response = await axios.post(
+      sapEndpointUrl,
+      { query: sqlQuery },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sapApiKey ? { 'x-api-key': sapApiKey } : {})
+        },
+        timeout: 15000
+      }
+    );
+
+    const resultData = response.data;
+    const textOutput = typeof resultData === 'string' ? resultData : JSON.stringify(resultData);
+
+    return {
+      content: [{ type: 'text', text: textOutput }]
+    };
   } catch (error) {
-    console.warn("Servidor MCP de SAP HANA no disponible localmente:", error.message);
+    console.error('[SAP Gateway] Error consultando pasarela SAP HANA:', error.message);
+    throw new Error(`Error en la consulta a la pasarela de SAP HANA: ${error.message}`);
   }
 }
 
@@ -193,16 +205,8 @@ app.post('/api/admin/weekly-report', async (req, res) => {
 
 async function callMcpTool(name, args = {}) {
   if (name === 'sap_hana_query') {
-    if (sapMcpClient) {
-      return await sapMcpClient.request(
-        {
-          method: "tools/call",
-          params: { name, arguments: args },
-        },
-        CallToolResultSchema
-      );
-    }
-    throw new Error('El servicio de conexión a SAP HANA no está activo en este servidor.');
+    const sqlQuery = args.query || args.sqlQuery || args.sql || '';
+    return await executeSapHanaQuery(sqlQuery);
   }
 
   if (name === 'web_search_support') {

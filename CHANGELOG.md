@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.40.0] - 2026-07-22
+
+### Added
+- **Conector Directo HTTP/Pasarela para Consultas SAP HANA (`executeSapHanaQuery`):**
+  - Implementada la función `executeSapHanaQuery` en `server.js` para enviar consultas SQL `SELECT` directamente a la pasarela HTTP de SAP HANA (`SAP_HANA_GATEWAY_URL`, por defecto `http://192.170.1.209:5678/webhook/sap-hana-query`).
+  - Eliminado la dependencia de subprocesos Stdio independientes en producción, optimizando el tiempo de respuesta en milisegundos y la estabilidad del servidor PM2.
+
 ## [0.39.3] - 2026-07-22
 
 ### Fixed
@@ -206,7 +213,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.39.3", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.40.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
