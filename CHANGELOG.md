@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.9] - 2026-07-22
+
+### Fixed
+- **Flujo de Confirmación Conversacional y Ejecución Directa de Notas (`server.js`, `agent-orchestrator.js`):**
+  - **Corrección de Bloqueo por `CONFIRMATION_WORDS` (`server.js`):** Cuando el usuario respondía *"si"* o *"ok"* durante una conversación donde NO existía una tarjeta adaptativa de confirmación pendiente en `session.pendingActions`, el sistema interceptaba la palabra e interumpía abruptamente el diálogo con *"No tengo una acción pendiente para confirmar"*. Se actualizó el manejador de Teams para permitir que las respuestas afirmativas/negativas sin tarjeta pendiente pasen directamente al orquestador de IA.
+  - **Ejecución Inmediata de `sdp_add_note` (`agent-orchestrator.js`):** Se instruyó explícitamente a Gemini para que ejecute `sdp_add_note` de inmediato de forma automatizada cuando se disponga del ID del ticket (`request_id`) y del texto de la nota (`note_text`), prohibiendo preguntas de confirmación en texto libre (`¿Te parece bien que agregue la nota...?`).
+
 ## [0.42.8] - 2026-07-22
 
 ### Fixed

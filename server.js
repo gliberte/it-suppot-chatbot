@@ -11783,31 +11783,30 @@ async function handleTeamsMessage(context) {
   if (CONFIRMATION_WORDS.has(normalizedText)) {
     const { action, expired } = takeFirstPendingAction(session);
 
-    if (!action) {
-      await sendTeamsReply(context, 'No tengo una acción pendiente para confirmar. Dime qué cambio quieres hacer y lo preparo de nuevo.');
+    if (action) {
+      if (expired) {
+        await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmation_expired' });
+        await sendTeamsReply(context, formatExpiredConfirmationMessage(action));
+        return;
+      }
+
+      try {
+        const summary = await executeConfirmedAction(action, user, session);
+        session.history = pushChatHistory(session.history, 'assistant', summary?.summaryText || summary);
+        scheduleRuntimeStateSave();
+        await sendTeamsReply(context, summary);
+      } catch (error) {
+        await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmed_error', error });
+        console.error(`[Teams] Error confirmando acción ${action.toolName}:`, error.message);
+        await sendTeamsReply(context, formatConfirmedActionError(action, error));
+      }
       return;
     }
-
-    if (expired) {
-      await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmation_expired' });
-      await sendTeamsReply(context, formatExpiredConfirmationMessage(action));
-      return;
-    }
-
-    try {
-      const summary = await executeConfirmedAction(action, user, session);
-      session.history = pushChatHistory(session.history, 'assistant', summary?.summaryText || summary);
-      scheduleRuntimeStateSave();
-      await sendTeamsReply(context, summary);
-    } catch (error) {
-      await auditToolCall({ user, toolName: action.toolName, args: action.args, outcome: 'confirmed_error', error });
-      console.error(`[Teams] Error confirmando acción ${action.toolName}:`, error.message);
-      await sendTeamsReply(context, formatConfirmedActionError(action, error));
-    }
-    return;
+    // Si no hay tarjeta pendiente en session.pendingActions, no bloqueamos la conversación;
+    // dejamos que el mensaje ("si", "confirmar", etc.) pase a runSupportTurn para que Gemini lo procese en contexto.
   }
 
-  if (CANCEL_WORDS.has(normalizedText)) {
+  if (CANCEL_WORDS.has(normalizedText) && session.pendingActions && session.pendingActions.size > 0) {
     session.pendingActions.clear();
     scheduleRuntimeStateSave();
     await sendTeamsReply(context, 'Listo, cancelé la acción pendiente.');
