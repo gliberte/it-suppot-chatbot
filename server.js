@@ -2988,7 +2988,7 @@ function minimizeValue(value) {
 
   const allowed = {};
   for (const [key, childValue] of Object.entries(value)) {
-    if (['response_status', 'list_info', 'id', 'name', 'status', 'message'].includes(key)) {
+    if (['response_status', 'list_info', 'id', 'name', 'status', 'message', 'note', 'notes', 'status_code', 'result'].includes(key)) {
       allowed[key] = minimizeValue(childValue);
     }
   }
@@ -9156,6 +9156,19 @@ async function runSupportTurn({
       }
     }
 
+    if (aiDecision.tool_name === 'sdp_add_note') {
+      const requestId = preparedArgs.request_id || extractRequestIdFromMessage(message);
+      onText([
+        `Listo, agregué la nota de seguimiento al ticket${requestId ? ` #${requestId}` : ''}.`,
+        '',
+        '**Opciones**',
+        requestId ? `- Ver detalle del ticket #${requestId}` : '- Consultar mis tickets abiertos',
+        requestId ? `- Agregar otro seguimiento al ticket #${requestId}` : '- Crear una nueva solicitud',
+        '- Consultar mis tickets abiertos'
+      ].join('\n'));
+      return;
+    }
+
     if (streamSummary) {
       await streamToolSummary(toolOutput, (type, data) => {
         if (type === 'text_chunk') onText(data.content);
@@ -9503,7 +9516,13 @@ function getSummarySystemInstruction(options = {}) {
         'Si el resultado incluye notas o seguimientos, agrega una sección **Seguimientos** con las notas más recientes, sin exceder 5 entradas.',
         'Las opciones deben orientar a ver resolución, agregar seguimiento, crear una solicitud relacionada o consultar tickets similares si aplica.'
       ]
-    : toolName === 'sdp_search_user'
+    : toolName === 'sdp_add_note'
+      ? [
+          'Para sdp_add_note (registro de seguimiento), confirma de forma clara y directa que la nota fue agregada exitosamente al ticket.',
+          'NUNCA digas "no se encontraron resultados" ni sugieras "intentar otra búsqueda con diferentes criterios".',
+          'Las opciones finales deben sugerir ver el detalle del ticket, agregar otro seguimiento o consultar mis tickets abiertos.'
+        ]
+      : toolName === 'sdp_search_user'
       ? [
           'Para búsqueda de usuario, las opciones deben orientar a consultar tickets como solicitante, consultar tickets como Técnico asignado o buscar MCI relacionadas.'
         ]

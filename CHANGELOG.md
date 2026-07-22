@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.10] - 2026-07-22
+
+### Fixed
+- **Confirmación Clara de Registro de Nota en SDP (`executeDirectChatTool`, `minimizeValue`, `server.js`):**
+  - **Identificación del problema:** Al ejecutar `sdp_add_note` con éxito en el chat directo, la respuesta JSON de SDP (`{ note: {...}, response_status: {...} }`) se filtraba en `minimizeValue` descartando la clave `note`. Al pasar la salida a `summarizeToolOutput`, el modelo generativo confundía el resultado con una consulta de búsqueda vacía y respondía erróneamente *"Parece que la operación se completó con éxito, pero no se encontraron resultados para tu consulta"*.
+  - **Solución:** 
+    1. Se añadió un formateador de éxito directo para `sdp_add_note` en `executeDirectChatTool` que devuelve de inmediato: *"Listo, agregué la nota de seguimiento al ticket #XXXXX."* con sus respectivas opciones accionables.
+    2. Se incluyeron las claves `note`, `notes`, `status_code` y `result` en la lista blanca de `minimizeValue` para conservar la estructura del payload devuelto por SDP.
+    3. Se agregaron reglas explícitas para `sdp_add_note` en `getSummarySystemInstruction`.
+
 ## [0.42.9] - 2026-07-22
 
 ### Fixed
