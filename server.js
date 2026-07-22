@@ -679,26 +679,52 @@ function userCanAccessRequest(user, data) {
   const requesterId = String(requester.id || '');
   const requesterEmail = (requester.email_id || requester.email || '').toLowerCase();
   const userRequesterId = String(getRequesterId(user) || '');
-  const userEmail = (user?.email || '').toLowerCase();
+  const userEmail = (user?.email || user?.mail || user?.userPrincipalName || '').toLowerCase();
 
-  return Boolean(
-    (userRequesterId && requesterId && userRequesterId === requesterId) ||
-    (userEmail && requesterEmail && userEmail === requesterEmail)
-  );
+  if (userRequesterId && requesterId && userRequesterId === requesterId) return true;
+  if (userEmail && requesterEmail && userEmail === requesterEmail) return true;
+
+  // Comparación por prefijo de correo (antes del @) si los dominios difieren
+  if (userEmail && requesterEmail) {
+    const userPrefix = userEmail.split('@')[0];
+    const reqPrefix = requesterEmail.split('@')[0];
+    if (userPrefix && reqPrefix && userPrefix.length > 2 && userPrefix === reqPrefix) return true;
+  }
+
+  // Comparación por nombre normalizado
+  const requesterName = normalizeComparableText(requester.name || requester.display_value || '');
+  const userName = normalizeComparableText(user?.name || user?.displayName || '');
+  if (requesterName && userName) {
+    if (requesterName === userName || requesterName.includes(userName) || userName.includes(requesterName)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function userCanReadRequest(user, data) {
-  if (isSupportAdmin(user) || userCanAccessRequest(user, data) || userMatchesAssignedTechnician(user, data)) return true;
+  if (isSupportAdmin(user) || isItExecutiveUser(user) || isMciAdmin(user) || userCanAccessRequest(user, data) || userMatchesAssignedTechnician(user, data)) return true;
   return isMciRequestData(data) && userMatchesMciLeader(user, data);
 }
 
 function userCanSeeListRequest(user, request, { isMciResult = false } = {}) {
   if (isMciResult) return userCanReadRequest(user, request);
-  return userCanAccessRequest(user, request) || userMatchesAssignedTechnician(user, request);
+  return isSupportAdmin(user) || isItExecutiveUser(user) || userCanAccessRequest(user, request) || userMatchesAssignedTechnician(user, request);
 }
 
 function userMatchesAssignedTechnician(user, data) {
   const request = data?.request || data;
+  const techObj = request?.technician;
+  const techEmail = (techObj?.email_id || techObj?.email || '').toLowerCase();
+  const userEmail = (user?.email || user?.mail || user?.userPrincipalName || '').toLowerCase();
+
+  if (userEmail && techEmail && userEmail === techEmail) return true;
+
+  const techId = String(techObj?.id || '');
+  const userTechId = String(getRequesterId(user) || '');
+  if (techId && userTechId && techId === userTechId) return true;
+
   const assignedTechnician = normalizeComparableText(getAssignedTechnicianValue(request));
   if (!assignedTechnician) return false;
 
@@ -11273,20 +11299,20 @@ async function assertToolAllowedForUser(toolName, args, user) {
     return;
   }
 
-  if (isSupportAdmin(user)) return;
+  if (isSupportAdmin(user) || isItExecutiveUser(user) || isMciAdmin(user)) return;
 
   const isRequester = userCanAccessRequest(user, data);
   const isTechnician = userMatchesAssignedTechnician(user, data);
 
   if (toolName === 'sdp_add_note') {
     if (!isRequester && !isTechnician) {
-      throw new Error('Solo el solicitante del ticket o el técnico asignado pueden agregar notas de seguimiento a esta solicitud.');
+      throw new Error('Solo el solicitante del ticket, el técnico asignado o un administrador pueden agregar notas de seguimiento a esta solicitud.');
     }
     return;
   }
 
-  if (!isRequester) {
-    throw new Error('No tienes permiso para modificar ese ticket.');
+  if (!isRequester && !isTechnician) {
+    throw new Error('No tienes permiso para modificar este ticket.');
   }
 }
 

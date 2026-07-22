@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.6] - 2026-07-22
+
+### Fixed
+- **Validación Robusta de Permisos para Notas de Seguimiento (`assertToolAllowedForUser`, `userCanAccessRequest`, `userMatchesAssignedTechnician`):**
+  - **Solicitantes (Requesters):** Mejorada la coincidencia por ID de solicitante, correo exacto, prefijo de correo antes del `@` y nombre completo normalizado. Evita rechazos indebidos cuando el correo o dominio difieren ligeramente en SDP.
+  - **Técnicos Asignados (Assigned Technicians):** Añadida verificación directa por correo de técnico (`technician.email_id` / `technician.email`) e ID técnico (`technician.id`), además de la coincidencia por nombre normalizado. Previene que técnicos asignados reciban rechazo al agregar notas.
+  - **Administradores y Ejecutivos (Support Admins & IT Executives):** Incluidos expresamente `isItExecutiveUser` e `isMciAdmin` junto a `isSupportAdmin` para permitir el registro de notas de seguimiento sin restricciones.
+- **Reintento Automático de Payload en Servidor MCP (`sdp-mcp-server`):**
+  - Añadido fallback automático en `sdp_add_note` de `sdp-mcp-server`: si el endpoint `/requests/{id}/notes` rechaza la propiedad `show_to_requester` (error 4001/4000), realiza un segundo intento limpio enviando únicamente `{ note: { description: note_text } }`.
+
 ## [0.42.5] - 2026-07-22
 
 ### Fixed
