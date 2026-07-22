@@ -7537,6 +7537,80 @@ async function handleReportExportTurn({ message, user, onText, onCard, responseC
   }
 }
 
+/* ==========================================================================
+   Formateador Ejecutivo y Discreto de Tarjetas Adaptativas para Resultados SAP
+   ========================================================================== */
+
+function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
+  let textContent = '';
+  if (typeof toolOutput === 'string') {
+    textContent = toolOutput;
+  } else if (toolOutput?.content?.[0]?.text) {
+    textContent = toolOutput.content[0].text;
+  } else {
+    textContent = JSON.stringify(toolOutput);
+  }
+
+  // Quitar artefactos de markdown roto de tablas como |---|---|
+  const cleanContent = textContent
+    .replace(/\|\s*:?-+:?\s*/g, '')
+    .replace(/\[phone-redacted\]/g, '')
+    .replace(/Facturas\s*\|/g, '')
+    .trim();
+
+  const summaryText = `📊 Consulta de Registros Empresariales`;
+
+  const body = [
+    {
+      type: 'TextBlock',
+      text: '📊 Resultados de la Consulta',
+      weight: 'Bolder',
+      size: 'Medium',
+      color: 'Accent',
+      wrap: true
+    },
+    {
+      type: 'TextBlock',
+      text: 'A continuación se presentan los registros obtenidos en respuesta a tu consulta:',
+      isSubtle: true,
+      spacing: 'Small',
+      wrap: true
+    },
+    {
+      type: 'Container',
+      spacing: 'Medium',
+      style: 'emphasis',
+      items: [
+        {
+          type: 'TextBlock',
+          text: cleanContent,
+          wrap: true,
+          spacing: 'Small'
+        }
+      ]
+    },
+    {
+      type: 'TextBlock',
+      text: '💡 *Puedes solicitar más detalles especificando un número de registro, cliente o rango de fecha.*',
+      isSubtle: true,
+      size: 'Small',
+      spacing: 'Medium',
+      wrap: true
+    }
+  ];
+
+  return {
+    type: 'adaptive_card',
+    summaryText,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.4',
+      body
+    }
+  };
+}
+
 function createCsatSurveyAdaptiveCard(requestId, subject = 'Solicitud de Soporte') {
   const ticketId = `#${requestId}`;
   return {
@@ -8746,6 +8820,14 @@ async function runSupportTurn({
     rememberLastTicketFromToolOutput(session, aiDecision.tool_name, toolOutput);
 
     console.log(`[Bridge] Resultado técnico obtenido.`);
+
+    if (responseChannel === 'teams' && aiDecision.tool_name === 'sap_hana_query') {
+      const card = createSapQueryResultAdaptiveCard(toolOutput, message);
+      if (card) {
+        onCard?.(card);
+        return;
+      }
+    }
 
     if (responseChannel === 'teams' && aiDecision.tool_name === 'sdp_list_requests') {
       const card = createTicketsAdaptiveCard(toolOutput);

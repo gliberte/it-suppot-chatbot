@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.41.0] - 2026-07-22
+
+### Added
+- **Diseño de Tarjetas Adaptativas Elegantes para Resultados Empresariales (`createSapQueryResultAdaptiveCard`):**
+  - Implementada la función `createSapQueryResultAdaptiveCard` en `server.js` para interceptar las respuestas de la herramienta `sap_hana_query` en Teams y presentarlas dentro de un contenedor estilizado (`style: emphasis`).
+  - Limpieza automática de artefactos de código o tablas markdown desalineadas (`|---|---|`, `[phone-redacted]`).
+  - Mantiene la discreción ejecutiva presentando el resultado como *"Resultados de la Consulta"*.
+
 ## [0.40.4] - 2026-07-22
 
 ### Fixed
@@ -238,7 +246,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.40.4", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
