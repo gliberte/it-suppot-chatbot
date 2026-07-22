@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.1] - 2026-07-22
+
+### Fixed
+- **Validación Estricta de Permisos para Notas de Seguimiento (`assertToolAllowedForUser`):**
+  - Implementada la validación de propiedad y asignación para `sdp_add_note`. Sophia verifica antes de enviar cualquier nota que el usuario autenticado sea **el solicitante original del ticket**, **el técnico asignado** o un **administrador de soporte**.
+  - Si un usuario no autorizado intenta agregar notas a tickets ajenos, el sistema rechaza la acción con el mensaje: *"Solo el solicitante del ticket o el técnico asignado pueden agregar notas de seguimiento a esta solicitud."*
+
 ## [0.42.0] - 2026-07-22
 
 ### Fixed
@@ -286,7 +293,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.42.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.42.1", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

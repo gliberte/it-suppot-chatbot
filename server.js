@@ -74,6 +74,7 @@ const TOOLS_REQUIRING_CONFIRMATION = new Set([
   'sdp_execute_automation_action'
 ]);
 const REQUEST_SCOPED_MUTATION_TOOLS = new Set([
+  'sdp_add_note',
   'sdp_resolve_request',
   'sdp_assign_request',
   'sdp_update_request',
@@ -8738,6 +8739,7 @@ async function runSupportTurn({
   let preparedArgs;
   try {
     preparedArgs = await prepareToolArgs(aiDecision.tool_name, aiDecision.tool_args || {}, user, message, session);
+    await assertToolAllowedForUser(aiDecision.tool_name, preparedArgs, user);
   } catch (error) {
     onText(error.message);
     return;
@@ -11010,9 +11012,17 @@ async function assertToolAllowedForUser(toolName, args, user) {
 
   if (isSupportAdmin(user)) return;
 
-  if (toolName === 'sdp_add_note' && userMatchesAssignedTechnician(user, data)) return;
+  const isRequester = userCanAccessRequest(user, data);
+  const isTechnician = userMatchesAssignedTechnician(user, data);
 
-  if (!userCanAccessRequest(user, data)) {
+  if (toolName === 'sdp_add_note') {
+    if (!isRequester && !isTechnician) {
+      throw new Error('Solo el solicitante del ticket o el técnico asignado pueden agregar notas de seguimiento a esta solicitud.');
+    }
+    return;
+  }
+
+  if (!isRequester) {
     throw new Error('No tienes permiso para modificar ese ticket.');
   }
 }
