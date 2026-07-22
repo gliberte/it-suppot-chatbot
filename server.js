@@ -243,6 +243,20 @@ async function callMcpTool(name, args = {}) {
   if (name === 'sdp_add_note') {
     normalizedArgs.request_id = String(args.request_id || args.id || args.ticket_id || args.requestId || '');
     normalizedArgs.note_text = args.note_text || args.notes || args.comment || args.text || '';
+    if (args.file_base64) normalizedArgs.file_base64 = args.file_base64;
+    if (args.file_name) normalizedArgs.file_name = args.file_name;
+    if (args.file_mime) normalizedArgs.file_mime = args.file_mime;
+  }
+  if (name === 'sdp_create_request') {
+    if (args.file_base64) normalizedArgs.file_base64 = args.file_base64;
+    if (args.file_name) normalizedArgs.file_name = args.file_name;
+    if (args.file_mime) normalizedArgs.file_mime = args.file_mime;
+  }
+  if (name === 'sdp_upload_attachment') {
+    normalizedArgs.request_id = String(args.request_id || args.id || args.ticket_id || args.requestId || '');
+    normalizedArgs.file_base64 = args.file_base64 || '';
+    normalizedArgs.file_name = args.file_name || 'evidencia_teams.png';
+    normalizedArgs.file_mime = args.file_mime || 'image/png';
   }
 
   const result = await mcpClient.request(
@@ -9109,6 +9123,14 @@ async function runSupportTurn({
   }
 
   console.log(`[Bridge] Ejecutando: ${aiDecision.tool_name} con args:`, JSON.stringify(preparedArgs));
+  if (session?.lastImageAttachment && (aiDecision.tool_name === 'sdp_add_note' || aiDecision.tool_name === 'sdp_create_request' || aiDecision.tool_name === 'sdp_upload_attachment')) {
+    if (!preparedArgs.file_base64) {
+      preparedArgs.file_base64 = session.lastImageAttachment.file_base64;
+      preparedArgs.file_name = session.lastImageAttachment.file_name;
+      preparedArgs.file_mime = session.lastImageAttachment.file_mime;
+    }
+  }
+
   if (aiDecision.tool_name === 'sap_hana_query') {
     onStatus?.('Consultando datos requeridos...');
   } else {
@@ -9268,6 +9290,13 @@ function pickWorkingMessage(seed, options) {
 
 async function executeConfirmedAction(action, user, session = null) {
   const confirmedArgs = prepareConfirmedActionArgs(action);
+  if (session?.lastImageAttachment && (action.toolName === 'sdp_add_note' || action.toolName === 'sdp_create_request' || action.toolName === 'sdp_upload_attachment')) {
+    if (!confirmedArgs.file_base64) {
+      confirmedArgs.file_base64 = session.lastImageAttachment.file_base64;
+      confirmedArgs.file_name = session.lastImageAttachment.file_name;
+      confirmedArgs.file_mime = session.lastImageAttachment.file_mime;
+    }
+  }
   await assertToolAllowedForUser(action.toolName, confirmedArgs, user);
   const toolResult = await callMcpTool(action.toolName, confirmedArgs);
   const createdRequestId = action.toolName === 'sdp_create_request'
@@ -11833,6 +11862,18 @@ async function handleTeamsMessage(context) {
 
   if (imageAttachments.length > 0) {
     await context.sendActivity({ type: 'typing' });
+    try {
+      const downloaded = await downloadTeamsImageAttachment(context, imageAttachments[0]);
+      if (downloaded && downloaded.base64) {
+        session.lastImageAttachment = {
+          file_base64: downloaded.base64,
+          file_mime: downloaded.mimeType || 'image/png',
+          file_name: imageAttachments[0].name || 'evidencia_teams.png'
+        };
+      }
+    } catch (attErr) {
+      console.warn('[Teams] Error capturando binario de adjunto:', attErr.message);
+    }
     let imageAnalysis;
     try {
       imageAnalysis = await analyzeTeamsImageAttachments(context, text);

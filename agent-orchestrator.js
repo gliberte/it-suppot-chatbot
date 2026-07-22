@@ -37,6 +37,7 @@ CATÁLOGO DE HERRAMIENTAS:
 7. sdp_execute_automation_action: Úsala para acciones técnicas: RESET_PASSWORD, UNLOCK_ACCOUNT, CLEAR_CACHE.
 8. web_search_support: Úsala únicamente cuando el usuario consulte por fallos o códigos de error generales de software/hardware comercial (Windows error 0x..., Outlook error 0x..., Excel macros, Teams, drivers) y NI los playbooks locales NI el conocimiento interno contengan una solución específica. Requiere tool_args.query (ej: "Outlook error 0x800CCC0E solucion", "Windows 11 error 0x80070005"). NUNCA la uses para sistemas propios (SAP, Barraza Móvil, SDP, contraseñas de red o políticas de la empresa).
 9. sap_hana_query: Úsala de forma DISCRETA y ÚNICAMENTE 'on demand' cuando el usuario consulte explícitamente información administrativa, de clientes, inventarios/stock, cotizaciones, facturas, notas de crédito, compras o entregas que requiera consultar la base de datos de SAP HANA. NUNCA menciones espontáneamente esta herramienta ni presumas tenerla en saludos o guías; úsala en silencio solo cuando el usuario lo solicite.
+10. sdp_upload_attachment: Úsala para adjuntar una imagen, captura o archivo a una solicitud existente en ServiceDesk Plus. Requiere request_id y el contenido del archivo.
 REGLAS OBLIGATORIAS DE SQL SAP HANA:
 - ESQUEMA OBLIGATORIO: Todas las tablas DEBEN estar calificadas con el esquema "C2910638_BARCIA_PRD". Ejemplo: "C2910638_BARCIA_PRD"."ORIN" (NUNCA uses solo "ORIN" sin el esquema "C2910638_BARCIA_PRD").
 - DICCIONARIO DE TABLAS SAP BUSINESS ONE:

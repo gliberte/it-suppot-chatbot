@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.45.0] - 2026-07-22
+
+### Added
+- **Subida Real de Archivos Adjuntos a ServiceDesk Plus desde Teams (`sdp-mcp-server`, `server.js`):**
+  - **Soporte de Adjuntos multipart/form-data (`uploadAttachmentToSdp`):** Implementada la subida real de archivos y capturas de pantalla a la API REST v3 de SDP (`/requests/{id}/uploads`) mediante `form-data`.
+  - **Nueva Herramienta MCP `sdp_upload_attachment`:** Permite adjuntar imágenes, capturas o PDFs codificados en Base64 a cualquier ticket de SDP de forma explícita.
+  - **Integración Transparente en `sdp_create_request` y `sdp_add_note`:** Al recibir fotos o imágenes en Teams, el sistema captura automáticamente los datos binarios en la sesión (`session.lastImageAttachment`) y los adjunta como archivos reales al ticket o nota creada.
+
 ## [0.44.0] - 2026-07-22
 
 ### Added
