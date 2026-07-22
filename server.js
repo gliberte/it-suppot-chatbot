@@ -132,7 +132,7 @@ async function executeSapHanaQuery(sqlQuery) {
           'Content-Type': 'application/json',
           ...(sapApiKey ? { 'x-api-key': sapApiKey } : {})
         },
-        timeout: 25000
+        timeout: 45000
       }
     );
 

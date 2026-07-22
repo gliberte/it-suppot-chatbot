@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.41.1] - 2026-07-22
+
+### Fixed
+- **Optimización de Consultas SQL a SAP HANA y Mapeo de Campos (`agent-orchestrator.js` & `server.js`):**
+  - Incorporadas reglas de esquema en Gemini indicando que el campo de asignación de rutas en la tabla `OCRD` es `U_TM_RUTAS` (evitando búsquedas por campos inexistentes como `U_Ruta` que provocaban escaneos completos y colapsos).
+  - Obligatoriedad de la cláusula `TOP 50` para acotar los resultados y prevenir timeouts en consultas sobre la tabla masiva de clientes (`OCRD` con 15,000+ registros).
+  - Incrementado el timeout de pasarela a 45,000 ms.
+
 ## [0.41.0] - 2026-07-22
 
 ### Added
@@ -246,7 +254,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.1", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
