@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.39.0] - 2026-07-22
+
+### Added
+- **Integración Discreta 'On-Demand' de Consultas de Solo Lectura a SAP HANA (`sap_hana_query`):**
+  - Habilitada la herramienta MCP `sap_hana_query` dentro de las herramientas autorizadas para lectura en chat (`READ_ONLY_CHAT_TOOLS`).
+  - Configurado Gemini con directiva de uso **discreto e interactivo bajo demanda**: Sophia ejecutará consultas SQL `SELECT` en la base de datos `C2910638_BARCIA_PRD` ÚNICAMENTE cuando un usuario pregunte por stock, inventarios, facturas o entregas.
+  - La habilidad se mantiene oculta en saludos, menús de bienvenida y guías de capacidades para no promocionar activamente funciones fuera del alcance técnico.
+
 ## [0.38.0] - 2026-07-21
 
 ### Added
@@ -179,7 +187,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.38.0", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.39.0", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

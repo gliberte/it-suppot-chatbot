@@ -58,7 +58,8 @@ const READ_ONLY_CHAT_TOOLS = new Set([
   'sdp_list_requests',
   'sdp_get_request_details',
   'sdp_search_user',
-  'web_search_support'
+  'web_search_support',
+  'sap_hana_query'
 ]);
 
 const CONFIRMATION_WORDS = new Set(['confirmar', 'confirma', 'confirmo', 'confírmalo', 'confirmalo', 'si', 'sí', 'ok', 'dale']);
