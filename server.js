@@ -8690,7 +8690,11 @@ async function runSupportTurn({
   }
 
   console.log(`[Bridge] Ejecutando: ${aiDecision.tool_name} con args:`, JSON.stringify(preparedArgs));
-  onStatus?.(`Consultando herramienta: ${aiDecision.tool_name}...`);
+  if (aiDecision.tool_name === 'sap_hana_query') {
+    onStatus?.('Consultando datos requeridos...');
+  } else {
+    onStatus?.(`Consultando herramienta: ${aiDecision.tool_name}...`);
+  }
   await Promise.resolve(onWorking?.(createWorkingMessage(aiDecision, message)));
 
   try {
@@ -8788,6 +8792,14 @@ function createWorkingMessage(aiDecision, message = '') {
       'Claro, reviso el detalle de esa solicitud.',
       'Voy a abrir ese ticket y revisar lo importante.',
       'Sí, consulto el detalle y te resumo el estado.'
+    ]);
+  }
+
+  if (aiDecision?.tool_name === 'sap_hana_query') {
+    return pickWorkingMessage(message, [
+      'Claro, reviso esa información y te comparto el resumen.',
+      'Voy a consultar los registros requeridos.',
+      'Sí, busco esos datos y te los ordeno.'
     ]);
   }
 
