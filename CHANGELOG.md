@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.11] - 2026-07-22
+
+### Changed
+- **Simplificación de Notificaciones Broadcast de Versión (`createReleaseBroadcastAdaptiveCard`, `getLatestReleaseHighlights`, `server.js`):**
+  - **Foco Exclusivo en la ÚLTIMA Actualización:** Se eliminó el bloque estático de *"Capacidades Principales Activas"* para mostrar únicamente las novedades correspondientes a la versión actual que se está transmitiendo.
+  - **Ejemplos Dinámicos de la ÚLTIMA Versión:** Se removieron los ejemplos heredados de versiones pasadas (PowerBI, diagnóstico de red, cuentas AD) y se implementó un generador dinámico de prompts (`generateExamplesForRelease`) que presenta únicamente los comandos de prueba asociados a las nuevas funcionalidades de la versión.
+
 ## [0.42.10] - 2026-07-22
 
 ### Fixed

@@ -5923,8 +5923,8 @@ async function getLatestReleaseHighlights() {
     const latestBlock = sections[1] || '';
     const headerLineMatch = latestBlock.match(/^(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})/);
 
-    const version = headerLineMatch ? headerLineMatch[1] : '0.23.0';
-    const date = headerLineMatch ? headerLineMatch[2] : '2026-07-20';
+    const version = headerLineMatch ? headerLineMatch[1] : '0.42.10';
+    const date = headerLineMatch ? headerLineMatch[2] : '2026-07-22';
 
     const highlights = [];
     const lines = latestBlock.split('\n');
@@ -5942,18 +5942,52 @@ async function getLatestReleaseHighlights() {
       highlights.push('🚀 Mejoras de estabilidad, rendimiento y nuevas capacidades para el soporte IT en Teams.');
     }
 
-    return { version, date, highlights };
+    const examples = generateExamplesForRelease(highlights, latestBlock);
+
+    return { version, date, highlights, examples };
   } catch (error) {
     return {
-      version: '0.23.0',
-      date: '2026-07-20',
+      version: '0.42.10',
+      date: '2026-07-22',
       highlights: [
-        '🔑 **Flujo de Aprobación de Licencias de Software:** Aprobación en 1-clic por Teams.',
-        '📡 **Auto-Diagnóstico de Red e Impresoras:** Pruebas Nivel 1 de SAP, VPN, Gateway e Impresoras.',
-        '📢 **Notificaciones Proactivas de Versión:** Transmisión de novedades al personal de IT.'
+        '📝 **Confirmación Clara de Notas de Seguimiento en SDP:** Respuesta directa e instantánea al registrar notas.',
+        '📊 **Corrección de Consultas SAP Business One:** Soporte corregido para Notas de Crédito (ORIN) y Facturas (OINV).'
+      ],
+      examples: [
+        '💬 *"Agrega un seguimiento al ticket 12860: Este caso ya fue solucionado"*',
+        '💬 *"Dame las últimas 5 notas de crédito registradas en SAP"*'
       ]
     };
   }
+}
+
+function generateExamplesForRelease(highlights = [], latestBlock = '') {
+  const examples = [];
+  const fullText = (highlights.join(' ') + ' ' + latestBlock).toLowerCase();
+
+  if (/sap|orin|oinv|factura|nota.*credito|remision|odln|ordr|oqut|ocrd|esquema/i.test(fullText)) {
+    examples.push('💬 *"Dame las últimas 5 notas de crédito registradas en SAP"*');
+    examples.push('💬 *"Consultar las últimas facturas de venta en SAP"*');
+  }
+
+  if (/nota|seguimiento|sdp_add_note|comentario|evidencia/i.test(fullText)) {
+    examples.push('💬 *"Agrega un seguimiento al ticket 12860: Este caso ya fue atendido por Eliseo Quintana"*');
+  }
+
+  if (/cierre|cancelaci.n|cerrar ticket|cancelar solicitud/i.test(fullText)) {
+    examples.push('💬 *"Solicito cerrar el ticket 12860"*');
+  }
+
+  if (/mci|metas|crucialmente|lider/i.test(fullText)) {
+    examples.push('💬 *"Ver mis MCI activas"*');
+  }
+
+  if (examples.length === 0) {
+    examples.push('💬 *"Agrega una nota de seguimiento al ticket 12860"*');
+    examples.push('💬 *"Dame las últimas 5 facturas en SAP"*');
+  }
+
+  return examples;
 }
 
 /* ==========================================================================
@@ -6085,7 +6119,7 @@ function createAudioTranscriptionCard(audioResult) {
 }
 
 function createReleaseBroadcastAdaptiveCard(releaseInfo) {
-  const { version, highlights } = releaseInfo;
+  const { version, highlights, examples = [] } = releaseInfo;
   const summaryText = `🚀 Sophia ha sido actualizada a la versión v${version}`;
 
   const body = [
@@ -6099,13 +6133,13 @@ function createReleaseBroadcastAdaptiveCard(releaseInfo) {
     },
     {
       type: 'TextBlock',
-      text: 'Hola Team IT, he recibido nuevas mejoras para optimizar nuestra gestión de soporte durante la fase piloto:',
+      text: 'Hola Team IT, he recibido nuevas mejoras para optimizar nuestra gestión de soporte:',
       wrap: true,
       spacing: 'Small'
     },
     {
       type: 'TextBlock',
-      text: '✨ **Novedades y Actualizaciones Recientes:**',
+      text: '✨ **Novedades de esta actualización:**',
       weight: 'Bolder',
       spacing: 'Medium',
       wrap: true
@@ -6118,23 +6152,8 @@ function createReleaseBroadcastAdaptiveCard(releaseInfo) {
     })),
     {
       type: 'TextBlock',
-      text: '⚡ **Capacidades Principales Activas:**\n' +
-            '- 🔑 **Licencias:** Aprobación en 1-clic por Teams para PowerBI, M365, Visio y Adobe.\n' +
-            '- 📡 **Diagnóstico Nivel 1:** Chequeo en tiempo real de SAP, VPN, Gateway e Impresoras.\n' +
-            '- 🔓 **Autogestión AD:** Diagnóstico y desbloqueo seguro de cuentas Active Directory.\n' +
-            '- 🚨 **Incidentes Masivos:** Detección de caídas de servicio y respuestas preventivas.\n' +
-            '- 📊 **Salud IT:** Dashboard ejecutivo de indicadores operativos y SLA.\n' +
-            '- 🖼️ **Evidencias:** Análisis de capturas de pantalla e imágenes adjuntas en Teams.',
-      wrap: true,
-      spacing: 'Medium'
-    },
-    {
-      type: 'TextBlock',
-      text: '💡 **Escribe en este chat para probar las funciones de inmediato:**\n' +
-            '- 💬 *"Solicitar licencia de PowerBI Pro"*\n' +
-            '- 💬 *"Ejecutar diagnóstico de red"*\n' +
-            '- 💬 *"¿Mi cuenta de AD está bloqueada?"*\n' +
-            '- 💬 *"Dashboard"* | *"Mis tickets resueltos"*',
+      text: '💡 **Escribe en este chat para probar las nuevas funciones de inmediato:**\n' +
+            examples.map((ex) => (ex.startsWith('-') ? ex : `- ${ex}`)).join('\n'),
       wrap: true,
       spacing: 'Medium',
       isSubtle: true
