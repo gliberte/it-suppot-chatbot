@@ -1731,8 +1731,7 @@ function normalizeTicketToolDecision(aiDecision, message, user) {
         toolArgs.fields?.note_text ||
         toolArgs.fields?.notes ||
         toolArgs.fields?.comment ||
-        extractFollowUpTextFromMessage(message),
-      is_public: toolArgs.is_public ?? true
+        extractFollowUpTextFromMessage(message)
     };
   }
 
@@ -1909,9 +1908,9 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
 
   if (toolName === 'sdp_add_note') {
     args.note_text = args.note_text || args.notes || args.comment || extractFollowUpTextFromMessage(message);
-    args.is_public = args.is_public ?? true;
     delete args.notes;
     delete args.comment;
+    delete args.is_public;
   }
 
   if (toolName === 'sdp_update_request' && args.status) {
@@ -6688,16 +6687,22 @@ async function handleTicketCancellationTurn({ message, user, session, onText, on
       console.warn('[Cancellation] Error guardando historial:', err.message);
     }
 
+    let noteRegistered = false;
     try {
       await callMcpTool('sdp_add_note', {
         request_id: requestId,
         note_text: `El usuario (${user?.email || 'solicitante'}) solicitó la cancelación/cierre de esta solicitud desde Teams: "Era una prueba y ya no es necesario". Favor proceder con el cierre formal en ServiceDesk Plus.`
       });
+      noteRegistered = true;
     } catch (sdpErr) {
       console.warn('[Cancellation] Error agregando nota en SDP:', sdpErr.message);
     }
 
-    onText?.(`✅ **El Ticket #${requestId} ha sido CANCELADO exitosamente.**\n\nSe notificó formalmente a ServiceDesk Plus con la nota aclaratoria para que la Mesa de Ayuda proceda con el cierre formal.`);
+    if (noteRegistered) {
+      onText?.(`✅ **Solicitud de cierre registrada — Ticket #${requestId}**\n\nLa Mesa de Ayuda fue notificada en ServiceDesk Plus. Un técnico procederá con el cierre formal en breve.`);
+    } else {
+      onText?.(`📋 **Solicitud de cierre pendiente — Ticket #${requestId}**\n\nTu solicitud quedó registrada en el sistema. Sin embargo, no fue posible agregar la nota directamente en ServiceDesk Plus en este momento.\n\n**Por favor notifica al técnico asignado** para que proceda con el cierre formal del ticket.`);
+    }
     return true;
   }
 

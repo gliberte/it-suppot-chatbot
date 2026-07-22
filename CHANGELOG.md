@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.5] - 2026-07-22
+
+### Fixed
+- **Mensaje honesto en cierre de ticket cuando SDP no permite agregar notas (`handleTicketCancellationTurn`):**
+  - Cuando `sdp_add_note` falla (error 4002 permiso en SDP), el usuario ya no recibe falsamente "El ticket ha sido cancelado exitosamente". Ahora recibe un mensaje claro indicando que la solicitud quedó pendiente y debe notificar al técnico asignado para el cierre formal.
+  - Cuando `sdp_add_note` tiene éxito, el mensaje confirma que la Mesa de Ayuda fue notificada.
+- **Eliminado campo `is_public` de args de `sdp_add_note`:** Esta versión de SDP On-Premise no acepta ese campo (error 4001 Extra key). El MCP usa correctamente `show_to_requester` internamente.
+
 ## [0.42.4] - 2026-07-22
 
 ### Fixed
@@ -321,7 +329,7 @@ Formato recomendado:
 
 ### Fixed
 - **Optimización del Parser de Novedades (`getLatestReleaseHighlights`):**
-  - Corregida la extracción de versiones en `CHANGELOG.md` para garantizar el despliegue correcto de las notas de la versión `0.42.4` en las tarjetas de broadcast de Teams.
+  - Corregida la extracción de versiones en `CHANGELOG.md` para garantizar el despliegue correcto de las notas de la  "version": "0.42.5",` en las tarjetas de broadcast de Teams.
 
 ## [0.23.1] - 2026-07-20
 
