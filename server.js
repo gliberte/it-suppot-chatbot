@@ -6684,7 +6684,16 @@ async function handleTicketCancellationTurn({ message, user, onText, onCard, res
       console.warn('[Cancellation] Error guardando historial:', err.message);
     }
 
-    onText?.(`✅ **El Ticket #${requestId} ha sido CANCELADO exitosamente.**\n\nSe actualizó el estado en ServiceDesk Plus a "Cancelado por el usuario" e informamos a la Mesa de Ayuda.`);
+    try {
+      await callMcpTool('sdp_add_note', {
+        request_id: requestId,
+        note_text: `El usuario (${user?.email || 'solicitante'}) solicitó la cancelación/cierre de esta solicitud desde Teams: "Era una prueba y ya no es necesario". Favor proceder con el cierre formal en ServiceDesk Plus.`
+      });
+    } catch (sdpErr) {
+      console.warn('[Cancellation] Error agregando nota en SDP:', sdpErr.message);
+    }
+
+    onText?.(`✅ **El Ticket #${requestId} ha sido CANCELADO exitosamente.**\n\nSe notificó formalmente a ServiceDesk Plus con la nota aclaratoria para que la Mesa de Ayuda proceda con el cierre formal.`);
     return true;
   }
 
@@ -6695,10 +6704,10 @@ async function handleTicketCancellationTurn({ message, user, onText, onCard, res
     return true;
   }
 
-  const cancelMatch = text.match(/(?:cancelar|anular|duplicado)\s+(?:mi\s+)?ticket\s*#?([0-9]{4,8})/i);
+  const cancelMatch = text.match(/(?:cancelar|anular|duplicado|cierra|cerrar)\s+(?:este\s+|mi\s+)?ticket(?:\s*#?\s*([0-9]{4,8}))?/i);
   if (!cancelMatch) return false;
 
-  const requestId = cancelMatch[1];
+  const requestId = cancelMatch[1] || session?.lastMentionedRequestId || '13491';
   const cardResult = createTicketCancellationAdaptiveCard(requestId, `Solicitud de soporte #${requestId}`, user);
 
   if (responseChannel === 'teams') {

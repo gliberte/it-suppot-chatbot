@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.41.4] - 2026-07-22
+
+### Fixed
+- **Mejora del Módulo de Cancelación de Tickets (`handleTicketCancellationTurn`):**
+  - Reconocimiento dinámico de frases conversacionales como *"cierra este ticket"* o *"cerrar ticket"*.
+  - Redirección automática de la acción hacia el módulo de cancelación de tickets de Sophia (`handleTicketCancellationTurn`), agregando la nota aclaratoria directamente a ServiceDesk Plus (`sdp_add_note`) en lugar de intentar una mutación directa de estado restringida por la API (`status_code: 4002: User does not have this permission`).
+
 ## [0.41.3] - 2026-07-22
 
 ### Fixed
@@ -266,7 +273,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.3", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.4", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
