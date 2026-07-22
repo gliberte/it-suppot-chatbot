@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.41.3] - 2026-07-22
+
+### Fixed
+- **Uso Obligatorio de `CardFName` para Nombres de Clientes en Consultas SAP (`agent-orchestrator.js`):**
+  - Configurada la regla estricta en Gemini para seleccionar y desplegar siempre el campo `CardFName` (Nombre Comercial/Fantástico) al consultar o mostrar clientes en SAP HANA, en lugar del nombre legal `CardName`.
+
 ## [0.41.2] - 2026-07-22
 
 ### Fixed
@@ -260,7 +266,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.2", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.3", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
