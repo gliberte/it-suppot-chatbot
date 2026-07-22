@@ -5965,11 +5965,7 @@ function generateExamplesForRelease(highlights = [], latestBlock = '') {
   const examples = [];
   const fullText = (highlights.join(' ') + ' ' + latestBlock).toLowerCase();
 
-  if (/sap|orin|oinv|factura|nota.*credito|remision|odln|ordr|oqut|ocrd|esquema/i.test(fullText)) {
-    examples.push('💬 *"Dame las últimas 5 notas de crédito registradas en SAP"*');
-    examples.push('💬 *"Consultar las últimas facturas de venta en SAP"*');
-  }
-
+  // REGLA DE SEGURIDAD Y PRIVACIDAD: NUNCA publicar ni exponer capacidades de SAP en el broadcast a usuarios generales
   if (/nota|seguimiento|sdp_add_note|comentario|evidencia/i.test(fullText)) {
     examples.push('💬 *"Agrega un seguimiento al ticket 12860: Este caso ya fue atendido por Eliseo Quintana"*');
   }
@@ -5984,7 +5980,7 @@ function generateExamplesForRelease(highlights = [], latestBlock = '') {
 
   if (examples.length === 0) {
     examples.push('💬 *"Agrega una nota de seguimiento al ticket 12860"*');
-    examples.push('💬 *"Dame las últimas 5 facturas en SAP"*');
+    examples.push('💬 *"Ver mis tickets abiertos"*');
   }
 
   return examples;
@@ -7700,7 +7696,12 @@ function formatSapFieldLabel(key) {
     Phone1: 'Teléfono',
     E_Mail: 'Email',
     City: 'Ciudad',
-    Country: 'País'
+    Country: 'País',
+    Dscription: 'Producto / Descripción',
+    Quantity: 'Cantidad',
+    Price: 'Precio Unitario',
+    LineTotal: 'Total Línea',
+    DocEntry: 'ID Interno'
   };
   return labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^_+|_+$/g, '').trim();
 }

@@ -9,6 +9,19 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.43.0] - 2026-07-22
+
+### Added
+- **Consultas de Detalle de Líneas de Documentos y Filtros por Cliente en SAP Business One (`agent-orchestrator.js`, `server.js`):**
+  - **Detalle de Artículos por Documento (`DocNum`):** Mapeadas las tablas de detalle (`INV1`, `RIN1`, `DLN1`, `RDR1`, `QUT1`) unidas a la cabecera por `DocEntry` para consultar productos, cantidades, precios unitarios y totales de línea de una factura, pedido, remisión o nota de crédito específica.
+  - **Filtro por Cliente o RUC:** Soporte para filtrar documentos por nombre comercial, Razón Social o RUC (`CardCode` / `CardName`).
+  - **Mapeo de Campos Amigables (`formatSapFieldLabel`):** Añadidos alias visuales para `Dscription` (*Producto / Descripción*), `Quantity` (*Cantidad*), `Price` (*Precio Unitario*) y `LineTotal` (*Total Línea*).
+
+### Security & Privacy
+- **Política Estricta de Discreción e Invisibilidad de SAP:**
+  - Se configuró la regla de seguridad para garantizar que NUNCA se incluyan ejemplos de consultas a SAP en las tarjetas de broadcast proactivo ni se sugieran capacidades de SAP a usuarios generales.
+  - La herramienta `sap_hana_query` opera de forma estrictamente silenciosa y *on demand* únicamente cuando un usuario autorizado consulte explícitamente información administrativa de SAP.
+
 ## [0.42.11] - 2026-07-22
 
 ### Changed
