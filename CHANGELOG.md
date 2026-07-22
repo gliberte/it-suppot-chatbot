@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.39.2] - 2026-07-22
+
+### Added
+- **Soporte de Arquitectura Multiserver MCP para Conexión SAP HANA (`sapMcpClient`):**
+  - Implementado cliente Stdio secundario `sapMcpClient` en `server.js` para conectar con el servidor MCP de SAP HANA (`sap-mcp-server/build/index.js`).
+  - Actualizado el enrutador de herramientas `callMcpTool` para dirigir dinámicamente las llamadas de `sap_hana_query` hacia el motor MCP de SAP HANA.
+
 ## [0.39.1] - 2026-07-22
 
 ### Fixed
@@ -193,7 +200,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.39.1", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.39.2", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 

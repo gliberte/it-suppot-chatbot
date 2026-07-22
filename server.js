@@ -88,7 +88,7 @@ app.use('/exports', express.static(path.join(__dirname, 'public', 'exports')));
 
 const PORT = 3001;
 
-// Configuración del transporte para conectar con el servidor MCP de SDP
+// Configuración del transporte para conectar con los servidores MCP (SDP y SAP)
 const transport = new StdioClientTransport({
   command: "node",
   args: [path.join(__dirname, "../sdp-mcp-server/build/index.js")],
@@ -100,12 +100,31 @@ const mcpClient = new Client(
   { capabilities: {} }
 );
 
+// Cliente MCP para SAP HANA (si existe el paquete/servidor mcp local)
+let sapMcpClient = null;
+const SAP_MCP_PATH = process.env.SAP_MCP_SERVER_PATH || path.join(__dirname, "../sap-mcp-server/build/index.js");
+
 async function initMCP() {
   try {
     await mcpClient.connect(transport);
     console.log("Chatbot Bridge conectado al servidor MCP de ServiceDesk Plus");
   } catch (error) {
-    console.error("Error conectando a MCP:", error);
+    console.error("Error conectando a MCP SDP:", error);
+  }
+
+  try {
+    if (await fileExists(SAP_MCP_PATH)) {
+      const sapTransport = new StdioClientTransport({
+        command: "node",
+        args: [SAP_MCP_PATH],
+        env: process.env
+      });
+      sapMcpClient = new Client({ name: "chatbot-bridge-sap", version: "1.0.0" }, { capabilities: {} });
+      await sapMcpClient.connect(sapTransport);
+      console.log("Chatbot Bridge conectado al servidor MCP de SAP HANA");
+    }
+  } catch (error) {
+    console.warn("Servidor MCP de SAP HANA no disponible localmente:", error.message);
   }
 }
 
@@ -173,6 +192,19 @@ app.post('/api/admin/weekly-report', async (req, res) => {
 });
 
 async function callMcpTool(name, args = {}) {
+  if (name === 'sap_hana_query') {
+    if (sapMcpClient) {
+      return await sapMcpClient.request(
+        {
+          method: "tools/call",
+          params: { name, arguments: args },
+        },
+        CallToolResultSchema
+      );
+    }
+    throw new Error('El servicio de conexión a SAP HANA no está activo en este servidor.');
+  }
+
   if (name === 'web_search_support') {
     const text = await performWebSearchSupport(args.query || args.search_text || args.text || '');
     return {
