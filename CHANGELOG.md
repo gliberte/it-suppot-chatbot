@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.41.2] - 2026-07-22
+
+### Fixed
+- **Ampliación del Límite de Resultados SQL SAP (`agent-orchestrator.js`):**
+  - Ampliada la regla de restricción de resultados de Gemini de `TOP 50` a `TOP 100` en la herramienta `sap_hana_query`.
+
 ## [0.41.1] - 2026-07-22
 
 ### Fixed
@@ -254,7 +260,7 @@ Formato recomendado:
 
 ### Fixed
 - **Extracción Dinámica de Novedades desde `CHANGELOG.md` (`getLatestReleaseHighlights`):**
-  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.1", v0.23.0, etc.).
+  - Reemplazada la lista estática en código por un parser dinámico que lee los viñetas exactos de la última versión en `CHANGELOG.md`. Ahora las tarjetas de broadcast reflejan fielmente las características específicas introducidas en cada versión  "version": "0.41.2", v0.23.0, etc.).
 
 ## [0.23.0] - 2026-07-20
 
