@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.8] - 2026-07-22
+
+### Fixed
+- **Corrección de Columna de Cliente en Consultas de Documentos SAP Business One (`agent-orchestrator.js`):**
+  - **Identificación del problema:** Al consultar documentos directos (Notas de Crédito `ORIN`, Facturas `OINV`, Remisiones `ODLN`, Pedidos `ORDR`, Cotizaciones `OQUT`), el orquestador incluía la columna `"CardFName"`, provocando el error `la columna "CardFName" no se encuentra en la tabla "ORIN"`.
+  - **Solución:** Se actualizó la regla de consulta SQL SAP HANA aclarando que las cabeceras de documentos contienen `"CardName"` (y `"CardCode"`), mientras que `"CardFName"` (Nombre Comercial) pertenece únicamente al maestro de socios de negocio (`OCRD`). Se instruyó seleccionar `"CardName"` en consultas directas de documentos sin JOIN.
+
 ## [0.42.7] - 2026-07-22
 
 ### Fixed

@@ -50,8 +50,11 @@ REGLAS OBLIGATORIAS DE SQL SAP HANA:
   * Stock por Bodega: "C2910638_BARCIA_PRD"."OITW"
   * Vendedores: "C2910638_BARCIA_PRD"."OSLP"
   * Bodegas: "C2910638_BARCIA_PRD"."OWHS"
-- CONSULTA DE ÚLTIMOS REGISTROS: Cuando pidan los "últimos X" registros (ej. últimas 5 notas de crédito o últimas 5 facturas), ordena siempre de forma descendente por el campo "DocNum" o "DocDate" (ORDER BY "DocNum" DESC) y aplica la cláusula TOP correspondiente (ej: SELECT TOP 5 "DocNum", "DocDate", "CardFName", "DocTotal" FROM "C2910638_BARCIA_PRD"."ORIN" ORDER BY "DocNum" DESC).
-- REGLAS DE CAMPOS: Para el nombre comercial del cliente usa "CardFName" (NO "CardName"). El campo de ruta en "OCRD" es "U_TM_RUTAS" (NO "U_Ruta").
+- CONSULTA DE ÚLTIMOS REGISTROS: Cuando pidan los "últimos X" registros (ej. últimas 5 notas de crédito o últimas 5 facturas), ordena siempre de forma descendente por el campo "DocNum" o "DocDate" (ORDER BY "DocNum" DESC) y aplica la cláusula TOP correspondiente (ej: SELECT TOP 5 "DocNum", "DocDate", "CardCode", "CardName", "DocTotal" FROM "C2910638_BARCIA_PRD"."ORIN" ORDER BY "DocNum" DESC).
+- REGLAS DE CAMPOS Y NOMBRES DE CLIENTE:
+  * En tablas de documentos ("ORIN", "OINV", "ODLN", "ORDR", "OQUT"), el nombre del cliente es "CardName" (NO existe la columna "CardFName" en tablas de documentos).
+  * En la tabla de maestros de clientes ("OCRD"), "CardName" es Razón Social y "CardFName" es Nombre Comercial. El campo de ruta en "OCRD" es "U_TM_RUTAS" (NO "U_Ruta").
+  * Para consultas directas a documentos sin JOIN, selecciona siempre "CardName". Si se solicita explícitamente Nombre Comercial en documentos, realiza JOIN con "OCRD" ON T0."CardCode" = T1."CardCode".
 - LÍMITE GENERAL: Si no especifican cantidad, usa "TOP 100" para no exceder timeouts.
 
 REGLAS DE ORO:
