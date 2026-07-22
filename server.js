@@ -113,7 +113,7 @@ async function initMCP() {
 }
 
 async function executeSapHanaQuery(sqlQuery) {
-  const sapEndpointUrl = process.env.SAP_HANA_GATEWAY_URL || 'http://192.170.1.209:5678/webhook/sap-hana-query';
+  const sapEndpointUrl = process.env.SAP_HANA_GATEWAY_URL || 'http://192.170.1.209:5678/webhook/df0596a7-f358-480b-8d66-dd51bfc114c6/chat';
   const sapApiKey = process.env.SAP_HANA_GATEWAY_KEY || '';
 
   console.log(`[SAP Gateway] Iniciando consulta a: ${sapEndpointUrl}`);
