@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.44.0] - 2026-07-22
+
+### Added
+- **Botones de Acción Directa (1-Clic) en Tarjetas Adaptativas de Teams (`server.js`):**
+  - **Acciones Interactivas 1-Clic (`ActionSet`):** Incorporados botones interactivos `Action.Submit` directamente dentro de las tarjetas adaptativas de detalle de tickets (`[ 📝 Agregar Nota ]`, `[ 🔒 Solicitar Cierre ]`, `[ 📋 Mis Tickets ]`), listas de atención (`[ 🔍 Ver Detalle ]`, `[ 📝 Agregar Nota ]`) y proyectos MCI (`[ 📝 Actualizar Avance ]`, `[ 📋 Mis MCI ]`).
+  - **Manejador de Payloads en Teams (`getTeamsText`, `server.js`):** Implementado el procesamiento de los eventos de clic (`__sophia_card_add_note`, `__sophia_card_close_ticket`, `__sophia_card_view_details`, `__sophia_card_list_my_tickets`, `__sophia_card_update_mci`, `__sophia_card_list_mci`) para permitir que los usuarios ejecuten o preparen acciones instantáneamente sin necesidad de escribir comandos en texto libre.
+
 ## [0.43.0] - 2026-07-22
 
 ### Added

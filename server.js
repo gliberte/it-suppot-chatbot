@@ -9826,8 +9826,23 @@ function createTicketAttentionBlock(requests) {
 
   const { request, attention } = ranked[0];
   const ticketId = `#${request.id || '-'}`;
+  const cleanId = String(request.id || '').replace('#', '');
   const reasons = attention.reasons.slice(0, 3).join('; ');
   const suggestion = attention.suggestion || 'Conviene revisar el detalle y decidir si requiere seguimiento.';
+
+  const actionButtons = [];
+  if (cleanId) {
+    actionButtons.push({
+      type: 'Action.Submit',
+      title: '🔍 Ver Detalle',
+      data: { action: '__sophia_card_view_details', requestId: cleanId }
+    });
+    actionButtons.push({
+      type: 'Action.Submit',
+      title: '📝 Agregar Nota',
+      data: { action: '__sophia_card_add_note', requestId: cleanId }
+    });
+  }
 
   return {
     type: 'Container',
@@ -9861,7 +9876,12 @@ function createTicketAttentionBlock(requests) {
         wrap: true,
         isSubtle: true,
         spacing: 'Small'
-      }
+      },
+      ...(actionButtons.length > 0 ? [{
+        type: 'ActionSet',
+        spacing: 'Small',
+        actions: actionButtons
+      }] : [])
     ]
   };
 }
@@ -10687,6 +10707,7 @@ function createMciDetailsAdaptiveCard(request) {
 }
 
 function createMciDetailOptionsBlock(mciId) {
+  const cleanId = String(mciId || '').replace('#', '');
   return {
     type: 'Container',
     spacing: 'Medium',
@@ -10694,16 +10715,32 @@ function createMciDetailOptionsBlock(mciId) {
     items: [
       {
         type: 'TextBlock',
-        text: 'Opciones',
+        text: 'Acciones Rápidas (1-Clic)',
         weight: 'Bolder',
         wrap: true
       },
       {
+        type: 'ActionSet',
+        spacing: 'Small',
+        actions: [
+          {
+            type: 'Action.Submit',
+            title: '📝 Actualizar Avance',
+            data: { action: '__sophia_card_update_mci', requestId: cleanId }
+          },
+          {
+            type: 'Action.Submit',
+            title: '📋 Ver Mis MCI',
+            data: { action: '__sophia_card_list_mci' }
+          }
+        ]
+      },
+      {
         type: 'TextBlock',
         text: [
-          `Actualizar avance de la MCI ${mciId}`,
-          `Actualizar predictiva de la MCI ${mciId}`,
-          `Actualizar fecha de la MCI ${mciId}`
+          `Actualizar avance de la MCI #${cleanId}`,
+          `Actualizar predictiva de la MCI #${cleanId}`,
+          `Actualizar fecha de la MCI #${cleanId}`
         ].map((option) => `- ${option}`).join('\n'),
         wrap: true,
         spacing: 'Small',
@@ -11093,13 +11130,35 @@ function splitTextForAdaptiveCard(text, maxChunkLength) {
 }
 
 function createDetailOptionsBlock(ticketId, request) {
+  const cleanId = String(ticketId || '').replace('#', '');
   const category = getDisplayName(request.category);
   const status = normalizeComparableText(getDisplayName(request.status));
   const isResolvedOrClosed = status.includes('resuelt') || status.includes('cerrad') || status.includes('resolved') || status.includes('closed');
 
+  const actionButtons = [];
+  if (cleanId) {
+    actionButtons.push({
+      type: 'Action.Submit',
+      title: '📝 Agregar Nota',
+      data: { action: '__sophia_card_add_note', requestId: cleanId }
+    });
+    if (!isResolvedOrClosed) {
+      actionButtons.push({
+        type: 'Action.Submit',
+        title: '🔒 Solicitar Cierre',
+        data: { action: '__sophia_card_close_ticket', requestId: cleanId }
+      });
+    }
+  }
+  actionButtons.push({
+    type: 'Action.Submit',
+    title: '📋 Mis Tickets',
+    data: { action: '__sophia_card_list_my_tickets' }
+  });
+
   const options = [
-    `Agregar un seguimiento al ticket ${ticketId}`,
-    isResolvedOrClosed ? `Calificar la atención del ticket ${ticketId}` : null,
+    cleanId ? `Agregar un seguimiento al ticket #${cleanId}` : null,
+    isResolvedOrClosed && cleanId ? `Calificar la atención del ticket #${cleanId}` : null,
     category ? `Ver tickets similares de ${category}` : 'Ver tickets similares',
     'Crear una nueva solicitud relacionada'
   ].filter(Boolean);
@@ -11111,9 +11170,14 @@ function createDetailOptionsBlock(ticketId, request) {
     items: [
       {
         type: 'TextBlock',
-        text: 'Opciones',
+        text: 'Acciones Rápidas (1-Clic)',
         weight: 'Bolder',
         wrap: true
+      },
+      {
+        type: 'ActionSet',
+        spacing: 'Small',
+        actions: actionButtons
       },
       {
         type: 'TextBlock',
@@ -11573,6 +11637,24 @@ function getTeamsText(activity) {
     if (activity.value.action === '__sophia_refresh_infra_health') {
       return `__sophia_refresh_infra_health`;
     }
+    if (activity.value.action === '__sophia_card_add_note' && activity.value.requestId) {
+      return `__sophia_card_add_note:${activity.value.requestId}`;
+    }
+    if (activity.value.action === '__sophia_card_close_ticket' && activity.value.requestId) {
+      return `__sophia_card_close_ticket:${activity.value.requestId}`;
+    }
+    if (activity.value.action === '__sophia_card_view_details' && activity.value.requestId) {
+      return `__sophia_card_view_details:${activity.value.requestId}`;
+    }
+    if (activity.value.action === '__sophia_card_list_my_tickets') {
+      return `__sophia_card_list_my_tickets`;
+    }
+    if (activity.value.action === '__sophia_card_update_mci' && activity.value.requestId) {
+      return `__sophia_card_update_mci:${activity.value.requestId}`;
+    }
+    if (activity.value.action === '__sophia_card_list_mci') {
+      return `__sophia_card_list_mci`;
+    }
     if (activity.value.action === '__sophia_verify_otp') {
       return `__sophia_verify_otp:${activity.value.challengeId}:${activity.value.otpCode || ''}`;
     }
@@ -11850,6 +11932,44 @@ async function handleTeamsMessage(context) {
     scheduleRuntimeStateSave();
     await sendTeamsReply(context, 'Listo, cancelé la acción pendiente.');
     return;
+  }
+
+  const cardAddNoteMatch = normalizedText.match(/^__sophia_card_add_note:(\d+)$/i);
+  if (cardAddNoteMatch) {
+    const requestId = cardAddNoteMatch[1];
+    rememberLastTicket(session, { id: requestId }, 'card_action');
+    await sendTeamsReply(context, `Claro, para agregar una nota de seguimiento al ticket #${requestId}, escríbeme a continuación el texto o comentario que deseas registrar.`);
+    return;
+  }
+
+  const cardCloseMatch = normalizedText.match(/^__sophia_card_close_ticket:(\d+)$/i);
+  if (cardCloseMatch) {
+    const requestId = cardCloseMatch[1];
+    rememberLastTicket(session, { id: requestId }, 'card_action');
+    messageForSophia = `Solicito cerrar el ticket #${requestId}`;
+  }
+
+  const cardViewDetailsMatch = normalizedText.match(/^__sophia_card_view_details:(\d+)$/i);
+  if (cardViewDetailsMatch) {
+    const requestId = cardViewDetailsMatch[1];
+    rememberLastTicket(session, { id: requestId }, 'card_action');
+    messageForSophia = `Ver el detalle del ticket #${requestId}`;
+  }
+
+  if (normalizedText === '__sophia_card_list_my_tickets') {
+    messageForSophia = `Ver mis tickets abiertos`;
+  }
+
+  const cardUpdateMciMatch = normalizedText.match(/^__sophia_card_update_mci:(\d+)$/i);
+  if (cardUpdateMciMatch) {
+    const requestId = cardUpdateMciMatch[1];
+    rememberLastTicket(session, { id: requestId }, 'card_action');
+    await sendTeamsReply(context, `Claro, para actualizar la MCI #${requestId}, indícame a continuación el porcentaje de avance o comentario que deseas aplicar.`);
+    return;
+  }
+
+  if (normalizedText === '__sophia_card_list_mci') {
+    messageForSophia = `Ver mis MCI activas`;
   }
 
   const draftUpdate = updateCreateRequestDraftFromMessage(session, messageForSophia, user);
