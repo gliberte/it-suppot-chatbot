@@ -9,6 +9,23 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.7] - 2026-07-22
+
+### Fixed
+- **Esquema Obligatorio y Diccionario de Tablas SAP Business One (`agent-orchestrator.js`):**
+  - **Calificación Obligatoria de Esquema:** Se instruyó explícitamente a Gemini en la regla 9 de `sap_hana_query` que TODAS las tablas deben ir prefijadas con el esquema `"C2910638_BARCIA_PRD"` (ej. `"C2910638_BARCIA_PRD"."ORIN"`). Se corrigió la falla *"El nombre de la tabla 'ORIN' no es válido"* al consultar notas de crédito sin prefijo de esquema.
+  - **Diccionario de Tablas SAP:** Incluidas equivalencias oficiales:
+    - Notas de Crédito: `"C2910638_BARCIA_PRD"."ORIN"`
+    - Facturas de Venta: `"C2910638_BARCIA_PRD"."OINV"`
+    - Entregas / Remisiones: `"C2910638_BARCIA_PRD"."ODLN"`
+    - Pedidos / Órdenes: `"C2910638_BARCIA_PRD"."ORDR"`
+    - Cotizaciones: `"C2910638_BARCIA_PRD"."OQUT"`
+    - Socios de Negocio: `"C2910638_BARCIA_PRD"."OCRD"`
+    - Artículos / Productos: `"C2910638_BARCIA_PRD"."OITM"`
+    - Stock por Bodega: `"C2910638_BARCIA_PRD"."OITW"`
+  - **Consultas de ÚLTIMOS Registros:** Instrucción explícita de usar `ORDER BY "DocNum" DESC` o `ORDER BY "DocDate" DESC` junto a `TOP N`.
+  - **Categorización Visual de Notas de Crédito (`server.js`):** Añadida categoría 💳 **Notas de Crédito** a `detectSapQueryMeta` para presentar estas tarjetas con ícono y encabezado personalizado en Teams.
+
 ## [0.42.6] - 2026-07-22
 
 ### Fixed

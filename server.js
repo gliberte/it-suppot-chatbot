@@ -7638,6 +7638,9 @@ function detectSapQueryMeta(records, userPrompt) {
   const allKeys = records.length > 0 ? Object.keys(records[0]) : [];
   const prompt = (userPrompt || '').toLowerCase();
 
+  if (/nota.*crédito|nota.*credito|credit.*note|orin/i.test(prompt)) {
+    return { icon: '💳', title: 'Notas de Crédito', color: 'Warning', subtitle: 'Notas de crédito registradas en SAP Business One' };
+  }
   if (allKeys.some(k => /CardFName|CardName|CardCode|Ruta|Route/i.test(k)) || /cliente|ruta|cardfname/i.test(prompt)) {
     return { icon: '👥', title: 'Clientes', color: 'Good', subtitle: 'Directorio de clientes SAP Business One' };
   }
