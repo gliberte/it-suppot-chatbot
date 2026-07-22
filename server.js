@@ -240,6 +240,10 @@ async function callMcpTool(name, args = {}) {
       normalizedArgs.search_text = args.search_text || args.query || args.search || args.text;
     }
   }
+  if (name === 'sdp_add_note') {
+    normalizedArgs.request_id = String(args.request_id || args.id || args.ticket_id || args.requestId || '');
+    normalizedArgs.note_text = args.note_text || args.notes || args.comment || args.text || '';
+  }
 
   const result = await mcpClient.request(
     {
@@ -7550,6 +7554,101 @@ async function handleReportExportTurn({ message, user, onText, onCard, responseC
    Formateador Ejecutivo y Discreto de Tarjetas Adaptativas para Resultados SAP
    ========================================================================== */
 
+/**
+ * Parsea la salida de texto de n8n (lenguaje natural con pares clave: valor)
+ * y la convierte en un array de registros { campo: valor }.
+ */
+function parseSapTextToRecords(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const records = [];
+  let current = {};
+  let hasData = false;
+
+  for (const line of lines) {
+    // Detectar pares clave: valor (ej. "CardFName: Supermercado Sol" o "- CardFName: Supermercado Sol")
+    const kvMatch = line.match(/^[-*•]?\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/);
+    if (kvMatch) {
+      const key = kvMatch[1].trim();
+      const val = kvMatch[2].trim();
+
+      // Si ya existe esa clave en el registro actual → el nuevo registro empieza
+      if (hasData && key in current) {
+        records.push(current);
+        current = {};
+        hasData = false;
+      }
+      current[key] = val;
+      hasData = true;
+    } else {
+      // Línea sin kvMatch → separador entre registros (línea vacía ya fue filtrada)
+      if (hasData) {
+        records.push(current);
+        current = {};
+        hasData = false;
+      }
+    }
+  }
+  if (hasData) records.push(current);
+  return records;
+}
+
+/**
+ * Detecta el tipo de consulta SAP basado en las claves de los registros
+ * y devuelve metadata de presentación (ícono, título, color).
+ */
+function detectSapQueryMeta(records, userPrompt) {
+  const allKeys = records.length > 0 ? Object.keys(records[0]) : [];
+  const prompt = (userPrompt || '').toLowerCase();
+
+  if (allKeys.some(k => /CardFName|CardName|CardCode|Ruta|Route/i.test(k)) || /cliente|ruta|cardfname/i.test(prompt)) {
+    return { icon: '👥', title: 'Clientes', color: 'Good', subtitle: 'Directorio de clientes SAP Business One' };
+  }
+  if (allKeys.some(k => /ItemCode|ItemName|OnHand|Stock|Qty/i.test(k)) || /inventario|stock|item|producto/i.test(prompt)) {
+    return { icon: '📦', title: 'Inventario', color: 'Accent', subtitle: 'Estado actual de inventario en SAP' };
+  }
+  if (allKeys.some(k => /DocNum|DocDate|CardName|DocTotal|Invoice/i.test(k)) || /factura|venta|pedido|orden/i.test(prompt)) {
+    return { icon: '🧾', title: 'Facturas / Ventas', color: 'Warning', subtitle: 'Documentos de venta en SAP Business One' };
+  }
+  if (allKeys.some(k => /SlpName|SalesPerson|Vendedor/i.test(k)) || /vendedor|representante/i.test(prompt)) {
+    return { icon: '🤝', title: 'Vendedores', color: 'Accent', subtitle: 'Equipo comercial registrado en SAP' };
+  }
+  if (allKeys.some(k => /WhsCode|WhsName|Bodega|Warehouse/i.test(k)) || /bodega|almacen|warehouse/i.test(prompt)) {
+    return { icon: '🏭', title: 'Bodegas', color: 'Default', subtitle: 'Almacenes registrados en SAP' };
+  }
+  return { icon: '📊', title: 'Resultados SAP', color: 'Accent', subtitle: 'Datos obtenidos desde SAP Business One' };
+}
+
+/**
+ * Formatea el nombre de un campo SAP para mostrarlo de forma amigable.
+ */
+function formatSapFieldLabel(key) {
+  const labels = {
+    CardFName: 'Cliente',
+    CardName: 'Razón Social',
+    CardCode: 'Código',
+    U_Ruta: 'Ruta',
+    U_TM_RUTAS: 'Ruta TM',
+    ItemCode: 'Código Item',
+    ItemName: 'Descripción',
+    OnHand: 'Stock',
+    WhsCode: 'Bodega',
+    DocNum: 'N° Documento',
+    DocDate: 'Fecha',
+    DocTotal: 'Total',
+    SlpName: 'Vendedor',
+    CardType: 'Tipo',
+    Phone1: 'Teléfono',
+    E_Mail: 'Email',
+    City: 'Ciudad',
+    Country: 'País'
+  };
+  return labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^_+|_+$/g, '').trim();
+}
+
+/**
+ * Crea el cuerpo (body) de la Adaptive Card con registros de SAP.
+ * Muestra cada registro como un Container con ColumnSet (etiqueta | valor).
+ */
 function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
   let textContent = '';
   if (typeof toolOutput === 'string') {
@@ -7560,57 +7659,206 @@ function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
     textContent = JSON.stringify(toolOutput);
   }
 
-  // Quitar artefactos de markdown roto de tablas como |---|---|
+  // Limpiar artefactos de markdown
   const cleanContent = textContent
-    .replace(/\|\s*:?-+:?\s*/g, '')
+    .replace(/\|\s*:?-+:?\s*\|?/g, '')
     .replace(/\[phone-redacted\]/g, '')
-    .replace(/Facturas\s*\|/g, '')
+    .replace(/^\s*\|/gm, '')
     .trim();
 
-  const summaryText = `📊 Consulta de Registros Empresariales`;
+  const records = parseSapTextToRecords(cleanContent);
+  const meta = detectSapQueryMeta(records, userPrompt);
+  const totalRecords = records.length;
 
-  const body = [
-    {
-      type: 'TextBlock',
-      text: '📊 Resultados de la Consulta',
-      weight: 'Bolder',
-      size: 'Medium',
-      color: 'Accent',
-      wrap: true
-    },
-    {
-      type: 'TextBlock',
-      text: 'A continuación se presentan los registros obtenidos en respuesta a tu consulta:',
-      isSubtle: true,
-      spacing: 'Small',
-      wrap: true
-    },
-    {
+  const body = [];
+
+  // ── Header de la tarjeta ──────────────────────────────────────────────────
+  body.push({
+    type: 'Container',
+    style: 'emphasis',
+    bleed: true,
+    items: [
+      {
+        type: 'ColumnSet',
+        columns: [
+          {
+            type: 'Column',
+            width: 'auto',
+            items: [
+              {
+                type: 'TextBlock',
+                text: meta.icon,
+                size: 'ExtraLarge',
+                wrap: false
+              }
+            ]
+          },
+          {
+            type: 'Column',
+            width: 'stretch',
+            items: [
+              {
+                type: 'TextBlock',
+                text: meta.title,
+                weight: 'Bolder',
+                size: 'Large',
+                wrap: false
+              },
+              {
+                type: 'TextBlock',
+                text: meta.subtitle,
+                isSubtle: true,
+                size: 'Small',
+                spacing: 'None',
+                wrap: true
+              }
+            ]
+          },
+          ...(totalRecords > 0 ? [{
+            type: 'Column',
+            width: 'auto',
+            verticalContentAlignment: 'Center',
+            items: [
+              {
+                type: 'TextBlock',
+                text: `${totalRecords}`,
+                weight: 'Bolder',
+                size: 'ExtraLarge',
+                color: meta.color,
+                horizontalAlignment: 'Right',
+                wrap: false
+              },
+              {
+                type: 'TextBlock',
+                text: 'registros',
+                isSubtle: true,
+                size: 'Small',
+                horizontalAlignment: 'Right',
+                spacing: 'None',
+                wrap: false
+              }
+            ]
+          }] : [])
+        ]
+      }
+    ]
+  });
+
+  // ── Registros estructurados ───────────────────────────────────────────────
+  if (totalRecords > 0) {
+    const SHOW_LIMIT = 50; // máximo de registros a mostrar en la tarjeta
+    const displayRecords = records.slice(0, SHOW_LIMIT);
+
+    displayRecords.forEach((rec, idx) => {
+      const keys = Object.keys(rec);
+      // Separador entre registros (excepto el primero)
+      const containerItems = [];
+
+      // Número de registro (badge)
+      containerItems.push({
+        type: 'TextBlock',
+        text: `#${idx + 1}`,
+        weight: 'Bolder',
+        size: 'Small',
+        color: 'Accent',
+        spacing: idx === 0 ? 'Small' : 'Medium',
+        wrap: false
+      });
+
+      // Campos clave-valor como ColumnSet de 2 columnas
+      keys.forEach(key => {
+        containerItems.push({
+          type: 'ColumnSet',
+          spacing: 'Small',
+          columns: [
+            {
+              type: 'Column',
+              width: '120px',
+              items: [
+                {
+                  type: 'TextBlock',
+                  text: formatSapFieldLabel(key),
+                  weight: 'Bolder',
+                  size: 'Small',
+                  isSubtle: true,
+                  wrap: true
+                }
+              ]
+            },
+            {
+              type: 'Column',
+              width: 'stretch',
+              items: [
+                {
+                  type: 'TextBlock',
+                  text: String(rec[key] || '—'),
+                  size: 'Small',
+                  wrap: true
+                }
+              ]
+            }
+          ]
+        });
+      });
+
+      body.push({
+        type: 'Container',
+        style: idx % 2 === 0 ? 'default' : 'emphasis',
+        spacing: 'Small',
+        items: containerItems,
+        separator: idx > 0
+      });
+    });
+
+    // Aviso si hay más registros de los que se muestran
+    if (records.length > SHOW_LIMIT) {
+      body.push({
+        type: 'TextBlock',
+        text: `⚠️ Se muestran los primeros ${SHOW_LIMIT} de ${records.length} registros. Para filtrar, especifica una condición adicional.`,
+        isSubtle: true,
+        size: 'Small',
+        color: 'Warning',
+        spacing: 'Medium',
+        wrap: true
+      });
+    }
+  } else {
+    // Fallback: texto crudo si no se pudo parsear en registros
+    body.push({
       type: 'Container',
-      spacing: 'Medium',
       style: 'emphasis',
+      spacing: 'Medium',
       items: [
         {
           type: 'TextBlock',
           text: cleanContent,
           wrap: true,
-          spacing: 'Small'
+          size: 'Small'
         }
       ]
-    },
-    {
-      type: 'TextBlock',
-      text: '💡 *Puedes solicitar más detalles especificando un número de registro, cliente o rango de fecha.*',
-      isSubtle: true,
-      size: 'Small',
-      spacing: 'Medium',
-      wrap: true
-    }
-  ];
+    });
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  body.push({
+    type: 'Container',
+    style: 'emphasis',
+    bleed: true,
+    spacing: 'Medium',
+    items: [
+      {
+        type: 'TextBlock',
+        text: '💡 Puedes pedir más detalles especificando un código, cliente o rango de fecha.',
+        isSubtle: true,
+        size: 'Small',
+        wrap: true
+      }
+    ]
+  });
 
   return {
     type: 'adaptive_card',
-    summaryText,
+    summaryText: `${meta.icon} ${meta.title} — ${totalRecords > 0 ? `${totalRecords} registros` : 'Resultado SAP'}`,
     card: {
       $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
       type: 'AdaptiveCard',

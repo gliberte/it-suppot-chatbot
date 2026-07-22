@@ -9,6 +9,19 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.42.3] - 2026-07-22
+
+### Changed
+- **Tarjetas SAP estructuradas y enriquecidas (`createSapQueryResultAdaptiveCard`):**
+  - Reescritura completa del formateador de tarjetas de resultados SAP en Teams.
+  - Nueva función `parseSapTextToRecords()` que parsea la salida de texto libre de n8n y extrae registros clave-valor estructurados.
+  - Nueva función `detectSapQueryMeta()` que detecta automáticamente el tipo de consulta (Clientes, Inventario, Facturas, Vendedores, Bodegas) y asigna ícono, título y color contextual.
+  - Nueva función `formatSapFieldLabel()` con diccionario de etiquetas amigables para campos SAP (CardFName→Cliente, ItemCode→Código Item, DocNum→N° Documento, etc.).
+  - Cada registro SAP se despliega como un Container con filas de 2 columnas (etiqueta | valor), alternando estilos `default`/`emphasis` para mejor legibilidad.
+  - Header con ícono grande, título del tipo de datos y contador de registros en tiempo real.
+  - Límite de 50 registros visibles con aviso si hay más resultados disponibles.
+  - Footer discreto con instrucción de refinamiento de consulta.
+
 ## [0.42.2] - 2026-07-22
 
 ### Fixed
