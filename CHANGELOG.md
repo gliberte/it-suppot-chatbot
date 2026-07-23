@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.47.0] - 2026-07-23
+
+### Added
+- **Motor de Gráficos Locales para Teams (`chart-generator.js`, `server.js`):**
+  - **Generador Autónomo en Servidor:** Implementación de generación local de gráficos estadísticos (PNG) mediante `canvas` y `chart.js` sin depender de APIs de terceros o de la nube.
+  - **Detección Automática de Intención Visual:** Cuando un usuario en Teams solicita un reporte visual de tickets o de MCI utilizando palabras clave (`gráfico`, `pastel`, `barras`, etc.), Sophia intercepta la respuesta de `sdp_list_requests` y genera el gráfico correspondiente.
+  - **Avance de MCI por Líder:** Genera gráficos de barras verticales a color (con código de semáforo basado en progreso: Verde >= 80%, Azul >= 40%, Rojo < 40%) mostrando el avance individual de cada MCI de un líder específico, junto con datos promedio en la tarjeta adaptativa.
+  - **Carga de Tickets por Técnico:** Genera gráficos de barras horizontales mostrando la cantidad de tickets asignados a cada técnico de soporte activo.
+  - **Directorio de Exportaciones Ignorado:** Configurado `.gitignore` para omitir la carpeta de gráficos temporales `public/exports/` y no ensuciar el repositorio.
+
 ## [0.46.1] - 2026-07-23
 
 ### Fixed

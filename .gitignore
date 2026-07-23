@@ -35,6 +35,8 @@ data/knowledge-candidates.json.tmp
 .DS_Store
 *.suo
 *.ntvs*
-*.njsproj
-*.sln
 *.sw?
+
+# Dynamic exports and charts
+public/exports/
+

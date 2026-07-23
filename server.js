@@ -13,6 +13,7 @@ import { formatKnowledgeContext, searchKnowledge } from './rag.js';
 import { getTicketRoutingMap, normalizeRoutingText, resolveTicketRoutingFromText } from './ticket-routing.js';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
+import { generateMciProgressChart, generateTechnicianLoadChart } from './chart-generator.js';
 import { CloudAdapter, ConfigurationBotFrameworkAuthentication, TeamsActivityHandler, TurnContext } from 'botbuilder';
 
 dotenv.config();
@@ -9183,6 +9184,15 @@ async function runSupportTurn({
     }
 
     if (responseChannel === 'teams' && aiDecision.tool_name === 'sdp_list_requests') {
+      const isChartRequest = /\b(grafico|gráfico|grafica|gráfica|visual|visualizar|barras|pastel|pie|chart|histograma)\b/i.test(message);
+      if (isChartRequest) {
+        const card = await createChartAdaptiveCardFromList(toolOutput, message);
+        if (card) {
+          onCard?.(card);
+          return;
+        }
+      }
+
       const card = createTicketsAdaptiveCard(toolOutput);
       if (card) {
         onCard?.(card);
@@ -9714,6 +9724,114 @@ function createTicketsAdaptiveCard(toolOutput) {
       type: 'AdaptiveCard',
       version: '1.4',
       body
+    }
+  };
+}
+
+async function createChartAdaptiveCardFromList(toolOutput, message = '') {
+  let data;
+  try {
+    data = JSON.parse(toolOutput);
+  } catch {
+    return null;
+  }
+
+  const requests = Array.isArray(data?.requests) ? data.requests : [];
+  if (requests.length === 0) return null;
+
+  const isMciResult = data?.result_type === 'mci';
+  let imageUrl = null;
+  let title = '';
+  const facts = [];
+
+  if (isMciResult) {
+    let leaderName = 'Líder';
+    for (const req of requests) {
+      const l = req.udf_fields?.udf_pick_1503 || req.leader;
+      if (l) {
+        leaderName = typeof l === 'object' ? (l.name || l.display_value || l.value) : l;
+        break;
+      }
+    }
+
+    try {
+      imageUrl = await generateMciProgressChart(requests, leaderName);
+    } catch (err) {
+      console.error('[Bridge] Error generating MCI progress chart:', err.message);
+      return null;
+    }
+
+    title = `Gráfico de Avance MCI - Líder: ${leaderName}`;
+
+    const progresses = requests.map(r => Number(r.progress !== undefined ? r.progress : (r.udf_fields?.udf_long_1801 || 0)));
+    const avgProgress = progresses.length > 0 ? Math.round(progresses.reduce((sum, p) => sum + p, 0) / progresses.length) : 0;
+    const completedCount = progresses.filter(p => p >= 100).length;
+
+    facts.push(
+      { title: 'Total MCIs:', value: String(requests.length) },
+      { title: 'Progreso Promedio:', value: `${avgProgress}%` },
+      { title: 'Completadas (100%):', value: `${completedCount} de ${requests.length}` }
+    );
+  } else {
+    try {
+      imageUrl = await generateTechnicianLoadChart(requests);
+    } catch (err) {
+      console.error('[Bridge] Error generating technician load chart:', err.message);
+      return null;
+    }
+
+    title = 'Carga de Tickets por Técnico';
+
+    const totalTickets = requests.length;
+    let unassigned = 0;
+    requests.forEach(ticket => {
+      let techName = '';
+      if (ticket.technician && ticket.technician.name) {
+        techName = ticket.technician.name;
+      } else if (ticket.udf_fields && ticket.udf_fields.udf_pick_2701) {
+        techName = ticket.udf_fields.udf_pick_2701;
+      }
+      if (!techName || techName === 'Sin Asignar' || techName === 'Sin asignar') {
+        unassigned++;
+      }
+    });
+
+    facts.push(
+      { title: 'Total Tickets:', value: String(totalTickets) },
+      { title: 'Pendientes de Asignar:', value: String(unassigned) }
+    );
+  }
+
+  if (!imageUrl) return null;
+
+  return {
+    type: 'adaptive_card',
+    summaryText: `Te muestro el gráfico de ${isMciResult ? 'avance de las MCI' : 'carga de tickets'}.`,
+    card: {
+      $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+      type: 'AdaptiveCard',
+      version: '1.5',
+      body: [
+        {
+          type: 'TextBlock',
+          text: title,
+          weight: 'Bolder',
+          size: 'Medium',
+          wrap: true
+        },
+        {
+          type: 'Image',
+          url: imageUrl,
+          size: 'Stretch',
+          altText: title,
+          spacing: 'Medium'
+        },
+        {
+          type: 'FactSet',
+          spacing: 'Medium',
+          facts: facts
+        }
+      ]
     }
   };
 }
