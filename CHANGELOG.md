@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.46.0] - 2026-07-23
+
+### Added
+- **Script de Reporte de Uso de Sophia en Teams (`scripts/report-teams-users.js`):**
+  - **Generación de Reportes de Usuario:** Creado un nuevo script para analizar el archivo `teams-audit.log` y consolidar la información de todos los usuarios que han interactuado con Sophia a través de Microsoft Teams.
+  - **Mapeo de Campos de Auditoría:** El script agrupa las interacciones de manera inteligente por ID de Teams (AadObjectId), mostrando el nombre del usuario, su ID SDP (si está mapeado), cantidad de mensajes enviados por el usuario, cantidad de respuestas enviadas por Sophia, total de interacciones, canales/chats usados (personal o grupal) y la fecha y hora de su primer y último uso.
+  - **Soporte de Múltiples Formatos y Filtros:** Permite exportar o imprimir en formatos: `table` (por defecto en consola), `markdown`/`md` (`--format md`), `json` (`--format json`) y `csv` (`--format csv`). Admite filtros por fecha (`--since YYYY-MM-DD`), ordenamiento (`--sort messages|name|lastSeen`) y escritura directa en archivos con `--output <filepath>`.
+  - **Comando NPM:** Añadido el script rápido `"report:teams"` a `package.json` para facilitar su ejecución directa como `npm run report:teams`.
+
 ## [0.45.3] - 2026-07-23
 
 ### Changed
