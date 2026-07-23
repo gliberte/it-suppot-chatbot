@@ -13,7 +13,7 @@ import { formatKnowledgeContext, searchKnowledge } from './rag.js';
 import { getTicketRoutingMap, normalizeRoutingText, resolveTicketRoutingFromText } from './ticket-routing.js';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
-import { generateMciProgressChart, generateTechnicianLoadChart } from './chart-generator.js';
+import { generateMciProgressChart, generateTechnicianLoadChart, generateSapGenericChart } from './chart-generator.js';
 import { CloudAdapter, ConfigurationBotFrameworkAuthentication, TeamsActivityHandler, TurnContext } from 'botbuilder';
 
 dotenv.config();
@@ -7725,7 +7725,7 @@ function formatSapFieldLabel(key) {
  * Crea el cuerpo (body) de la Adaptive Card con registros de SAP.
  * Muestra cada registro como un Container con ColumnSet (etiqueta | valor).
  */
-function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
+async function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
   let textContent = '';
   if (typeof toolOutput === 'string') {
     textContent = toolOutput;
@@ -7819,6 +7819,25 @@ function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
       }
     ]
   });
+
+  // ── Gráfico SAP (si se solicita) ──────────────────────────────────────────
+  const isChartRequest = /\b(grafico|gráfico|grafica|gráfica|visual|visualizar|barras|pastel|pie|chart|histograma)\b/i.test(userPrompt);
+  if (isChartRequest && totalRecords > 0) {
+    try {
+      const chartUrl = await generateSapGenericChart(records, userPrompt);
+      if (chartUrl) {
+        body.push({
+          type: 'Image',
+          url: chartUrl,
+          size: 'Stretch',
+          altText: meta.title,
+          spacing: 'Medium'
+        });
+      }
+    } catch (err) {
+      console.error('[Bridge] Error generating SAP chart:', err.message);
+    }
+  }
 
   // ── Registros estructurados ───────────────────────────────────────────────
   if (totalRecords > 0) {
@@ -9176,7 +9195,7 @@ async function runSupportTurn({
     console.log(`[Bridge] Resultado técnico obtenido.`);
 
     if (responseChannel === 'teams' && aiDecision.tool_name === 'sap_hana_query') {
-      const card = createSapQueryResultAdaptiveCard(toolOutput, message);
+      const card = await createSapQueryResultAdaptiveCard(toolOutput, message);
       if (card) {
         onCard?.(card);
         return;

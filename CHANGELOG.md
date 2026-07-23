@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.48.0] - 2026-07-23
+
+### Added
+- **Motor de Gráficos Genéricos para SAP HANA (`chart-generator.js`, `server.js`):**
+  - **Generación Automática de Gráficos de Negocio:** Añadida la función `generateSapGenericChart` para renderizar gráficos de barras a partir de registros tabulares recuperados desde SAP HANA. Detecta dinámicamente columnas numéricas (ej. `DocTotal`, `DocSum`, `Quantity`) y etiquetas/fechas (`DocDate`, `CardName`, `ItemCode`) para construir la visualización de forma inteligente.
+  - **Visualización en Tarjetas Adaptativas:** Si un usuario solicita un gráfico de SAP (como montos de compra/venta o stock), el backend intercepta el resultado de la consulta SQL (`sap_hana_query`) y embebe el gráfico dibujado directamente en el cuerpo de la tarjeta adaptativa, complementando la tabla de datos estructurada.
+  - **Prompt del Sistema Actualizado:** Sophia ahora es consciente de que puede generar gráficos tanto para solicitudes de ServiceDesk Plus como para consultas de base de datos de SAP HANA, ejecutando la herramienta de base de datos correspondiente en silencio.
+
 ## [0.47.1] - 2026-07-23
 
 ### Fixed

@@ -232,3 +232,120 @@ export async function generateTechnicianLoadChart(tickets) {
 
   return await generateChartImage(chartConfig, 'tech-load');
 }
+
+/**
+ * Genera un gráfico para datos tabulares de SAP (facturas, notas de crédito, cotizaciones, etc.).
+ * 
+ * @param {Array} records - Registros parseados de la consulta SAP
+ * @param {string} userPrompt - Prompt original del usuario
+ * @returns {Promise<string|null>} URL del gráfico generado o null si no se puede graficar
+ */
+export async function generateSapGenericChart(records, userPrompt = '') {
+  if (!records || records.length === 0) return null;
+
+  const sample = records[0];
+  const keys = Object.keys(sample);
+
+  // Buscar la clave que contenga valores numéricos para el eje Y
+  let numericKey = keys.find(k => {
+    const val = Number(sample[k]);
+    const lower = k.toLowerCase();
+    return (lower.includes('total') || lower.includes('sum') || lower.includes('monto') || lower.includes('quantity') || lower.includes('cantidad') || lower.includes('total')) && !isNaN(val) && val > 0;
+  });
+
+  if (!numericKey) {
+    numericKey = keys.find(k => {
+      const val = Number(sample[k]);
+      const lower = k.toLowerCase();
+      return !isNaN(val) && val > 0 && lower !== 'id' && !lower.includes('num') && !lower.includes('entry') && !lower.includes('code') && !lower.includes('slp') && !lower.includes('group');
+    });
+  }
+
+  // Buscar la clave de etiquetas (eje X)
+  let labelKey = keys.find(k => {
+    const lower = k.toLowerCase();
+    return lower.includes('date') || lower.includes('fecha') || lower.includes('name') || lower.includes('nombre') || lower.includes('item') || lower.includes('dscription');
+  });
+
+  if (!labelKey) {
+    labelKey = keys.find(k => {
+      const lower = k.toLowerCase();
+      return lower.includes('code') || lower.includes('num');
+    });
+  }
+
+  if (!labelKey) labelKey = keys[0];
+  if (!numericKey) return null; // Sin datos numéricos, no se grafica.
+
+  // Limitar cantidad de filas para legibilidad del gráfico
+  const chartRecords = records.slice(0, 15);
+
+  const labels = chartRecords.map(r => {
+    let val = r[labelKey] || '';
+    if (val && typeof val === 'string' && val.includes(' 00:00:00')) {
+      val = val.split(' ')[0]; // Quitar hora redundante en fechas
+    }
+    return String(val).length > 25 ? `${String(val).substring(0, 22)}...` : String(val);
+  });
+
+  const data = chartRecords.map(r => Number(r[numericKey]) || 0);
+
+  // Deducir el título según la consulta del usuario
+  let title = 'Análisis de Datos Administrativos SAP';
+  const normPrompt = userPrompt.toLowerCase();
+  if (normPrompt.includes('compra') || normPrompt.includes('factura') || normPrompt.includes('venta')) {
+    title = 'Historial de Compras/Ventas - Facturación';
+  } else if (normPrompt.includes('crédito') || normPrompt.includes('credito') || normPrompt.includes('orin')) {
+    title = 'Historial de Notas de Crédito SAP';
+  } else if (normPrompt.includes('inventario') || normPrompt.includes('stock') || normPrompt.includes('articulo')) {
+    title = 'Nivel de Stock / Inventario SAP';
+  }
+
+  const chartConfig = {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: `${numericKey}`,
+        data,
+        backgroundColor: '#4C6EF5',
+        borderColor: '#1C7ED6',
+        borderWidth: 1.5,
+        borderRadius: 4,
+        barPercentage: 0.55
+      }]
+    },
+    options: {
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: '#E9ECEF'
+          }
+        },
+        x: {
+          grid: {
+            display: false
+          }
+        }
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: title,
+          font: {
+            size: 15,
+            weight: 'bold'
+          },
+          padding: { bottom: 10 }
+        },
+        legend: {
+          display: false
+        }
+      }
+    }
+  };
+
+  return await generateChartImage(chartConfig, 'sap-data');
+}
+
