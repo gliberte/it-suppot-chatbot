@@ -11562,6 +11562,13 @@ function getDisplayDate(value) {
 }
 
 async function assertToolAllowedForUser(toolName, args, user) {
+  if (toolName === 'sap_hana_query') {
+    if (!isSupportAdmin(user)) {
+      throw new Error('No tienes autorización para consultar la base de datos de SAP HANA.');
+    }
+    return;
+  }
+
   if (!REQUEST_SCOPED_MUTATION_TOOLS.has(toolName)) return;
 
   const requestId = args?.request_id;

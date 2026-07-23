@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.48.3] - 2026-07-23
+
+### Security
+- **Restricción de Autorización Dura para SAP HANA (`server.js`):**
+  - **Validación de Rol en Backend:** Añadida validación dura en el middleware de seguridad `assertToolAllowedForUser` para que la herramienta `sap_hana_query` solo pueda ser ejecutada si el usuario pertenece al grupo de administradores de soporte (`isSupportAdmin`). Esto garantiza a nivel de código que únicamente Luis Solano, Algis Morales y Yariela Saucedo de Vallarino puedan consultar datos de SAP HANA, rechazando cualquier intento no autorizado con una excepción explícita.
+
 ## [0.48.2] - 2026-07-23
 
 ### Fixed
