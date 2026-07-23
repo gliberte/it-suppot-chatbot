@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.49.1] - 2026-07-23
+
+### Added
+- **Script de Transcripción de Conversaciones (`scripts/get-teams-transcript.js`):**
+  - **Comando `report:transcript`:** Creado un nuevo comando ejecutable (`npm run report:transcript -- --user "Nombre"`) que busca de forma inteligente todas las conversaciones activas de un usuario en Teams leyendo `teams-audit.log`. Extrae y reconstruye la transcripción del diálogo completo en orden cronológico mostrando los mensajes del usuario y las respuestas/tarjetas de Sophia.
+
 ## [0.49.0] - 2026-07-23
 
 ### Security
