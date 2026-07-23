@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.45.2] - 2026-07-23
+
+### Fixed
+- **Corrección de Error 400 Bad Request en la Lista de Solicitudes (`sdp-mcp-server`):**
+  - **Mapeo de Campos UDF Individuales (`fields_required`):** Se corrigió la consulta a la API REST v3 de ServiceDesk Plus que fallaba con un error de "Invalid Input" al solicitar el objeto completo `udf_fields` en la lista. Se reemplazó por la solicitud explícita e individual de los campos requeridos utilizando sus rutas anidadas (`udf_fields.udf_pick_1503` y `udf_fields.udf_pick_2701`), lo cual es completamente aceptado por la API de SDP.
+
 ## [0.45.1] - 2026-07-23
 
 ### Fixed
