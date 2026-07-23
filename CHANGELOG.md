@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.47.1] - 2026-07-23
+
+### Fixed
+- **Habilitación de Intenciones Gráficas en el Prompt (`agent-orchestrator.js`):**
+  - **Instrucción de Generación de Gráficos:** Añadida una nueva instrucción en el `SYSTEM_PROMPT` para que Sophia sea consciente de su capacidad para generar gráficos visuales. Se le instruye a llamar a la herramienta `sdp_list_requests` cuando el usuario solicite un gráfico de tickets o MCI, en lugar de responder de forma negativa afirmando que no puede crear gráficos.
+
 ## [0.47.0] - 2026-07-23
 
 ### Added
