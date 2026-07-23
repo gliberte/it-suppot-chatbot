@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.49.0] - 2026-07-23
+
+### Security
+- **Filtro de Destinatarios en Transmisión de Versiones (`server.js`):**
+  - **Restricción a Administradores de Soporte:** Modificada la función de difusión `broadcastReleaseNotesToItStaff` para que las tarjetas adaptativas de actualización de versión solo se envíen proactivamente en Teams a los usuarios cuyas referencias coincidan con los correos definidos en `SUPPORT_ADMIN_EMAILS` o IDs de AAD en `TEAMS_ADMIN_AAD_OBJECT_IDS`.
+  - **Restricción en Reportes Semanales:** Modificada la función `sendWeeklyExecutiveReportToExecutives` para filtrar y enviar el reporte ejecutivo únicamente a los administradores y directores de IT autorizados (`IT_EXECUTIVE_EMAILS` y `SUPPORT_ADMIN_EMAILS`), protegiendo la confidencialidad de la información corporativa.
+
 ## [0.48.3] - 2026-07-23
 
 ### Security

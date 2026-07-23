@@ -6242,7 +6242,13 @@ async function broadcastReleaseNotesToItStaff({ force = false } = {}) {
   const deliveredRecipients = [];
   const errors = [];
 
+  const adminEmails = getCsvEnvSet('SUPPORT_ADMIN_EMAILS');
+  const adminAadIds = getCsvEnvSet('TEAMS_ADMIN_AAD_OBJECT_IDS');
+
   for (const [userKey, reference] of teamsConversationReferences.entries()) {
+    const isMatchedAdmin = adminEmails.has(userKey) || adminAadIds.has(userKey);
+    if (!isMatchedAdmin) continue; // Enviar únicamente a administradores de soporte
+
     try {
       if (typeof teamsAdapter?.continueConversationAsync === 'function') {
         await teamsAdapter.continueConversationAsync(appId, reference, async (turnContext) => {
@@ -6385,7 +6391,14 @@ async function sendWeeklyExecutiveReportToExecutives({ force = false } = {}) {
   let deliveredCount = 0;
   const deliveredRecipients = [];
 
+  const adminEmails = getCsvEnvSet('SUPPORT_ADMIN_EMAILS');
+  const adminAadIds = getCsvEnvSet('TEAMS_ADMIN_AAD_OBJECT_IDS');
+  const execEmails = getCsvEnvSet('IT_EXECUTIVE_EMAILS');
+
   for (const [userKey, reference] of teamsConversationReferences.entries()) {
+    const isMatchedRecipient = adminEmails.has(userKey) || adminAadIds.has(userKey) || execEmails.has(userKey);
+    if (!isMatchedRecipient) continue; // Enviar únicamente a administradores o ejecutivos
+
     try {
       if (typeof teamsAdapter?.continueConversationAsync === 'function') {
         await teamsAdapter.continueConversationAsync(appId, reference, async (turnContext) => {
