@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.45.3] - 2026-07-23
+
+### Changed
+- **Visualización Detallada de MCI en Listas (`server.js`, `sdp-mcp-server`):**
+  - **Avance, Predictiva y Fecha de Actualización:** Añadidos explícitamente los campos de porcentaje de avance (`udf_long_1801`), comentarios predictivos (`udf_sline_2102`) y la última fecha de actualización (`udf_date_1508`) directamente en las tarjetas de lista de metas crucialmente importantes (MCI).
+  - **Expansión de Campos en Consultas MCI:** Modificada la lista de campos requeridos por defecto en el backend de SDP (`getDefaultFieldsRequired`) para recuperar y entregar de manera nativa los campos adicionales de progreso, predictivo e historial en lotes.
+
 ## [0.45.2] - 2026-07-23
 
 ### Fixed

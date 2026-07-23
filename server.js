@@ -11302,9 +11302,9 @@ function createMciListItemBlock(request, options = {}) {
   const mciId = `#${request.id || '-'}`;
   const subject = truncateText(request.subject || 'Sin asunto', 140);
   const leader = getMciLeaderDisplayValue(request) || 'Sin asignar';
-  const progress = getMciProgressValue(request) || '-';
-  const updated = getLastUpdatedValue(request) || '-';
-  const predictive = truncateText(getMciPredictiveValue(request) || '-', 160);
+  const progress = getMciProgressValue(request) || '0%';
+  const updated = getLastUpdatedValue(request) || 'Sin actualizar';
+  const predictive = truncateText(getMciPredictiveValue(request) || 'Sin comentarios predictivos', 160);
 
   return {
     type: 'Container',
@@ -11365,6 +11365,7 @@ function createMciListItemBlock(request, options = {}) {
         spacing: 'Small',
         facts: [
           { title: 'Líder', value: leader },
+          { title: 'Avance', value: progress },
           { title: 'Actualización', value: updated }
         ]
       },
