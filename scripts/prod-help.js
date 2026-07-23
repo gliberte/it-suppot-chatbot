@@ -106,6 +106,10 @@ const COMMANDS = [
         description: 'Reporta tickets creados por Sophia; acepta filtros como --confirmed, --errors, --since.'
       },
       {
+        name: 'report:teams',
+        description: 'Genera reporte de uso de Sophia en Teams por usuario, mensajes y ultimo uso; acepta --format, --since, --sort, --output.'
+      },
+      {
         name: 'routing:check',
         description: 'Valida rutas de clasificacion SDP y ejemplos protegidos.'
       },
