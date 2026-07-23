@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.48.1] - 2026-07-23
+
+### Ops
+- **Planificador de Limpieza Automática de Gráficos (`chart-generator.js`, `server.js`):**
+  - **Poda Automática de Imágenes Temporales:** Añadida la función `pruneOldCharts` para buscar e identificar imágenes de gráficos PNG antiguos que lleven más de 24 horas en el disco local y eliminarlos de forma segura para prevenir la saturación de espacio en disco del servidor.
+  - **Planificador en Segundo Plano:** Añadido `startChartCleanupScheduler` que inicializa el limpiador tras arrancar el servidor Express, programando una revisión automática recurrente cada 4 horas utilizando temporizadores sin bloqueo (`timer.unref()`).
+
 ## [0.48.0] - 2026-07-23
 
 ### Added

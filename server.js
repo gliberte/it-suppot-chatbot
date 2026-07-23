@@ -13,7 +13,7 @@ import { formatKnowledgeContext, searchKnowledge } from './rag.js';
 import { getTicketRoutingMap, normalizeRoutingText, resolveTicketRoutingFromText } from './ticket-routing.js';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
-import { generateMciProgressChart, generateTechnicianLoadChart, generateSapGenericChart } from './chart-generator.js';
+import { generateMciProgressChart, generateTechnicianLoadChart, generateSapGenericChart, startChartCleanupScheduler } from './chart-generator.js';
 import { CloudAdapter, ConfigurationBotFrameworkAuthentication, TeamsActivityHandler, TurnContext } from 'botbuilder';
 
 dotenv.config();
@@ -12664,6 +12664,7 @@ async function startServer() {
     console.log(`Chatbot Backend Bridge corriendo en http://localhost:${PORT}`);
     initMCP();
     scheduleDaily830AmReminders();
+    startChartCleanupScheduler();
   });
 }
 

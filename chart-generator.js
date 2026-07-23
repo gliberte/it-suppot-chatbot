@@ -349,3 +349,60 @@ export async function generateSapGenericChart(records, userPrompt = '') {
   return await generateChartImage(chartConfig, 'sap-data');
 }
 
+/**
+ * Poda las imágenes de gráficos generadas que tengan más de 24 horas de antigüedad.
+ */
+export async function pruneOldCharts() {
+  try {
+    const files = await fs.promises.readdir(CHARTS_DIR);
+    const now = Date.now();
+    const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 horas
+    let prunedCount = 0;
+
+    for (const file of files) {
+      if (file === '.gitkeep' || !file.endsWith('.png')) continue;
+      const filePath = path.join(CHARTS_DIR, file);
+      try {
+        const stats = await fs.promises.stat(filePath);
+        const age = now - stats.mtimeMs;
+        if (age > MAX_AGE_MS) {
+          await fs.promises.unlink(filePath);
+          prunedCount++;
+        }
+      } catch (err) {
+        console.error(`[Chart Cleanup] Error procesando archivo ${file}:`, err.message);
+      }
+    }
+
+    if (prunedCount > 0) {
+      console.log(`[Chart Cleanup] Se eliminaron ${prunedCount} gráficos obsoletos (más de 24 horas).`);
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error('[Chart Cleanup] Error leyendo directorio de gráficos:', err.message);
+    }
+  }
+}
+
+/**
+ * Inicializa el planificador de limpieza en segundo plano.
+ * Realiza una poda inicial a los 5 segundos y luego cada 4 horas.
+ */
+export function startChartCleanupScheduler() {
+  // Poda inicial después del arranque
+  setTimeout(() => {
+    pruneOldCharts().catch(err => console.error('[Chart Cleanup] Fallo inicial:', err.message));
+  }, 5000);
+
+  // Poda periódica cada 4 horas
+  const CLEANUP_INTERVAL_MS = 4 * 60 * 60 * 1000;
+  const timer = setInterval(() => {
+    pruneOldCharts().catch(err => console.error('[Chart Cleanup] Fallo en intervalo:', err.message));
+  }, CLEANUP_INTERVAL_MS);
+
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
+}
+
+
