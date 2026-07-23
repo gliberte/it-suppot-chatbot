@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.46.1] - 2026-07-23
+
+### Fixed
+- **Normalización de Búsquedas en SAP HANA (`agent-orchestrator.js`):**
+  - **Filtros Insensibles a Mayúsculas (`UPPER`/`LOWER`):** Añadida instrucción obligatoria en el prompt del sistema (`SYSTEM_PROMPT`) para que Sophia siempre aplique normalizaciones `UPPER`/`LOWER` tanto a las columnas como a los valores al generar queries SQL de SAP HANA (ej: `UPPER(CardCode) = UPPER('cl101011')`). Esto previene fallos de "No se encontraron datos" debido a la sensibilidad de HANA cuando el usuario ingresa códigos en minúsculas.
+
 ## [0.46.0] - 2026-07-23
 
 ### Added
