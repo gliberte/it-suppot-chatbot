@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.48.2] - 2026-07-23
+
+### Fixed
+- **Parseo de Respuestas Planas en SAP (`server.js`):**
+  - **Soporte de Cadenas Planas Envueltas en JSON:** Corrección de un fallo visual en el formateador de tarjetas de SAP donde las respuestas del Gateway que devolvían oraciones explicativas planas envueltas en un objeto JSON (ej: `{"output":"The sum of... is 442903.20"}`) se mostraban como JSON crudo y feo en la tarjeta adaptativa. Ahora el parser detecta y extrae el campo `"output"` y lo renderiza de forma limpia como una oración en texto legible.
+
 ## [0.48.1] - 2026-07-23
 
 ### Ops

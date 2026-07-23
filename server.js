@@ -7742,7 +7742,30 @@ async function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
     .replace(/^\s*\|/gm, '')
     .trim();
 
-  const records = parseSapTextToRecords(cleanContent);
+  let records = [];
+  let displayContent = cleanContent;
+
+  try {
+    const parsed = JSON.parse(cleanContent);
+    if (Array.isArray(parsed)) {
+      records = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      if (parsed.output) {
+        displayContent = parsed.output;
+      } else {
+        records = [parsed];
+      }
+    }
+  } catch (e) {
+    // No es JSON válido, procesar como texto plano clave-valor
+    records = parseSapTextToRecords(cleanContent);
+  }
+
+  // Si se detectó un output de texto plano dentro de un JSON, reintentamos parsear por si acaso
+  if (records.length === 0 && displayContent !== cleanContent) {
+    records = parseSapTextToRecords(displayContent);
+  }
+
   const meta = detectSapQueryMeta(records, userPrompt);
   const totalRecords = records.length;
 
@@ -7926,7 +7949,7 @@ async function createSapQueryResultAdaptiveCard(toolOutput, userPrompt = '') {
       items: [
         {
           type: 'TextBlock',
-          text: cleanContent,
+          text: displayContent,
           wrap: true,
           size: 'Small'
         }
