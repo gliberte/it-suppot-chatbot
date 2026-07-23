@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.49.2] - 2026-07-23
+
+### Ops
+- **Documentación de Comandos en Guía Operativa (`scripts/prod-help.js`):**
+  - **Inclusión de `report:transcript`:** Integrado el nuevo comando de transcripción a la lista visible del menú de ayuda operativa en la sección "Auditoría y QA", detallando los parámetros requeridos (`--user`) y opcionales (`--format`, `--output`).
+
 ## [0.49.1] - 2026-07-23
 
 ### Added

@@ -110,6 +110,10 @@ const COMMANDS = [
         description: 'Genera reporte de uso de Sophia en Teams por usuario, mensajes y ultimo uso; acepta --format, --since, --sort, --output.'
       },
       {
+        name: 'report:transcript',
+        description: 'Reconstruye y muestra el dialogo cronologico completo de un usuario en Teams; requiere --user y acepta --format, --output.'
+      },
+      {
         name: 'routing:check',
         description: 'Valida rutas de clasificacion SDP y ejemplos protegidos.'
       },
