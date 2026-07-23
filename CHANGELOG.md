@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.45.1] - 2026-07-23
+
+### Fixed
+- **Resolución Inteligente de Nombres con Acentos para MCI y Técnicos (`sdp-mcp-server`):**
+  - **Resolución de Nombres en SDP (`resolveUserFullName`):** Corrección del fallo de insensibilidad a acentos en búsquedas directas de ServiceDesk Plus (ej: "Purificacion Cardenas" no retornaba resultados si en la base de datos estaba como "Purificación Cárdenas").
+  - **Búsqueda por Prefijos sin Acentos:** Si la búsqueda exacta por nombre falla, el backend divide el nombre por palabras y genera búsquedas por prefijos sin acentos (ej: "Purific" para "Purificación"), recupera los candidatos coincidentes, y luego realiza un matching local insensible a acentos sobre los nombres completos.
+  - **Inclusión de `udf_fields` por Defecto:** Se fuerza la devolución de `udf_fields` en la consulta list_requests cuando se filtra por MCI o técnicos custom, permitiendo mapear y resolver el campo "Técnico asignado" (`udf_pick_2701`) y "Líder MCI" (`udf_pick_1503`) de forma transparente sin llamadas extras de detalle.
+  - **Filtrado por `search_criteria` para Técnicos Custom:** Añadido filtrado nativo en SDP para la asignación de técnicos custom en la tabla de UDFs (`udf_fields.udf_pick_2701`).
+
 ## [0.45.0] - 2026-07-22
 
 ### Added
