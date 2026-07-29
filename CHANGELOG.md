@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.50.0] - 2026-07-29
+
+### Added
+- **Sophia como Mentora y Orientadora de MCI (`agent-orchestrator.js`):**
+  - **Habilitación de Guía de Exposición Semanal:** Agregada una directriz estructurada en el `SYSTEM_PROMPT` para que Sophia ayude proactivamente a los miembros del equipo de IT a preparar su exposición semanal de avances ante la gerencia.
+  - **Reconstrucción del Estado de la Meta:** El asistente consulta las MCI activas del usuario, analiza el avance físico actual, deduce las causas de retraso o bloqueo a partir del historial de la *predictiva* y arma un resumen ejecutivo estructurado con plan de acción/mitigación.
+  - **Elevator Pitch de 1 Minuto:** Genera un guión verbal optimizado con tono constructivo, profesional y enfocado en soluciones para que el colaborador exponga de forma fluida frente a la gerencia.
+  - **Diálogo Interactivo:** Si el sistema detecta que la predictiva está vacía o desactualizada, Sophia pregunta de forma proactiva al usuario para afinar los detalles de su guión de exposición.
+
 ## [0.49.2] - 2026-07-23
 
 ### Ops
