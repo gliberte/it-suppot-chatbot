@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.51.0] - 2026-07-29
+
+### Changed
+- **Razonamiento y Exposición Proactiva en MCI (`agent-orchestrator.js`):**
+  - **Interpretación de Resultados:** Sophia ya no se limita a mostrar tarjetas adaptativas pasivamente en consultas de MCI. Ahora acompaña cada listado o consulta con una explicación en lenguaje natural analizando cuáles metas van a tiempo y cuáles sufren rezagos.
+  - **Recomendaciones Operativas:** Sugiere de forma autónoma ideas, alternativas técnicas y mitigaciones concretas para resolver los bloqueos descritos en el campo `predictiva` de las metas.
+
 ## [0.50.0] - 2026-07-29
 
 ### Added
