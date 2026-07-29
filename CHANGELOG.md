@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.52.0] - 2026-07-29
+
+### Fixed
+- **Envío Conjunto de Tarjetas y Texto en Teams (`server.js`):**
+  - **Desbloqueo de Respuestas de Texto:** Corregido un cuello de botella arquitectónico donde el canal de Teams descartaba cualquier respuesta de texto si el turno generaba una tarjeta adaptativa. Ahora el bot envía la tarjeta y luego el texto analítico completo.
+  - **Flujo de Resumen en Listas de MCI:** Eliminado el retorno temprano (`return;`) en el bridge al listar MCI (`sdp_list_requests`), permitiendo que el motor de IA procese las metas, efectúe su análisis explicativo y genere la mentoría o guía semanal.
+  - **Envío de Parámetro de Consulta:** Configurado el envío del mensaje original en las opciones del resumidor (`summarizeToolOutput` y `streamToolSummary`) para contextualizar las metas analizadas.
+
 ## [0.51.0] - 2026-07-29
 
 ### Changed

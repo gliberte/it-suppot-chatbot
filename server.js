@@ -9251,7 +9251,11 @@ async function runSupportTurn({
       const card = createTicketsAdaptiveCard(toolOutput);
       if (card) {
         onCard?.(card);
-        return;
+        // Evitamos retornar temprano si es una solicitud de MCI para permitir que el orquestador
+        // ejecute summarizeToolOutput y Sophia brinde su análisis explicativo y mentoría.
+        if (!isMciListRequest(message)) {
+          return;
+        }
       }
     }
 
@@ -9279,9 +9283,9 @@ async function runSupportTurn({
     if (streamSummary) {
       await streamToolSummary(toolOutput, (type, data) => {
         if (type === 'text_chunk') onText(data.content);
-      }, { channel: responseChannel, toolName: aiDecision.tool_name });
+      }, { channel: responseChannel, toolName: aiDecision.tool_name, message });
     } else {
-      onText(await summarizeToolOutput(toolOutput, { channel: responseChannel, toolName: aiDecision.tool_name }));
+      onText(await summarizeToolOutput(toolOutput, { channel: responseChannel, toolName: aiDecision.tool_name, message }));
     }
   } catch (error) {
     console.error(`[Bridge] Error crítico ejecutando herramienta ${aiDecision.tool_name}:`, error.message);
@@ -9540,7 +9544,7 @@ function extractRequestIdFromToolResult(toolResult) {
 async function streamToolSummary(toolOutput, sendEvent, options = {}) {
   const minimizedOutput = minimizeToolOutputForGemini(toolOutput);
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const systemInstruction = getSummarySystemInstruction({ channel: options.channel || 'web', toolName: options.toolName });
+  const systemInstruction = getSummarySystemInstruction(options);
   try {
     const model = genAI.getGenerativeModel({
       model: GEMINI_SUMMARY_MODEL,
@@ -9590,6 +9594,7 @@ async function summarizeToolOutput(toolOutput, options = {}) {
 function getSummarySystemInstruction(options = {}) {
   const channel = options.channel || 'web';
   const toolName = options.toolName || '';
+  const message = options.message || '';
   const base = [
     'Eres Sophia, la asistente conversacional de Soporte IT de Barraza y Cía.',
     'Responde en español con una voz humana, clara, atenta y orientadora. Debe sentirse como una persona competente explicando lo que encontró y ayudando a decidir el siguiente paso, no como una plantilla.',
@@ -9663,7 +9668,15 @@ function getSummarySystemInstruction(options = {}) {
         'Puedes dar una explicación un poco más rica que en Teams, pero sin extenderte.'
       ];
 
-  return [...base, ...channelRules, ...ticketFormat, ...toolRules].join('\n');
+  const mciInstruction = isMciListRequest(message)
+    ? [
+        '¡IMPORTANTE! Estás analizando las MCI (Metas Crucialmente Importantes) del usuario para dar una explicación rica, razonada y proactiva, no meramente pasiva.',
+        'Analiza qué metas van bien y cuáles muestran rezagos o están bloqueadas (basándote en el avance físico y en el texto de la predictiva). Sugiere ideas operativas y recomendaciones técnicas para resolver los bloqueos.',
+        'Si el usuario pidió preparar su reunión semanal de avance de MCI (mentoría), elabora una "Guía de Exposición Semanal para Gerencia" con: a) Estado de Avance, b) Análisis de Impedimentos (explicación clara y profesional de retrasos), c) Plan de Mitigación (qué se hará la próxima semana), y d) Guión de Exposición (elevator pitch de 1 minuto con tono constructivo y orientado a soluciones). Si falta predictiva o comentarios, pídele al líder de forma amigable que te dé detalles para afinar su pitch.'
+      ]
+    : [];
+
+  return [...base, ...channelRules, ...ticketFormat, ...toolRules, ...mciInstruction].join('\n');
 }
 
 function createTicketsAdaptiveCard(toolOutput) {
@@ -12258,11 +12271,24 @@ async function handleTeamsMessage(context) {
   }
 
   const cardResponse = chunks.find((chunk) => chunk?.type === 'adaptive_card');
+  const textResponse = chunks.filter((chunk) => typeof chunk === 'string').join('').trim();
   if (cardResponse) {
-    session.history = pushChatHistory(pushChatHistory(session.history, 'user', messageForSophia), 'assistant', cardResponse.summaryText);
-    scheduleRuntimeStateSave();
-    await sendTeamsReply(context, cardResponse);
-    return;
+    if (textResponse) {
+      session.history = pushChatHistory(
+        pushChatHistory(session.history, 'user', messageForSophia),
+        'assistant',
+        `${textResponse}\n\n[Card: ${cardResponse.summaryText || 'MCI / Tickets'}]`
+      );
+      scheduleRuntimeStateSave();
+      await sendTeamsReply(context, cardResponse);
+      await sendTeamsReply(context, textResponse);
+      return;
+    } else {
+      session.history = pushChatHistory(pushChatHistory(session.history, 'user', messageForSophia), 'assistant', cardResponse.summaryText);
+      scheduleRuntimeStateSave();
+      await sendTeamsReply(context, cardResponse);
+      return;
+    }
   }
 
   const response = truncateText(chunks.join('').trim(), 27000);
