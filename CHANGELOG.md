@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.52.2] - 2026-08-03
+
+### Changed
+- **Mapeo de Rutas en Consultas de SAP HANA (`agent-orchestrator.js`):**
+  - **Uso Obligatorio de `U_TM_RUTAS`:** Modificadas las directrices de base de datos en el `SYSTEM_PROMPT` para instruir a Sophia a usar de manera autónoma y directa la columna `U_TM_RUTAS` ante cualquier consulta relacionada con rutas de SAP (ej: clientes, facturación o stock), evitando preguntar o confirmar al usuario.
+
 ## [0.52.1] - 2026-08-03
 
 ### Fixed
