@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.52.1] - 2026-08-03
+
+### Fixed
+- **Precisión de Fechas en Consultas SQL (`agent-orchestrator.js`):**
+  - **Validación del Calendario (Años No Bisiestos):** Agregada una directriz dura en el prompt del sistema (`SYSTEM_PROMPT`) para exigir la máxima precisión al calcular rangos de fecha en consultas de SAP HANA. Específicamente, previene que se generen fechas inválidas como `2026-02-29` (año no bisiesto), evitando errores críticos de SQL en la base de datos de producción.
+
 ## [0.52.0] - 2026-07-29
 
 ### Fixed
