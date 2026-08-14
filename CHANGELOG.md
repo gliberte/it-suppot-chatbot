@@ -9,6 +9,17 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.52.3] - 2026-08-14
+
+### Security
+- **Corrección de bypass de ownership en `isItExecutiveUser` (`lib/authz.js`):**
+  - **Comportamiento restrictivo por defecto:** `isItExecutiveUser` ya no trata a cualquier usuario autenticado como ejecutivo de IT cuando `SOPHIA_IT_EXECUTIVE_EMAILS`/`SOPHIA_IT_EXECUTIVE_AAD_OBJECT_IDS` no están configuradas. Con el comportamiento anterior, cualquier usuario podía ver el reporte ejecutivo (`handleExecutiveItTurn`) y saltarse el chequeo de solicitante/técnico asignado en acciones mutantes sobre tickets de otras personas (agregar notas, resolver, asignar). Ahora solo califican como ejecutivo los usuarios explícitamente listados en esas variables, más los administradores de soporte y de MCI.
+
+### Ops
+- **Extracción y cobertura de tests para autorización y confirmación de acciones (`lib/authz.js`, `lib/pending-actions.js`):**
+  - **Módulos puros extraídos de `server.js`:** Se movieron las funciones de resolución de roles/ownership de tickets y la máquina de estados de acciones pendientes a `lib/authz.js` y `lib/pending-actions.js`, sin cambiar su comportamiento, para poder probarlas sin levantar el bridge completo.
+  - **Suite de pruebas con Vitest:** Se agregó `vitest` (`npm test`) y 58 pruebas unitarias que cubren resolución de roles (admin/MCI admin/ejecutivo), ownership de tickets, permisos de edición de MCI, y el ciclo de vida completo de confirmación de acciones (crear, actualizar, confirmar, expirar).
+
 ## [0.52.2] - 2026-08-03
 
 ### Changed

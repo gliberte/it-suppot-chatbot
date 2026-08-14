@@ -15,6 +15,31 @@ import { appendFile, mkdir, readFile, rename, writeFile } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { generateMciProgressChart, generateTechnicianLoadChart, generateSapGenericChart, startChartCleanupScheduler } from './chart-generator.js';
 import { CloudAdapter, ConfigurationBotFrameworkAuthentication, TeamsActivityHandler, TurnContext } from 'botbuilder';
+import {
+  getBearerToken,
+  normalizeComparableText,
+  getDisplayName,
+  getAssignedTechnicianValue,
+  getCsvEnvSet,
+  getRequesterId,
+  isSupportAdmin,
+  getExecutiveItProfile,
+  isMciAdmin,
+  isItExecutiveUser,
+  withUserRole,
+  userCanAccessRequest,
+  userMatchesAssignedTechnician,
+  isMciRequestData,
+  userMatchesMciLeader,
+  userCanReadRequest,
+  userCanSeeListRequest,
+  mciUpdateChangesLeader,
+  getDisallowedLeaderMciUpdateFields
+} from './lib/authz.js';
+import {
+  createPendingActionStore,
+  formatExpiredConfirmationMessage
+} from './lib/pending-actions.js';
 
 dotenv.config();
 
@@ -149,12 +174,6 @@ async function executeSapHanaQuery(sqlQuery) {
     console.error('[SAP Gateway Error Detallado]:', detail);
     throw new Error(`Error en la consulta a la pasarela de SAP HANA: ${detail}`);
   }
-}
-
-function getBearerToken(req) {
-  const header = req.get('authorization') || '';
-  const [scheme, token] = header.split(' ');
-  return scheme?.toLowerCase() === 'bearer' ? token : null;
 }
 
 function getSessionForRequest(req) {
@@ -587,219 +606,11 @@ function getLastTicketId(session) {
   return session?.operationalMemory?.lastTicket?.id || null;
 }
 
-function withUserRole(user) {
-  if (!user) return user;
-  const candidate = { ...user };
-  candidate.executiveProfile = getExecutiveItProfile(candidate);
-  candidate.role = (isSupportAdmin(candidate) || candidate.executiveProfile) ? 'support_admin' : (candidate.role || 'user');
-  return candidate;
-}
-
-function getRequesterId(user) {
-  return user?.sdpRequesterId || user?.id;
-}
-
-function isSupportAdmin(user) {
-  if (!user) return false;
-  if (user.isSupportAdmin || user.role === 'admin' || user.role === 'support_admin') return true;
-
-  const adminAadObjectIds = getCsvEnvSet('TEAMS_ADMIN_AAD_OBJECT_IDS');
-  const adminEmails = getCsvEnvSet('SUPPORT_ADMIN_EMAILS');
-  const adminRequesterIds = getCsvEnvSet('SUPPORT_ADMIN_SDP_REQUESTER_IDS');
-  const aadObjectId = String(user.aadObjectId || '').toLowerCase();
-  const email = String(user.email || '').toLowerCase();
-  const requesterId = String(getRequesterId(user) || '').toLowerCase();
-
-  return Boolean(
-    (aadObjectId && adminAadObjectIds.has(aadObjectId)) ||
-    (email && adminEmails.has(email)) ||
-    (requesterId && adminRequesterIds.has(requesterId))
-  );
-}
-
-function getExecutiveItProfile(user) {
-  if (!user) return null;
-
-  const executiveEmails = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_EMAILS');
-  const executiveAadObjectIds = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_AAD_OBJECT_IDS');
-  const email = String(user.email || '').toLowerCase();
-  const aadObjectId = String(user.aadObjectId || '').toLowerCase();
-  const normalizedName = normalizeComparableText(user.name || user.displayName || '');
-  const isYariela = normalizedName.includes('yariela saucedo') || normalizedName.includes('yariela saucedo de vallarino');
-
-  if (
-    isYariela ||
-    (email && executiveEmails.has(email)) ||
-    (aadObjectId && executiveAadObjectIds.has(aadObjectId))
-  ) {
-    return {
-      type: 'it_executive',
-      title: 'Gerente de IT',
-      serviceStyle: 'executive_follow_up',
-      reportingOptions: [
-        'tickets nuevos generados por usuarios',
-        'carga por personal técnico',
-        'seguimientos recientes',
-        'avances de MCI'
-      ]
-    };
-  }
-
-  return null;
-}
-
-function isItExecutiveUser(user) {
-  if (user?.executiveProfile?.type === 'it_executive' || getExecutiveItProfile(user)) return true;
-  if (isSupportAdmin(user) || isMciAdmin(user)) return true;
-
-  const executiveEmails = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_EMAILS');
-  const executiveAadObjectIds = getCsvEnvSet('SOPHIA_IT_EXECUTIVE_AAD_OBJECT_IDS');
-  if (executiveEmails.size === 0 && executiveAadObjectIds.size === 0) {
-    return true;
-  }
-
-  return false;
-}
-
-function isMciAdmin(user) {
-  if (!user) return false;
-
-  const adminAadObjectIds = getCsvEnvSet('MCI_ADMIN_AAD_OBJECT_IDS');
-  const adminEmails = getCsvEnvSet('MCI_ADMIN_EMAILS');
-  const adminRequesterIds = getCsvEnvSet('MCI_ADMIN_SDP_REQUESTER_IDS');
-  const aadObjectId = String(user.aadObjectId || '').toLowerCase();
-  const email = String(user.email || '').toLowerCase();
-  const requesterId = String(getRequesterId(user) || '').toLowerCase();
-
-  return Boolean(
-    (aadObjectId && adminAadObjectIds.has(aadObjectId)) ||
-    (email && adminEmails.has(email)) ||
-    (requesterId && adminRequesterIds.has(requesterId)) ||
-    (adminAadObjectIds.size === 0 && adminEmails.size === 0 && adminRequesterIds.size === 0 && isSupportAdmin(user))
-  );
-}
-
-function getCsvEnvSet(name) {
-  return new Set(
-    (process.env[name] || '')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
-function userCanAccessRequest(user, data) {
-  const request = data?.request || data;
-  const requester = request?.requester || {};
-  const requesterId = String(requester.id || '');
-  const requesterEmail = (requester.email_id || requester.email || '').toLowerCase();
-  const userRequesterId = String(getRequesterId(user) || '');
-  const userEmail = (user?.email || user?.mail || user?.userPrincipalName || '').toLowerCase();
-
-  if (userRequesterId && requesterId && userRequesterId === requesterId) return true;
-  if (userEmail && requesterEmail && userEmail === requesterEmail) return true;
-
-  // Comparación por prefijo de correo (antes del @) si los dominios difieren
-  if (userEmail && requesterEmail) {
-    const userPrefix = userEmail.split('@')[0];
-    const reqPrefix = requesterEmail.split('@')[0];
-    if (userPrefix && reqPrefix && userPrefix.length > 2 && userPrefix === reqPrefix) return true;
-  }
-
-  // Comparación por nombre normalizado
-  const requesterName = normalizeComparableText(requester.name || requester.display_value || '');
-  const userName = normalizeComparableText(user?.name || user?.displayName || '');
-  if (requesterName && userName) {
-    if (requesterName === userName || requesterName.includes(userName) || userName.includes(requesterName)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function userCanReadRequest(user, data) {
-  if (isSupportAdmin(user) || isItExecutiveUser(user) || isMciAdmin(user) || userCanAccessRequest(user, data) || userMatchesAssignedTechnician(user, data)) return true;
-  return isMciRequestData(data) && userMatchesMciLeader(user, data);
-}
-
-function userCanSeeListRequest(user, request, { isMciResult = false } = {}) {
-  if (isMciResult) return userCanReadRequest(user, request);
-  return isSupportAdmin(user) || isItExecutiveUser(user) || userCanAccessRequest(user, request) || userMatchesAssignedTechnician(user, request);
-}
-
-function userMatchesAssignedTechnician(user, data) {
-  const request = data?.request || data;
-  const techObj = request?.technician;
-  const techEmail = (techObj?.email_id || techObj?.email || '').toLowerCase();
-  const userEmail = (user?.email || user?.mail || user?.userPrincipalName || '').toLowerCase();
-
-  if (userEmail && techEmail && userEmail === techEmail) return true;
-
-  const techId = String(techObj?.id || '');
-  const userTechId = String(getRequesterId(user) || '');
-  if (techId && userTechId && techId === userTechId) return true;
-
-  const assignedTechnician = normalizeComparableText(getAssignedTechnicianValue(request));
-  if (!assignedTechnician) return false;
-
-  const userCandidates = [
-    user?.name,
-    user?.email,
-    user?.displayName,
-    user?.mail,
-    user?.userPrincipalName
-  ].map(normalizeComparableText).filter(Boolean);
-
-  return userCandidates.some((candidate) => (
-    candidate === assignedTechnician ||
-    assignedTechnician.includes(candidate) ||
-    candidate.includes(assignedTechnician)
-  ));
-}
-
-function isMciRequestData(data) {
-  const request = data?.request || data;
-  const udfFields = request?.udf_fields || {};
-  const templateName = request?.template?.name || request?.request_template?.name || request?.template_name;
-  const templateId = String(request?.template?.id || request?.request_template?.id || '');
-
-  return templateName === 'PlantMCI' ||
-    templateId === '604' ||
-    Boolean(udfFields.udf_pick_1503 || udfFields.udf_pick_1501 || udfFields.udf_pick_1504);
-}
-
-function getMciLeaderValue(data) {
-  const request = data?.request || data;
-  const leader = request?.udf_fields?.udf_pick_1503;
-  if (!leader) return '';
-  if (typeof leader === 'string') return leader;
-  return leader.name || leader.display_value || leader.value || '';
-}
-
-function userMatchesMciLeader(user, data) {
-  const leader = normalizeComparableText(getMciLeaderValue(data));
-  if (!leader) return false;
-
-  return [
-    user?.name,
-    user?.email,
-    user?.login_name,
-    user?.userPrincipalName
-  ].some((value) => {
-    const normalized = normalizeComparableText(value);
-    return normalized && (normalized === leader || leader.includes(normalized) || normalized.includes(leader));
-  });
-}
-
-function mciUpdateChangesLeader(args) {
-  return Boolean(args?.fields?.leader || args?.fields?.leader_name || args?.fields?.mci_leader);
-}
-
-function getDisallowedLeaderMciUpdateFields(args) {
-  const leaderEditableFields = new Set(['current_date', 'description', 'predictive', 'progress']);
-  return Object.keys(args?.fields || {}).filter((field) => !leaderEditableFields.has(field));
-}
+// Autorización/ownership (withUserRole, isSupportAdmin, isMciAdmin, isItExecutiveUser,
+// getExecutiveItProfile, getCsvEnvSet, getRequesterId, userCanAccessRequest,
+// userCanReadRequest, userCanSeeListRequest, userMatchesAssignedTechnician,
+// isMciRequestData, getMciLeaderValue, userMatchesMciLeader, mciUpdateChangesLeader,
+// getDisallowedLeaderMciUpdateFields) vive en lib/authz.js — ver import al inicio del archivo.
 
 async function auditToolCall({ user, toolName, args, outcome, error }) {
   const record = {
@@ -1153,91 +964,17 @@ function createAdaptiveCardAuditSignals(card) {
   };
 }
 
-function prunePendingActions(session, persist = true) {
-  const now = Date.now();
-  const expiredActions = [];
-  for (const [id, action] of session.pendingActions.entries()) {
-    if (action.expiresAt <= now) {
-      session.pendingActions.delete(id);
-      expiredActions.push({ id, action });
-    }
-  }
-  if (expiredActions.length > 0 && persist) scheduleRuntimeStateSave();
-  return expiredActions;
-}
-
-function createPendingAction(session, { toolName, args, content }) {
-  prunePendingActions(session);
-  const actionId = randomUUID();
-  session.pendingActions.set(actionId, {
-    toolName,
-    args,
-    content,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    editHistory: [],
-    expiresAt: Date.now() + PENDING_ACTION_TTL_MS
-  });
-  scheduleRuntimeStateSave();
-  return actionId;
-}
-
-function updatePendingAction(session, actionId, updater) {
-  prunePendingActions(session);
-  const action = session.pendingActions.get(actionId);
-  if (!action) return null;
-  const updatedAction = updater({ ...action, args: cloneActionArgs(action.args) }) || action;
-  updatedAction.updatedAt = new Date().toISOString();
-  updatedAction.expiresAt = Date.now() + PENDING_ACTION_TTL_MS;
-  session.pendingActions.set(actionId, updatedAction);
-  scheduleRuntimeStateSave();
-  return updatedAction;
-}
-
-function cloneActionArgs(args = {}) {
-  return {
-    ...args,
-    udf_fields: args.udf_fields && typeof args.udf_fields === 'object' ? { ...args.udf_fields } : args.udf_fields,
-    sophia_classification: args.sophia_classification && typeof args.sophia_classification === 'object'
-      ? {
-          ...args.sophia_classification,
-          matchedKeywords: Array.isArray(args.sophia_classification.matchedKeywords)
-            ? [...args.sophia_classification.matchedKeywords]
-            : args.sophia_classification.matchedKeywords
-        }
-      : args.sophia_classification
-  };
-}
-
-function takePendingAction(session, actionId) {
-  const expiredActions = prunePendingActions(session);
-  const expiredAction = expiredActions.find((entry) => entry.id === actionId);
-  if (expiredAction) {
-    return { expired: true, action: expiredAction.action };
-  }
-  const action = session.pendingActions.get(actionId);
-  if (!action) return { expired: false, action: null };
-  session.pendingActions.delete(actionId);
-  scheduleRuntimeStateSave();
-  return { expired: false, action };
-}
-
-function takeFirstPendingAction(session) {
-  const expiredActions = prunePendingActions(session);
-  const pending = [...session.pendingActions.keys()][0];
-  if (pending) return takePendingAction(session, pending);
-
-  const latestExpired = expiredActions.at(-1)?.action || null;
-  return { expired: Boolean(latestExpired), action: latestExpired };
-}
-
-function formatExpiredConfirmationMessage(action) {
-  const actionLabel = getPendingActionLabel(action);
-  return [
-    `La confirmación${actionLabel ? ` para ${actionLabel}` : ''} expiró por seguridad.`,
-    'Vuelve a pedirme el cambio y lo preparo otra vez para que puedas confirmarlo.'
-  ].join(' ');
-}
+const {
+  prunePendingActions,
+  createPendingAction,
+  updatePendingAction,
+  takePendingAction,
+  takeFirstPendingAction
+} = createPendingActionStore({
+  ttlMs: PENDING_ACTION_TTL_MS,
+  generateId: randomUUID,
+  onPersist: () => scheduleRuntimeStateSave()
+});
 
 function formatConfirmedActionError(action, error) {
   const minimizedError = minimizeAuditError(error);
@@ -1382,19 +1119,6 @@ function extractValueAfterEditMarker(text, fieldPattern) {
   const afterField = source.slice((fieldMatch.index || 0) + fieldMatch[0].length);
   const markerMatch = afterField.match(/(?:a|por|con|como|siguiente texto|texto)\s*:?\s*(.+)$/i);
   return markerMatch?.[1]?.trim().replace(/^["“”']|["“”']$/g, '') || '';
-}
-
-function getPendingActionLabel(action) {
-  if (!action?.toolName) return '';
-  const requestId = action.args?.request_id ? ` #${action.args.request_id}` : '';
-  if (action.toolName === 'sdp_update_mci') return `actualizar la MCI${requestId}`;
-  if (action.toolName === 'sdp_create_request') return 'crear la solicitud';
-  if (action.toolName === 'sdp_update_request') return `actualizar el ticket${requestId}`;
-  if (action.toolName === 'sdp_add_note') return `agregar seguimiento al ticket${requestId}`;
-  if (action.toolName === 'sdp_resolve_request') return `resolver el ticket${requestId}`;
-  if (action.toolName === 'sdp_assign_request') return `asignar el ticket${requestId}`;
-  if (action.toolName === 'sdp_execute_automation_action') return 'ejecutar la acción técnica';
-  return 'ejecutar la acción';
 }
 
 function createTeamsConfirmationCard({ actionId, toolName, args, user, intro, summaryText, expiresInMs }) {
@@ -2390,15 +2114,6 @@ async function resolveSdpRequesterIdByName(searchText) {
   }
 
   return String(match.id);
-}
-
-function normalizeComparableText(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function isPersonalTicketsRequest(message) {
@@ -10609,10 +10324,6 @@ function getAccentInsensitivePersonSearch(preparedArgs = {}, message = '') {
   return null;
 }
 
-function getAssignedTechnicianValue(request) {
-  return getDisplayName(request?.udf_fields?.udf_pick_2701) || getDisplayName(request?.technician);
-}
-
 function createResultOptionsBlock({ isMciResult, hasResults }) {
   const options = hasResults
     ? isMciResult
@@ -11573,12 +11284,6 @@ function getMciProgressColor(progress) {
   if (value >= 90) return 'Good';
   if (value >= 50) return 'Accent';
   return 'Warning';
-}
-
-function getDisplayName(value) {
-  if (!value) return '';
-  if (typeof value === 'string') return value;
-  return value.name || value.display_value || value.value || '';
 }
 
 function getDisplayDate(value) {
