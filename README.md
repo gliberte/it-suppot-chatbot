@@ -22,6 +22,8 @@ npm run dev:server   # bridge Express
 npm run teams:check   # valida variables minimas para piloto Teams
 npm run teams:package # genera teams/generated/soporte-it-teams.zip
 npm run rag:ingest    # genera data/rag-index.json desde knowledge/
+npm test              # tests unitarios de autorizacion y acciones pendientes (vitest)
+npm run eval:agent    # eval de decisiones del agente contra Gemini real
 npm run pm2:start     # inicia Sophia con PM2 en produccion
 npm run pm2:restart   # reinicia Sophia en PM2 usando variables actualizadas
 npm run pm2:status    # muestra estado PM2 de Sophia
@@ -145,6 +147,30 @@ La respuesta incluye:
 - ruta de clasificacion y palabras clave que hicieron match;
 - confianza;
 - evidencia RAG usada para justificar la decision.
+
+## Evaluación Del Agente
+
+El `SYSTEM_PROMPT` de `agent-orchestrator.js` acumula reglas por parches sucesivos (ver `CHANGELOG.md`). Para detectar cuándo un cambio de prompt o de modelo rompe una decisión que ya funcionaba, hay un arnés de evaluación que corre mensajes reales contra Gemini y verifica la acción/herramienta/argumentos elegidos:
+
+```bash
+npm run eval:agent
+```
+
+Requiere `GEMINI_API_KEY`. Cada caso en `scripts/eval-agent.js` describe un mensaje de usuario y lo que Sophia debe decidir (responder directo, o usar una herramienta con ciertos argumentos). No reemplaza pruebas contra SDP/SAP reales ni los tests de `lib/authz.js`; solo valida la capa de razonamiento.
+
+Ejecutar un caso específico:
+
+```bash
+npm run eval:agent -- --only "SAP HANA"
+```
+
+Repetir cada caso varias veces para revisar consistencia (los LLM no son determinísticos):
+
+```bash
+npm run eval:agent -- --repeat 3
+```
+
+Antes de cambiar el modelo (`GEMINI_DECISION_MODEL`/`GEMINI_SUMMARY_MODEL`) o de reescribir reglas grandes del `SYSTEM_PROMPT`, correr este eval y confirmar que sigue en verde antes de desplegar.
 
 ## Seguridad Implementada
 

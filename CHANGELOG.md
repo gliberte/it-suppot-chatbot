@@ -15,6 +15,19 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.1] - 2026-08-17
+
+### Added
+- **Arnés de evaluación del agente (`scripts/eval-agent.js`, `npm run eval:agent`):**
+  - **19 casos contra Gemini real:** cubren saludo/charla general, listar tickets y MCI propios, MCI por líder (incluida la aclaración obligatoria cuando un admin pide tickets "de" alguien sin precisar solicitante/técnico), las dos fases de creación de ticket, automatizaciones (desbloqueo de cuenta), `sdp_add_note` con ID/texto explícitos y por memoria del último ticket, preguntas de marca/empresa vía RAG, gráficos, actualización de MCI, `sap_hana_query` y `web_search_support` (incluyendo que NO se use para sistemas propios como Barraza Móvil).
+  - **Flags `--only` y `--repeat`:** para aislar un caso o repetirlo varias veces y medir consistencia, dado que el modelo no es determinístico.
+  - **Hallazgo real de la primera corrida:** el eval detectó que `sap_hana_query` podía devolver el SQL bajo la clave `sql_query` en vez de `query`/`sqlQuery`/`sql`, las únicas que `callMcpTool` reconocía — la consulta se habría ejecutado vacía en producción. Se agregó `sql_query` como alias reconocido en `server.js` y se hizo explícito en el `SYSTEM_PROMPT` que el argumento correcto es `tool_args.query`, para reducir la ambigüedad que originó la variante.
+
+### Changed
+- **Actualización del modelo de razonamiento a Gemini 3.7 Flash (`.env`, `.env.example`):**
+  - **Modelo principal:** `GEMINI_DECISION_MODEL` y `GEMINI_SUMMARY_MODEL` pasan de `gemini-2.5-flash` a `gemini-3.7-flash` para la decisión del agente (`agent-orchestrator.js`) y el resumen/formateo de resultados de SDP/SAP (`server.js`). Se validó contra la API real que el modelo soporta `systemInstruction` y `responseMimeType: application/json`, y pasó las 19 pruebas del arnés de evaluación.
+  - **Fallback más cercano:** `GEMINI_FALLBACK_MODEL` pasa de `gemini-2.0-flash` a `gemini-2.5-flash` (el modelo estable anterior), para que si `gemini-3.7-flash` falla, Sophia caiga a un modelo probado en vez de saltar dos generaciones atrás.
+
 ## [0.52.3] - 2026-08-14
 
 ### Security

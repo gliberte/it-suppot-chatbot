@@ -236,7 +236,7 @@ app.post('/api/admin/weekly-report', async (req, res) => {
 
 async function callMcpTool(name, args = {}) {
   if (name === 'sap_hana_query') {
-    const sqlQuery = args.query || args.sqlQuery || args.sql || '';
+    const sqlQuery = args.query || args.sqlQuery || args.sql || args.sql_query || '';
     return await executeSapHanaQuery(sqlQuery);
   }
 

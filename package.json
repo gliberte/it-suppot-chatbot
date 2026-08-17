@@ -1,7 +1,7 @@
 {
   "name": "it-support-chatbot",
   "private": true,
-  "version": "0.53.0",
+  "version": "0.53.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "server": "node server.js",
     "rag:ingest": "node scripts/ingest-knowledge.js",
     "rag:test": "node scripts/test-rag.js",
+    "eval:agent": "node scripts/eval-agent.js",
     "knowledge:candidates": "node scripts/knowledge-candidates.js",
     "knowledge:candidates:report": "node scripts/report-knowledge-candidates.js",
     "knowledge:export": "node scripts/export-approved-knowledge.js",
