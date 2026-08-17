@@ -106,6 +106,8 @@ Visibilidad:
 
 El RAG no reemplaza datos vivos de SDP. Estados, tickets, solicitantes, MCI y acciones reales siguen consultandose con herramientas MCP.
 
+Umbral de recuperacion (`RAG_MIN_SCORE`, default `0.68`): si ninguna consulta llega a ese puntaje, se reintenta una vez con `RAG_FALLBACK_MIN_SCORE` (default `0.5`) antes de devolver conocimiento vacio. Esto evita que una reformulacion levemente distinta de la misma pregunta se quede sin contexto por caer justo debajo del corte principal. Solo aplica cuando la busqueda no explicita su propio `minScore` mas bajo (por ejemplo, la clasificacion de tickets ya usa `RAG_CLASSIFY_MIN_SCORE=0.3` y no dispara el fallback).
+
 Diagnostico de recuperacion:
 
 ```bash

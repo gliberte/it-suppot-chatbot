@@ -15,6 +15,12 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.2] - 2026-08-17
+
+### Changed
+- **Fallback de umbral en la recuperación RAG (`rag.js`):**
+  - **Segundo intento con umbral más permisivo:** `searchKnowledge` ahora reintenta con `RAG_FALLBACK_MIN_SCORE` (default `0.5`) cuando `RAG_MIN_SCORE` (default `0.68`) no devuelve ningún fragmento, en vez de dejar a Sophia sin `retrieved_knowledge`. `npm run rag:test` mostró varios casos ya en producción raspando el umbral principal (scores entre 0.673 y 0.692); probar reformulaciones más torpes de las mismas 18 consultas confirmó el problema real: 2 de 6 (`"correo raro no llega"`, `"wifi mal"`) devolvían cero resultados antes del cambio y recuperan el playbook correcto después. Solo aplica cuando la llamada no fija su propio `minScore` más bajo, así que no afecta la clasificación de tickets (`RAG_CLASSIFY_MIN_SCORE=0.3`).
+
 ## [0.53.1] - 2026-08-17
 
 ### Added

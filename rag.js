@@ -17,15 +17,27 @@ export async function searchKnowledge(query, options = {}) {
   const role = options.role || 'user';
   const limit = Number(options.limit || process.env.RAG_TOP_K || 5);
   const minScore = Number(options.minScore || process.env.RAG_MIN_SCORE || 0.68);
+  // Umbral mas permisivo usado solo cuando minScore no devuelve nada: evita que
+  // una reformulacion levemente distinta de la misma pregunta se quede sin
+  // retrieved_knowledge por caer justo debajo del corte principal (ver casos
+  // borderline de npm run rag:test, varios entre 0.67 y 0.69).
+  const fallbackMinScore = Number(options.fallbackMinScore ?? process.env.RAG_FALLBACK_MIN_SCORE ?? 0.5);
 
-  return index.chunks
+  const scored = index.chunks
     .filter((chunk) => isVisibleToRole(chunk, role))
     .map((chunk) => ({
       ...chunk,
       score: cosineSimilarity(queryEmbedding, chunk.embedding)
     }))
-    .filter((chunk) => chunk.score >= minScore)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.score - a.score);
+
+  let results = scored.filter((chunk) => chunk.score >= minScore);
+
+  if (!results.length && fallbackMinScore < minScore) {
+    results = scored.filter((chunk) => chunk.score >= fallbackMinScore);
+  }
+
+  return results
     .slice(0, limit)
     .map(({ embedding, ...chunk }) => chunk);
 }
