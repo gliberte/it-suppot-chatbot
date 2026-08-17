@@ -69,6 +69,17 @@ function getMonitorState() {
   }
 }
 
+function getKnowledgeCandidates() {
+  const path = resolve(process.env.KNOWLEDGE_CANDIDATES_PATH || 'data/knowledge-candidates.json');
+  if (!existsSync(path)) return [];
+  try {
+    const data = JSON.parse(readFileSync(path, 'utf8'));
+    return Array.isArray(data.candidates) ? data.candidates : [];
+  } catch {
+    return [];
+  }
+}
+
 function buildReport() {
   const teamsEvents = readJsonLines('teams-audit.log').filter(inReportDate);
   const toolEvents = readJsonLines('audit.log').filter(inReportDate);
@@ -111,6 +122,14 @@ function buildReport() {
     truncate((event.problems || []).join(' | '), 140)
   ]);
 
+  const knowledgeCandidates = getKnowledgeCandidates();
+  const pendingCandidates = knowledgeCandidates.filter((candidate) => candidate.status === 'pending_review');
+  const approvedCandidates = knowledgeCandidates.filter((candidate) => candidate.status === 'approved');
+  const newCandidatesToday = knowledgeCandidates.filter((candidate) => inReportDate({ timestamp: candidate.createdAt }));
+  const pendingRows = pendingCandidates
+    .slice(-15)
+    .map((candidate) => [candidate.id, candidate.type, truncate(candidate.title, 90)]);
+
   const statusLine = monitorState
     ? `${monitorState.problemCount ? 'Con observaciones' : 'Sin observaciones'} (${monitorState.problemCount || 0} problema(s) en último monitor, actualizado ${monitorState.updatedAt || 'n/a'})`
     : 'Sin estado de monitor disponible';
@@ -136,6 +155,8 @@ function buildReport() {
     `- Confirmaciones canceladas: ${cancelled.length}`,
     `- Tickets creados por Sophia: ${createdTickets.length}`,
     `- Cambios de alerta del monitor: ${alertEvents.length}`,
+    `- Candidatos de conocimiento nuevos hoy: ${newCandidatesToday.length}`,
+    `- Candidatos de conocimiento pendientes de revisión: ${pendingCandidates.length}${approvedCandidates.length ? ` (+${approvedCandidates.length} aprobado(s) sin aplicar)` : ''}`,
     '',
     '## Herramientas Más Usadas',
     '',
@@ -160,7 +181,21 @@ function buildReport() {
     '## Cambios De Alerta Del Monitor',
     '',
     formatTable(['Fecha', 'Estado', 'Transición', 'Problemas', 'Detalle'], latestAlerts),
-    ''
+    '',
+    '## Candidatos De Conocimiento',
+    '',
+    `Nuevos hoy: ${newCandidatesToday.length}. Pendientes de revisión: ${pendingCandidates.length}. Aprobados sin aplicar: ${approvedCandidates.length}.`,
+    '',
+    formatTable(['ID', 'Tipo', 'Título'], pendingRows),
+    '',
+    ...(pendingCandidates.length > 0 ? [
+      'Revisar con:',
+      '',
+      '```bash',
+      'npm run knowledge:review -- --limit 10',
+      '```',
+      ''
+    ] : [])
   ].join('\n');
 }
 

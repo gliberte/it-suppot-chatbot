@@ -100,13 +100,16 @@ Salida:
 reports/daily/sophia-daily-YYYY-MM-DD.md
 ```
 
-Cron recomendado todos los dias a las 7:30 a.m.:
+Cron recomendado todos los dias a las 7:30 a.m., generando primero candidatos de conocimiento nuevos desde `audit.log` para que el reporte los incluya:
 
 ```cron
+0 7 * * * cd /opt/sophia/it-support-chatbot && npm run knowledge:candidates >/dev/null 2>&1
 30 7 * * * cd /opt/sophia/it-support-chatbot && npm run prod:daily-report >/dev/null 2>&1
 ```
 
-El reporte resume actividad Teams, herramientas usadas, tickets creados, errores, confirmaciones y cambios de alerta del monitor.
+`knowledge:candidates` es aditivo e idempotente: solo agrega candidatos nuevos (por huella/fingerprint) a `data/knowledge-candidates.json`, nunca modifica ni elimina los existentes. Aprobar, descartar o aplicar un candidato sigue siendo manual con `npm run knowledge:review` -- ver seccion "RAG y conocimiento" de `npm run prod:help`.
+
+El reporte resume actividad Teams, herramientas usadas, tickets creados, errores, confirmaciones, cambios de alerta del monitor y candidatos de conocimiento pendientes de revision.
 
 Tambien resume actividad reciente:
 

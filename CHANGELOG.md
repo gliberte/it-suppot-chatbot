@@ -15,6 +15,13 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.3] - 2026-08-17
+
+### Ops
+- **Automatizar generación y aviso de candidatos de conocimiento (`scripts/prod-daily-report.js`, `docs/runbook-produccion.md`):**
+  - **Cron nuevo antes del reporte diario:** `npm run knowledge:candidates` corre a las 7:00 a.m. (30 min antes del reporte de las 7:30) para detectar candidatos nuevos desde `audit.log` sin depender de que alguien se acuerde de correrlo a mano. Es aditivo e idempotente, nunca aprueba ni aplica nada automáticamente.
+  - **Nueva sección "Candidatos De Conocimiento" en el reporte diario:** cuenta nuevos del día, pendientes de revisión y aprobados sin aplicar, lista los pendientes (ID/tipo/título) y sugiere `npm run knowledge:review` cuando hay algo que revisar. La revisión, aprobación y aplicación al `knowledge/` siguen siendo decisiones humanas manuales.
+
 ## [0.53.2] - 2026-08-17
 
 ### Changed
