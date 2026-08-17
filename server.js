@@ -46,16 +46,13 @@ import {
   stripHtml,
   redactSensitiveText,
   getEmailDomain,
-  minimizePerson,
-  minimizeRequest,
-  minimizeValue,
   minimizeToolOutputForGemini,
   minimizeAuditError,
-  extractJsonFromErrorMessage,
   minimizeAuditArgs,
-  summarizeAuditUdfFields,
-  summarizeAuditUdfValue,
-  createAuditTextPreview
+  createAuditTextPreview,
+  getResolutionText,
+  createSanitizedKnowledgeResponse,
+  escapeRegExp
 } from './lib/redaction.js';
 
 dotenv.config();
@@ -2584,85 +2581,8 @@ function resolveTicketRouting(args) {
 // minimizeToolOutputForGemini, minimizeValue, minimizeRequest viven en
 // lib/redaction.js.
 
-function createSanitizedKnowledgeResponse(data) {
-  const request = data?.request || data;
-  if (!request?.id) return null;
-
-  const status = getDisplayName(request.status);
-  if (!isResolvedKnowledgeStatus(status)) return null;
-
-  const resolution = redactKnowledgePeople(cleanKnowledgeText(getResolutionText(request.resolution), 900), request);
-  const description = redactKnowledgePeople(cleanKnowledgeText(request.description || request.short_description || '', 600), request);
-  if (!resolution && !description) return null;
-
-  const subject = redactKnowledgePeople(cleanKnowledgeText(request.subject || '', 180), request)
-    .replace(/^\s*\[persona-redacted\]\s*[-:]\s*/i, '')
-    .trim();
-  const category = getDisplayName(request.category);
-  const subcategory = getDisplayName(request.subcategory);
-  const classification = [category, subcategory].filter(Boolean).join(' / ');
-  const lines = [
-    `No puedo mostrar el detalle completo del ticket #${request.id} porque no pertenece a tu usuario, pero sí puedo compartir una versión sanitizada como referencia de conocimiento.`,
-    '',
-    '**Referencia reutilizable**'
-  ];
-
-  if (classification) lines.push(`- Categoría: ${classification}`);
-  if (subject) lines.push(`- Caso: ${subject}`);
-  if (description) lines.push(`- Síntoma o necesidad: ${description}`);
-  if (resolution) lines.push(`- Resolución aplicada: ${resolution}`);
-
-  lines.push(
-    '',
-    '**Opciones**',
-    '- Buscar tickets similares por síntoma',
-    '- Crear una solicitud con este contexto',
-    '- Pedir una guía paso a paso basada en esta resolución'
-  );
-
-  return lines.join('\n');
-}
-
-function isResolvedKnowledgeStatus(status) {
-  const normalized = normalizeComparableText(status);
-  return /\b(cerrado|closed|resuelto|resolved)\b/.test(normalized);
-}
-
-function cleanKnowledgeText(text, maxLength) {
-  const clean = redactSensitiveText(stripHtml(text || ''))
-    .replace(/\b(?:solicitante|usuario|tecnico|técnico)\s*:\s*[^\n.;]+/gi, '')
-    .replace(/\b(?:password|contraseña|clave)\s*[:=]\s*[^\s,.;]+/gi, '[credential-redacted]')
-    .replace(/\b(?:servidor|server|host)\s*[:=]\s*[A-Za-z0-9._-]+/gi, '[host-redacted]')
-    .replace(/\b(?:ip|direcci[oó]n ip)\s*[:=]\s*(?:\d{1,3}\.){3}\d{1,3}\b/gi, '[ip-redacted]')
-    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[ip-redacted]')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return truncateText(clean, maxLength);
-}
-
-function redactKnowledgePeople(text, request) {
-  let clean = String(text || '');
-  const names = [
-    getDisplayName(request?.requester),
-    getDisplayName(request?.technician)
-  ].filter(Boolean);
-
-  for (const name of names) {
-    const escapedName = escapeRegExp(name);
-    if (escapedName) {
-      clean = clean.replace(new RegExp(`\\b${escapedName}\\b`, 'gi'), '[persona-redacted]');
-    }
-  }
-
-  return clean.replace(/\s+/g, ' ').trim();
-}
-
-function escapeRegExp(value) {
-  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// minimizePerson, getEmailDomain, redactSensitiveText, stripHtml,
-// truncateText viven en lib/redaction.js.
+// La lógica de referencia de conocimiento sanitizada (antes definida aquí)
+// vive en lib/redaction.js -- ver import al inicio del archivo.
 
 function normalizeChatHistory(history) {
   if (!Array.isArray(history)) return [];
@@ -10460,17 +10380,7 @@ function createMciDetailOptionsBlock(mciId) {
   };
 }
 
-function getResolutionText(resolution) {
-  if (!resolution) return '';
-  if (typeof resolution === 'string') return resolution;
-  if (typeof resolution !== 'object') return String(resolution);
-  return resolution.content
-    || resolution.description
-    || resolution.text
-    || resolution.display_value
-    || resolution.name
-    || '';
-}
+// getResolutionText vive en lib/redaction.js.
 
 function getRequestNotes(request) {
   const notes = extractNotesFromRequestData(request);

@@ -15,6 +15,14 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.5] - 2026-08-17
+
+### Ops
+- **Ampliar `lib/redaction.js` con el cluster de "referencia sanitizada de conocimiento" (`server.js`):**
+  - **6 funciones puras más movidas:** `createSanitizedKnowledgeResponse`, `isResolvedKnowledgeStatus`, `cleanKnowledgeText`, `redactKnowledgePeople`, `escapeRegExp`, `getResolutionText` — la lógica que arma una versión sanitizada de un ticket ajeno (resuelto/cerrado) como referencia de conocimiento cuando el ownership check no permite mostrar el detalle completo.
+  - **La verificación esta vez encontró dos hallazgos reales antes de comitear:** (1) `escapeRegExp` sí se usa fuera del cluster (línea ~3883) y casi queda sin importar por segunda vez — el comentario que dejé listando nombres había generado además falsos positivos en el propio chequeo, así que ahora se excluyen líneas de comentario antes de comparar; (2) el chequeo detectó que 6 imports del corte anterior (v0.53.4) — `minimizePerson`, `minimizeRequest`, `minimizeValue`, `extractJsonFromErrorMessage`, `summarizeAuditUdfValue`, `summarizeAuditUdfFields` — nunca se llamaban directamente desde `server.js` (solo entre sí, dentro de `lib/redaction.js`), así que se quitaron del import por innecesarios.
+  - **16 pruebas nuevas** en `lib/__tests__/redaction.test.js` (111 en total con `npm test`). `server.js` baja de 12,250 a 12,160 líneas.
+
 ## [0.53.4] - 2026-08-17
 
 ### Ops
