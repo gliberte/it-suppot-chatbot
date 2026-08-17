@@ -15,6 +15,14 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.6] - 2026-08-17
+
+### Ops
+- **Tercer y último corte de `lib/redaction.js` por ahora (`server.js`):**
+  - **2 funciones puras más:** `createAdaptiveCardPreview` y `createAdaptiveCardAuditSignals` — extraen texto de `TextBlock` de tarjetas adaptativas de Teams para preview de auditoría y señales de contenido (seguimientos/historial/correo/nota). Sin cambios de comportamiento.
+  - **5 pruebas nuevas** (116 en total con `npm test`). `server.js` baja de 12,160 a 12,122 líneas.
+  - **Se detiene aquí el despiece de `server.js` por esta sesión:** los clusters restantes (bot de Teams ~62 funciones, lógica de tickets ~100+) están profundamente acoplados a estado compartido (`sessions`, `mcpClient`) y no tienen tests de integración de rutas Express/Teams. Extraerlos con la misma confianza requeriría primero esa cobertura.
+
 ## [0.53.5] - 2026-08-17
 
 ### Ops

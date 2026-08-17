@@ -52,7 +52,9 @@ import {
   createAuditTextPreview,
   getResolutionText,
   createSanitizedKnowledgeResponse,
-  escapeRegExp
+  escapeRegExp,
+  createAdaptiveCardPreview,
+  createAdaptiveCardAuditSignals
 } from './lib/redaction.js';
 
 dotenv.config();
@@ -831,48 +833,8 @@ function inferImageMimeType(url) {
   return '';
 }
 
-function createAdaptiveCardPreview(card) {
-  const texts = [];
-  const visit = (value) => {
-    if (!value || texts.length >= 24) return;
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (typeof value === 'object') {
-      if (value.type === 'TextBlock' && value.text) {
-        texts.push(String(value.text));
-      }
-      Object.values(value).forEach(visit);
-    }
-  };
-  visit(card?.body || card);
-  return createAuditTextPreview(texts.join('\n'), 1400);
-}
-
-function createAdaptiveCardAuditSignals(card) {
-  const texts = [];
-  const visit = (value) => {
-    if (!value) return;
-    if (Array.isArray(value)) {
-      value.forEach(visit);
-      return;
-    }
-    if (typeof value === 'object') {
-      if (value.type === 'TextBlock' && value.text) texts.push(String(value.text));
-      Object.values(value).forEach(visit);
-    }
-  };
-  visit(card?.body || card);
-  const joined = normalizeComparableText(texts.join(' '));
-  return {
-    textBlockCount: texts.length,
-    hasSeguimientos: joined.includes('seguimientos') || joined.includes('seguimiento'),
-    hasHistorial: joined.includes('historial'),
-    hasCorreo: joined.includes('correo'),
-    hasNota: joined.includes('nota')
-  };
-}
+// createAdaptiveCardPreview, createAdaptiveCardAuditSignals viven en
+// lib/redaction.js.
 
 const {
   prunePendingActions,
