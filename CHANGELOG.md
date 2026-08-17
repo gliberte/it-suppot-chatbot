@@ -15,6 +15,14 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.4] - 2026-08-17
+
+### Ops
+- **Extracción de `lib/redaction.js` desde `server.js` (corte pequeño y seguro tras el incidente de `getMciLeaderValue`):**
+  - **14 funciones puras de minimización/redacción movidas:** `truncateText`, `stripHtml`, `redactSensitiveText`, `getEmailDomain`, `minimizePerson`, `minimizeRequest`, `minimizeValue`, `minimizeToolOutputForGemini`, `minimizeAuditError`, `extractJsonFromErrorMessage`, `minimizeAuditArgs`, `summarizeAuditUdfFields`, `summarizeAuditUdfValue` y `createAuditTextPreview` — exactamente la maquinaria detrás de la sección "Minimización Para Gemini Cloud" del README. Sin cambios de comportamiento; cada función se importa de vuelta con el mismo nombre.
+  - **Verificación reforzada:** antes de dar la extracción por buena se comparó, para cada símbolo exportado de los tres módulos en `lib/` (`authz.js`, `pending-actions.js`, `redaction.js`), su uso real en `server.js` contra la lista de imports (sin asumir que toda referencia es una llamada con paréntesis, que fue justo lo que causó el bug de `getMciLeaderValue` en v0.52.3).
+  - **37 pruebas nuevas** en `lib/__tests__/redaction.test.js` (95 en total con `npm test`). `server.js` baja de 12,467 a 12,250 líneas.
+
 ## [0.53.3] - 2026-08-17
 
 ### Ops
