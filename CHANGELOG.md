@@ -15,6 +15,12 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.8] - 2026-08-17
+
+### Ops
+- **Aviso de `package-lock.json` en el flujo de despliegue (`docs/runbook-produccion.md`):**
+  - **`git status --short` antes de `git pull`** en "Checklist De Despliegue" y "Despliegue De Cambios", para detectar a tiempo cuando `npm install` se corrió en el servidor sin `pull` previo y dejó `package-lock.json` con cambios locales que bloquean el pull (`error: Your local changes... would be overwritten by merge`). Se documenta el fix (`git diff package-lock.json` para confirmar que es solo ruido, luego `git checkout -- package-lock.json`) en el mismo lugar, ya que ocurrió dos veces seguidas en esta serie de despliegues.
+
 ## [0.53.7] - 2026-08-17
 
 ### Added

@@ -487,12 +487,21 @@ Flujo manual recomendado para desplegar:
 cd /opt/sophia/it-support-chatbot
 npm run prod:version
 npm run prod:backup
+git status --short
 git pull
 npm install
 npm run build
 npm run pm2:restart
 npm run prod:check
 npm run prod:version
+```
+
+`git status --short` antes del `pull` detecta a tiempo un problema recurrente: si en el servidor se corrio `npm install` sin haber hecho `pull` primero, `package-lock.json` puede quedar con cambios locales (diferencias de plataforma/version de npm) que bloquean el `git pull` con `error: Your local changes to the following files would be overwritten by merge`. Si `git status --short` muestra `package-lock.json` modificado antes de intentar el pull, resolverlo asi:
+
+```bash
+git diff package-lock.json   # confirmar que es solo ruido de lockfile, no algo intencional
+git checkout -- package-lock.json
+git pull
 ```
 
 ## Revision Segura De .env
@@ -588,10 +597,11 @@ Favor validar policy/NAT de entrada TCP 443 desde AzureBotService hacia 192.170.
 
 ## Despliegue De Cambios
 
-Actualizar codigo:
+Actualizar codigo (antes de `git pull`, correr `git status --short`; ver el aviso de `package-lock.json` en "Checklist De Despliegue" si sale algo modificado):
 
 ```bash
 cd /opt/sophia/it-support-chatbot
+git status --short
 git pull
 npm install
 npm run build
