@@ -15,6 +15,15 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.7] - 2026-08-17
+
+### Added
+- **Tests de integración de rutas Express (`test/integration/`, `vitest.config.js`):**
+  - **`server.js` ahora exporta `app`** y solo omite el auto-arranque (`app.listen`, `initMCP`, conexión MCP real) cuando `NODE_ENV=test` (Vitest lo fija automáticamente); en producción (PM2 fija `NODE_ENV=production`) y en uso normal el comportamiento es idéntico al de antes.
+  - **`test/integration/setup.js` mockea toda la infraestructura externa:** el cliente MCP (`@modelcontextprotocol/sdk`), `AgentOrchestrator.processMessage`, `@google/generative-ai` y `fs/promises` (para no escribir en `audit.log`/`teams-audit.log` reales en cada corrida de tests).
+  - **14 tests con `supertest`** en `test/integration/routes.test.js`: `POST /api/login` (éxito y credenciales inválidas), `requireAuth` en `GET /api/me`, ownership en `POST /api/get-ticket-status` (403/200), scoping por `requester_id` en `POST /api/list-requests` para usuario normal vs. admin, confirmación explícita en `POST /api/create-ticket` (incluye que el `requester_id` de la sesión no pueda ser suplantado por el body del cliente), y el ciclo completo `POST /api/chat` → evento SSE `confirmation_required` → `POST /api/confirm-action` → ejecución real de la herramienta mockeada.
+  - **131 tests en total con `npm test`** (117 unitarios + 14 de integración). No cubre `/api/teams/messages` (requiere validar token real de Bot Framework) ni los clusters grandes de `server.js` que siguen sin extraer.
+
 ## [0.53.6] - 2026-08-17
 
 ### Ops

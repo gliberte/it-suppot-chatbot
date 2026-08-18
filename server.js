@@ -12113,10 +12113,18 @@ async function flushRuntimeStateAndExit(signal) {
   }
 }
 
-process.on('SIGINT', () => flushRuntimeStateAndExit('SIGINT'));
-process.on('SIGTERM', () => flushRuntimeStateAndExit('SIGTERM'));
+export { app };
 
-startServer().catch((error) => {
-  console.error('No se pudo iniciar el backend:', error);
-  process.exit(1);
-});
+// Los tests de integracion importan `app` directamente con supertest y no
+// deben levantar el puerto real ni conectar a MCP/Teams. Vitest fija
+// NODE_ENV=test automaticamente; en produccion (PM2 fija NODE_ENV=production)
+// y en uso normal (dev:server, server) esta condicion siempre es true.
+if (process.env.NODE_ENV !== 'test') {
+  process.on('SIGINT', () => flushRuntimeStateAndExit('SIGINT'));
+  process.on('SIGTERM', () => flushRuntimeStateAndExit('SIGTERM'));
+
+  startServer().catch((error) => {
+    console.error('No se pudo iniciar el backend:', error);
+    process.exit(1);
+  });
+}

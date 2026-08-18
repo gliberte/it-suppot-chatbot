@@ -22,7 +22,7 @@ npm run dev:server   # bridge Express
 npm run teams:check   # valida variables minimas para piloto Teams
 npm run teams:package # genera teams/generated/soporte-it-teams.zip
 npm run rag:ingest    # genera data/rag-index.json desde knowledge/
-npm test              # tests unitarios de autorizacion y acciones pendientes (vitest)
+npm test              # tests unitarios (lib/) + integracion de rutas Express (vitest)
 npm run eval:agent    # eval de decisiones del agente contra Gemini real
 npm run pm2:start     # inicia Sophia con PM2 en produccion
 npm run pm2:restart   # reinicia Sophia en PM2 usando variables actualizadas
@@ -173,6 +173,18 @@ npm run eval:agent -- --repeat 3
 ```
 
 Antes de cambiar el modelo (`GEMINI_DECISION_MODEL`/`GEMINI_SUMMARY_MODEL`) o de reescribir reglas grandes del `SYSTEM_PROMPT`, correr este eval y confirmar que sigue en verde antes de desplegar.
+
+## Tests De Integración De Rutas
+
+Además de los tests unitarios de `lib/` (funciones puras), `test/integration/routes.test.js` prueba las rutas Express reales de `server.js` con `supertest`: login, `requireAuth`, ownership en `/api/get-ticket-status`, scoping por `requester_id` en `/api/list-requests`, confirmación explícita en `/api/create-ticket`, y el ciclo completo `/api/chat` → evento SSE `confirmation_required` → `/api/confirm-action` → ejecución real de la herramienta.
+
+```bash
+npm test
+```
+
+No conecta a ServiceDesk Plus, LDAP, Gemini ni Microsoft Teams reales: `test/integration/setup.js` mockea el cliente MCP (`@modelcontextprotocol/sdk`), `AgentOrchestrator.processMessage`, `@google/generative-ai` y `fs/promises` (para no escribir en `audit.log`/`teams-audit.log` reales durante los tests). `server.js` exporta `app` y solo omite el auto-arranque (`app.listen`, conexión MCP real) cuando `NODE_ENV=test`, que Vitest fija automáticamente; en producción y en uso normal (`npm run dev:server`) el comportamiento no cambia.
+
+No cubre el webhook `/api/teams/messages` (requiere validar un token real de Bot Framework) ni los ~62 handlers específicos de Teams/tickets que quedaron sin extraer de `server.js` -- esa es la brecha que sigue abierta para refactors más grandes del monolito.
 
 ## Seguridad Implementada
 
