@@ -15,6 +15,14 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.9] - 2026-08-18
+
+### Ops
+- **Arreglar de raíz el problema recurrente de `package-lock.json` bloqueando `git pull` en el servidor (`docs/runbook-produccion.md`):**
+  - **`npm ci` en vez de `npm install`** en los flujos de deploy y rollback: instala exactamente lo que dice `package-lock.json` y nunca lo modifica, eliminando la causa del conflicto (diferencia de versión de Node/npm entre el servidor y donde se generó el lockfile) en vez de seguir descartando el archivo manualmente en cada despliegue. Se validó localmente que `npm ci` funciona con el lockfile actual antes de documentarlo.
+- **Dejar de versionar los `data/*.json` que Sophia escribe en producción (`.gitignore`):** 14 archivos de historial/estado runtime (`major_incidents.json`, `network_diagnostics_history.json`, `teams-conversation-references.json`, `active_ad_mock.json` y otros — todos con el mismo patrón de lectura/escritura atómica vía tmp+rename que ya tenían `runtime-state.json`/`active-situations.json`, pero que por descuido nunca se agregaron a `.gitignore`) quedaron sin trackear con `git rm --cached` (conserva el contenido en disco, solo saca el archivo del índice de git). Sin este cambio, cualquier commit futuro que tocara uno de esos archivos iba a bloquear `git pull` en el servidor exactamente como pasó con `package-lock.json`. También se agregaron a `.gitignore` los logs rotados por logrotate (`*.log.*`), los respaldos de `.env` (`.env.backup-*`) y los borradores de conocimiento exportados/pulidos, que aparecían como "sin trackear" en el servidor sin necesidad.
+  - **Nota para el próximo `git pull` en el servidor:** si aparece un conflicto por estos archivos, usar `git rm --cached <archivo>` (nunca sin `--cached`, ni `git reset --hard`) para no borrar el historial acumulado en producción.
+
 ## [0.53.8] - 2026-08-17
 
 ### Ops

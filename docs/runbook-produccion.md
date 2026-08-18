@@ -462,7 +462,7 @@ Rollback de codigo a un commit conocido:
 ```bash
 cd /opt/sophia/it-support-chatbot
 git reset --hard <commit-bueno>
-npm install
+npm ci
 npm run build
 sudo systemctl restart sophia
 npm run prod:check
@@ -489,20 +489,18 @@ npm run prod:version
 npm run prod:backup
 git status --short
 git pull
-npm install
+npm ci
 npm run build
 npm run pm2:restart
 npm run prod:check
 npm run prod:version
 ```
 
-`git status --short` antes del `pull` detecta a tiempo un problema recurrente: si en el servidor se corrio `npm install` sin haber hecho `pull` primero, `package-lock.json` puede quedar con cambios locales (diferencias de plataforma/version de npm) que bloquean el `git pull` con `error: Your local changes to the following files would be overwritten by merge`. Si `git status --short` muestra `package-lock.json` modificado antes de intentar el pull, resolverlo asi:
+`npm ci` en vez de `npm install`: instala exactamente lo que dice `package-lock.json` y nunca lo modifica, a diferencia de `npm install`, que en el servidor regeneraba el lockfile con pequeñas diferencias (version de Node/npm distinta a la que lo genero) y eso bloqueaba el siguiente `git pull`. Si `npm ci` falla, es porque `package-lock.json` y `package.json` estan realmente desincronizados (no una simple diferencia de plataforma); en ese caso corre `npm install` en local, confirma que el lockfile quedo correcto, comitea y vuelve a desplegar -- no lo resuelvas regenerando el lockfile directamente en el servidor.
 
-```bash
-git diff package-lock.json   # confirmar que es solo ruido de lockfile, no algo intencional
-git checkout -- package-lock.json
-git pull
-```
+`git status --short` antes del `pull` sigue sirviendo como red de seguridad general (detecta cualquier archivo con cambios locales antes de que el pull falle a medias). Si aun asi aparece algo modificado que no reconoces, revisalo con `git diff <archivo>` antes de descartarlo con `git checkout -- <archivo>`.
+
+Nota de una sola vez (version 0.53.9): varios `data/*.json` que Sophia escribe en runtime (`major_incidents.json`, `network_diagnostics_history.json`, `teams-conversation-references.json` y otros historiales/estado, ver `.gitignore`) dejaron de estar versionados porque el patron correcto era el mismo que ya se usaba para `runtime-state.json`. En el primer `git pull` despues de este cambio, si aparece un error o esos archivos quedan listados para eliminar, **no uses `git reset --hard` ni borres los archivos**; usa `git rm --cached <archivo>` (sin `--cached` borraria los datos reales acumulados en produccion) para que git dejen de rastrearlos sin tocar el contenido en disco, y repite `git pull`.
 
 ## Revision Segura De .env
 
@@ -603,7 +601,7 @@ Actualizar codigo (antes de `git pull`, correr `git status --short`; ver el avis
 cd /opt/sophia/it-support-chatbot
 git status --short
 git pull
-npm install
+npm ci
 npm run build
 ```
 

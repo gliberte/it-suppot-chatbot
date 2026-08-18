@@ -1,6 +1,7 @@
 # Logs
 logs
 *.log
+*.log.*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -17,6 +18,8 @@ reports/prod-monitor-alerts.log
 reports/prod-monitor-state.json
 reports/daily/
 reports/knowledge-candidates*.md
+reports/approved-knowledge-draft.md
+reports/polished-knowledge-draft.md
 data/rag-index.json
 data/runtime-state.json
 data/runtime-state.json.tmp
@@ -24,9 +27,29 @@ data/active-situations.json
 data/active-situations.json.tmp
 data/knowledge-candidates.json
 data/knowledge-candidates.json.tmp
+# Historiales/estado runtime que Sophia escribe en produccion (lectura +
+# escritura atomica via tmp+rename, ver server.js *_PATH). No son datos
+# versionados; cada instalacion acumula los suyos.
+data/active_ad_mock.json
+data/audio_transcriptions_history.json
+data/deflection_history.json
+data/infrastructure_health_history.json
+data/loan_equipment_requests.json
+data/major_incidents.json
+data/network_diagnostics_history.json
+data/onboarding_guides_history.json
+data/password_expiration_alerts.json
+data/preventive_maintenance_schedule.json
+data/release_broadcasts.json
+data/software_license_approvals.json
+data/teams-conversation-references.json
+data/ticket_cancellations_history.json
+data/weekly_reports_history.json
+data/*.tmp
 *.local
 .env
 .env.local
+.env.backup-*
 
 # Editor directories and files
 .vscode/*
