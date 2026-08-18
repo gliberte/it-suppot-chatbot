@@ -15,6 +15,13 @@ Formato recomendado:
 - **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
   - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
+## [0.53.10] - 2026-08-18
+
+### Fixed
+- **Causa real del conflicto recurrente de `package-lock.json` (`package-lock.json`, `docs/runbook-produccion.md`):**
+  - **No era la plataforma, era la metadata de versión desincronizada:** `package-lock.json` guarda una copia del campo `version` de `package.json`. Durante v0.52.3–v0.53.9 se subió el `version` de `package.json` en cada commit sin correr `npm install` localmente para sincronizar esa copia en el lockfile, así que quedó fijo en `0.53.6` mientras `package.json` avanzaba. Cualquier `npm ci`/`npm install` en el servidor detectaba el desfase y lo "corregía", generando el diff que bloqueó `git pull` tres veces seguidas en esta serie de despliegues -- incluso después de cambiar a `npm ci`.
+  - **Corregido corriendo `npm install` local** (sincroniza el lockfile a `0.53.10`) y documentada la regla en el runbook: después de cambiar `version` en `package.json`, correr `npm install` y comitear el `package-lock.json` resultante en el mismo commit.
+
 ## [0.53.9] - 2026-08-18
 
 ### Ops
