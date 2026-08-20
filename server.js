@@ -5623,13 +5623,10 @@ async function broadcastReleaseNotesToItStaff({ force = false } = {}) {
   const deliveredRecipients = [];
   const errors = [];
 
-  const adminEmails = getCsvEnvSet('SUPPORT_ADMIN_EMAILS');
-  const adminAadIds = getCsvEnvSet('TEAMS_ADMIN_AAD_OBJECT_IDS');
-
   for (const [userKey, reference] of teamsConversationReferences.entries()) {
-    const isMatchedAdmin = adminEmails.has(userKey) || adminAadIds.has(userKey);
-    if (!isMatchedAdmin) continue; // Enviar únicamente a administradores de soporte
-
+    // Difusión universal: llega a todo usuario con conversación proactiva
+    // guardada (cualquiera que le haya escrito a Sophia en Teams al menos
+    // una vez), no solo a administradores de soporte.
     try {
       if (typeof teamsAdapter?.continueConversationAsync === 'function') {
         await teamsAdapter.continueConversationAsync(appId, reference, async (turnContext) => {

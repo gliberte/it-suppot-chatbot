@@ -9,11 +9,18 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
-## [0.53.0] - 2026-08-17
+## [0.54.0] - 2026-08-18
 
-### Fixed
-- **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
-  - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
+### Added
+- **🧠 Sophia piensa con un modelo de IA más nuevo:** Actualizamos el motor de razonamiento a Gemini 3.7 Flash, la generación más reciente disponible. Las respuestas y decisiones de Sophia deberían sentirse más precisas y rápidas.
+- **🔍 Mejor comprensión de preguntas mal formuladas:** Si preguntas algo de forma más informal o imprecisa (ej. "wifi mal", "correo raro no llega"), Sophia ahora tiene más probabilidad de encontrar la guía correcta en vez de quedarse sin respuesta.
+- **📢 Este aviso de novedades ahora llega a todos:** Antes solo se lo enviábamos al equipo de soporte IT; a partir de ahora, cualquiera que haya chateado con Sophia en Teams recibe las actualizaciones relevantes.
+
+### Security
+- **🔒 Control de acceso a tickets reforzado:** Corregimos un caso donde, bajo cierta configuración, un usuario podía llegar a ver información de tickets que no le pertenecían. Ya no es posible.
+
+### Ops
+- **🛠️ Más pruebas automáticas y un despliegue más confiable:** Ampliamos la cobertura de pruebas de Sophia (131 pruebas automáticas nuevas) y resolvimos varios problemas de despliegue, para que las actualizaciones futuras lleguen más rápido y con menos riesgo de interrupciones.
 
 ## [0.53.10] - 2026-08-18
 
@@ -94,6 +101,12 @@ Formato recomendado:
 - **Actualización del modelo de razonamiento a Gemini 3.7 Flash (`.env`, `.env.example`):**
   - **Modelo principal:** `GEMINI_DECISION_MODEL` y `GEMINI_SUMMARY_MODEL` pasan de `gemini-2.5-flash` a `gemini-3.7-flash` para la decisión del agente (`agent-orchestrator.js`) y el resumen/formateo de resultados de SDP/SAP (`server.js`). Se validó contra la API real que el modelo soporta `systemInstruction` y `responseMimeType: application/json`, y pasó las 19 pruebas del arnés de evaluación.
   - **Fallback más cercano:** `GEMINI_FALLBACK_MODEL` pasa de `gemini-2.0-flash` a `gemini-2.5-flash` (el modelo estable anterior), para que si `gemini-3.7-flash` falla, Sophia caiga a un modelo probado en vez de saltar dos generaciones atrás.
+
+## [0.53.0] - 2026-08-17
+
+### Fixed
+- **HOTFIX: `getMciLeaderValue is not defined` al listar/buscar MCI por Líder (`server.js`):**
+  - **Regresión de la extracción v0.52.3:** Al mover las funciones de ownership a `lib/authz.js`, `getMciLeaderValue` quedó fuera de la lista de símbolos importados de vuelta en `server.js` porque la única referencia restante la pasaba por nombre de función (`getValue: getMciLeaderValue` en `getAccentInsensitivePersonSearch`) en vez de invocarla, y la verificación previa solo buscaba usos con paréntesis (`getMciLeaderValue(`). Esto rompía en producción cualquier búsqueda de MCI por Líder que cayera en el reintento sin sensibilidad a acentos, con `[Bridge] Error crítico ejecutando herramienta sdp_list_requests: getMciLeaderValue is not defined`. Se agregó el import faltante y se repitió la verificación de forma más estricta (comparando cada símbolo exportado contra su uso real en el archivo, sin asumir que toda referencia es una llamada) para descartar otros huecos similares.
 
 ## [0.52.3] - 2026-08-14
 
