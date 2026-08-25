@@ -56,6 +56,14 @@ import {
   createAdaptiveCardPreview,
   createAdaptiveCardAuditSignals
 } from './lib/redaction.js';
+import {
+  detectBirthdayIntent,
+  parseBirthdayFromMessage,
+  formatMonthDay,
+  createBirthdayRecord,
+  shouldSendBirthdayGreetingToday,
+  createBirthdayGreetingText
+} from './lib/birthdays.js';
 
 dotenv.config();
 
@@ -79,6 +87,7 @@ const AD_MOCK_PATH = process.env.AD_MOCK_PATH || path.join(__dirname, 'data', 'a
 const MAJOR_INCIDENTS_PATH = process.env.MAJOR_INCIDENTS_PATH || path.join(__dirname, 'data', 'major_incidents.json');
 const RELEASE_BROADCASTS_PATH = process.env.RELEASE_BROADCASTS_PATH || path.join(__dirname, 'data', 'release_broadcasts.json');
 const TEAMS_CONVERSATION_REFERENCES_PATH = process.env.TEAMS_CONVERSATION_REFERENCES_PATH || path.join(__dirname, 'data', 'teams-conversation-references.json');
+const BIRTHDAYS_PATH = process.env.BIRTHDAYS_PATH || path.join(__dirname, 'data', 'birthdays.json');
 const NETWORK_DIAGNOSTICS_PATH = process.env.NETWORK_DIAGNOSTICS_PATH || path.join(__dirname, 'data', 'network_diagnostics_history.json');
 const LICENSE_APPROVALS_PATH = process.env.LICENSE_APPROVALS_PATH || path.join(__dirname, 'data', 'software_license_approvals.json');
 const AUDIO_TRANSCRIPTIONS_PATH = process.env.AUDIO_TRANSCRIPTIONS_PATH || path.join(__dirname, 'data', 'audio_transcriptions_history.json');
@@ -6460,6 +6469,152 @@ async function handleOnboardingGuidesTurn({ message, user, onText, onCard, respo
 }
 
 /* ==========================================================================
+   Opción 24: Registro Voluntario de Cumpleaños y Saludo Privado
+   ========================================================================== */
+
+async function readBirthdaysStore() {
+  try {
+    const text = await readFile(BIRTHDAYS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[Birthday] Error leyendo birthdays.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), birthdays: {} };
+  }
+}
+
+async function writeBirthdaysStore(store) {
+  const tmpPath = `${BIRTHDAYS_PATH}.tmp`;
+  await mkdir(path.dirname(BIRTHDAYS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, BIRTHDAYS_PATH);
+}
+
+async function handleBirthdayTurn({ message, user, onText }) {
+  const intent = detectBirthdayIntent(message);
+  if (!intent) return false;
+
+  const requesterId = getRequesterId(user);
+  if (!requesterId) {
+    onText?.('Para guardar tu cumpleaños necesito que tu usuario esté vinculado a ServiceDesk Plus. Vuelve a escribirme cuando quede enlazado.');
+    return true;
+  }
+
+  const store = await readBirthdaysStore();
+  store.birthdays = store.birthdays || {};
+
+  if (intent === 'delete') {
+    if (store.birthdays[requesterId]) {
+      delete store.birthdays[requesterId];
+      store.updatedAt = new Date().toISOString();
+      await writeBirthdaysStore(store);
+      onText?.('Listo, borré tu cumpleaños de mis registros.');
+    } else {
+      onText?.('No tenía tu cumpleaños guardado, así que no hay nada que borrar.');
+    }
+    return true;
+  }
+
+  const parsed = parseBirthdayFromMessage(message);
+  if (!parsed) {
+    onText?.('¡Con gusto lo guardo! Dime el día y el mes -- por ejemplo: "mi cumpleaños es el 15 de marzo". Solo guardo el día y el mes, nunca el año.');
+    return true;
+  }
+
+  const existing = store.birthdays[requesterId];
+  const record = createBirthdayRecord({
+    sdpRequesterId: requesterId,
+    name: user?.name,
+    email: user?.email,
+    month: parsed.month,
+    day: parsed.day
+  });
+  if (existing) record.lastCongratulatedYear = existing.lastCongratulatedYear;
+
+  store.birthdays[requesterId] = record;
+  store.updatedAt = new Date().toISOString();
+  await writeBirthdaysStore(store);
+
+  const formatted = formatMonthDay(parsed.month, parsed.day);
+  const verb = existing ? 'Actualicé tu cumpleaños a' : 'Guardé tu cumpleaños:';
+  onText?.(`🎂 ${verb} **${formatted}**. Ese día te voy a mandar un saludo por aquí. Cuando quieras, puedes pedirme que lo borre.`);
+  return true;
+}
+
+function getMsUntilNextBirthdayCheckPanama() {
+  const nowObj = new Date();
+  const panamaStr = nowObj.toLocaleString('en-US', { timeZone: 'America/Panama' });
+  const panamaNow = new Date(panamaStr);
+
+  const target = new Date(panamaNow);
+  target.setHours(8, 0, 0, 0);
+
+  if (panamaNow >= target) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  return target.getTime() - panamaNow.getTime();
+}
+
+function scheduleDailyBirthdayGreetings() {
+  if (String(process.env.SOPHIA_BIRTHDAY_GREETINGS_ENABLED || 'true').toLowerCase() === 'false') {
+    console.log('[Cron] Saludos de cumpleaños desactivados por configuración.');
+    return;
+  }
+
+  const delayMs = getMsUntilNextBirthdayCheckPanama();
+  const delayHours = (delayMs / (1000 * 60 * 60)).toFixed(2);
+  console.log(`[Cron] 🎂 Revisión de cumpleaños programada para dentro de ${delayHours} horas.`);
+
+  setTimeout(async () => {
+    try {
+      await sendTodaysBirthdayGreetings();
+    } catch (err) {
+      console.warn('[Cron] Error enviando saludos de cumpleaños:', err.message);
+    } finally {
+      scheduleDailyBirthdayGreetings();
+    }
+  }, delayMs);
+}
+
+async function sendTodaysBirthdayGreetings() {
+  const store = await readBirthdaysStore();
+  const birthdays = store.birthdays || {};
+  const panamaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Panama' }));
+  const appId = process.env.MICROSOFT_APP_ID;
+  let sentCount = 0;
+
+  for (const [requesterId, record] of Object.entries(birthdays)) {
+    if (!shouldSendBirthdayGreetingToday(record, panamaNow)) continue;
+
+    const key = String(record.email || '').toLowerCase();
+    const reference = key ? teamsConversationReferences.get(key) : null;
+    if (!reference) continue; // sin conversación de Teams guardada, no hay a dónde saludar
+
+    try {
+      if (typeof teamsAdapter?.continueConversationAsync === 'function') {
+        await teamsAdapter.continueConversationAsync(appId, reference, async (turnContext) => {
+          await sendTeamsReply(turnContext, createBirthdayGreetingText(record.name));
+        });
+        record.lastCongratulatedYear = panamaNow.getFullYear();
+        sentCount++;
+      }
+    } catch (err) {
+      console.warn(`[Birthday] Error saludando a ${requesterId}:`, err.message);
+    }
+  }
+
+  if (sentCount > 0) {
+    store.updatedAt = new Date().toISOString();
+    await writeBirthdaysStore(store);
+  }
+
+  console.log(`[Birthday] 🎂 Saludos de cumpleaños enviados hoy: ${sentCount}`);
+  return { sentCount };
+}
+
+/* ==========================================================================
    Opción 16: Alerta Preventiva de Vencimiento de Contraseñas de Windows/AD
    ========================================================================== */
 
@@ -8320,6 +8475,14 @@ async function runSupportTurn({
     onText,
     onCard,
     responseChannel
+  })) {
+    return;
+  }
+
+  if (await handleBirthdayTurn({
+    message,
+    user,
+    onText
   })) {
     return;
   }
@@ -12091,6 +12254,7 @@ async function startServer() {
     console.log(`Chatbot Backend Bridge corriendo en http://localhost:${PORT}`);
     initMCP();
     scheduleDaily830AmReminders();
+    scheduleDailyBirthdayGreetings();
     startChartCleanupScheduler();
   });
 }

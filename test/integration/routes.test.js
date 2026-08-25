@@ -269,3 +269,44 @@ describe('POST /api/chat + POST /api/confirm-action (ciclo completo vía IA)', (
     expect(res.status).toBe(404);
   });
 });
+
+describe('POST /api/chat: registro de cumpleaños intercepta antes de llegar a la IA', () => {
+  it('un mensaje con fecha reconocible se registra sin invocar a AgentOrchestrator', async () => {
+    const login = await loginAs(ANA);
+    mockAgentProcessMessage.mockClear();
+
+    const chatRes = await request(app)
+      .post('/api/chat')
+      .set('Authorization', `Bearer ${login.body.token}`)
+      .send({ message: 'mi cumpleaños es el 15 de marzo', history: [] });
+
+    const events = chatRes.text
+      .split('\n\n')
+      .filter((chunk) => chunk.startsWith('data: '))
+      .map((chunk) => JSON.parse(chunk.slice('data: '.length)));
+    const textEvent = events.find((event) => event.type === 'text');
+
+    expect(textEvent?.content).toContain('Guardé tu cumpleaños');
+    expect(textEvent?.content).toContain('15 de marzo');
+    expect(mockAgentProcessMessage).not.toHaveBeenCalled();
+  });
+
+  it('borrar un cumpleaños que no existe responde sin invocar a AgentOrchestrator', async () => {
+    const login = await loginAs(ANA);
+    mockAgentProcessMessage.mockClear();
+
+    const chatRes = await request(app)
+      .post('/api/chat')
+      .set('Authorization', `Bearer ${login.body.token}`)
+      .send({ message: 'borra mi cumpleaños', history: [] });
+
+    const events = chatRes.text
+      .split('\n\n')
+      .filter((chunk) => chunk.startsWith('data: '))
+      .map((chunk) => JSON.parse(chunk.slice('data: '.length)));
+    const textEvent = events.find((event) => event.type === 'text');
+
+    expect(textEvent?.content).toContain('No tenía tu cumpleaños guardado');
+    expect(mockAgentProcessMessage).not.toHaveBeenCalled();
+  });
+});

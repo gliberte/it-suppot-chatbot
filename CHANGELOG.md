@@ -9,6 +9,15 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.1] - 2026-08-18
+
+### Added
+- **🎂 Registro voluntario de cumpleaños y saludo privado (`lib/birthdays.js`, `server.js`):**
+  - **Opt-in por chat:** un usuario le dice su cumpleaños a Sophia (ej. "mi cumpleaños es el 15 de marzo") y ella lo guarda en `data/birthdays.json` (ignorado por git). Puede pedir que lo borre en cualquier momento ("borra mi cumpleaños").
+  - **Solo mes y día, nunca el año de nacimiento** -- no hace falta para felicitar a alguien y expondría la edad exacta.
+  - **Saludo privado, no público:** un cron diario (8:00 a.m. hora Panamá, controlable con `SOPHIA_BIRTHDAY_GREETINGS_ENABLED`) revisa cumpleaños del día y le manda a esa persona, y solo a esa persona, un mensaje de Teams. No avisa a compañeros ni a ningún canal -- eso queda pendiente de definir a quién se le puede avisar y cómo pedir consentimiento para eso.
+  - **20 pruebas unitarias** en `lib/__tests__/birthdays.test.js` (parseo de fechas en español, validación de mes/día, lógica de "ya se saludó este año") y **2 pruebas de integración** que confirman que el registro/borrado intercepta el mensaje antes de llegar a `AgentOrchestrator` (153 tests en total con `npm test`).
+
 ## [0.54.0] - 2026-08-18
 
 ### Added

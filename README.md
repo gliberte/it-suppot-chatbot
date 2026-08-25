@@ -186,6 +186,19 @@ No conecta a ServiceDesk Plus, LDAP, Gemini ni Microsoft Teams reales: `test/int
 
 No cubre el webhook `/api/teams/messages` (requiere validar un token real de Bot Framework) ni los ~62 handlers específicos de Teams/tickets que quedaron sin extraer de `server.js` -- esa es la brecha que sigue abierta para refactors más grandes del monolito.
 
+## Cumpleaños (Opt-in)
+
+Un usuario puede decirle su cumpleaños a Sophia por chat (ej. *"mi cumpleaños es el 15 de marzo"*) y ella lo guarda en `data/birthdays.json` (ignorado por git, nunca se versiona). El día correspondiente, Sophia le manda un saludo privado por Teams -- solo a esa persona, nunca a un canal ni a otros compañeros.
+
+Decisiones de privacidad deliberadas:
+
+- **Solo mes y día, nunca el año de nacimiento.** No hace falta para felicitar a alguien, y el año expondría la edad exacta.
+- **Consentimiento explícito:** el registro solo ocurre porque la persona se lo dijo directamente a Sophia; el mensaje de confirmación deja claro qué se guardó y cómo borrarlo (`"borra mi cumpleaños"`).
+- **Nunca se comparte con terceros.** Hoy Sophia no avisa a otros compañeros ni a ningún canal sobre el cumpleaños de alguien -- eso queda pendiente de una decisión explícita de a quién/qué departamento se le puede avisar, y cómo pedir consentimiento para eso.
+- **Requiere una conversación de Teams guardada.** Si la persona nunca le ha escrito a Sophia en Teams, el saludo simplemente no se puede enviar (no hay canal proactivo al que mandarlo).
+
+Variable opcional: `SOPHIA_BIRTHDAY_GREETINGS_ENABLED=false` desactiva el cron diario sin afectar el registro/borrado por chat.
+
 ## Seguridad Implementada
 
 - Login contra AD por medio del MCP.
