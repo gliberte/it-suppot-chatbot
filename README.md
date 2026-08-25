@@ -199,6 +199,28 @@ Decisiones de privacidad deliberadas:
 
 Variable opcional: `SOPHIA_BIRTHDAY_GREETINGS_ENABLED=false` desactiva el cron diario sin afectar el registro/borrado por chat.
 
+## Avisos De Seguimiento De Tickets
+
+Sophia sondea (no hay webhook disponible en ServiceDesk Plus para esto -- se verificó directamente en `sdp-mcp-server`: no existe ningún mecanismo de push) los tickets abiertos cada cierto intervalo y le avisa en privado por Teams al solicitante cuando su ticket recibe un seguimiento (nota) nuevo o cambia de estado. Nunca avisa a otros, solo al dueño del ticket.
+
+Cómo funciona:
+
+- Cada ciclo lista los tickets abiertos (`sdp_list_requests`) y compara el `last_updated_time` de cada uno contra el último valor visto, guardado en `data/ticket_followup_state.json` (ignorado por git).
+- Si un ticket cambió, consulta sus notas (`sdp_get_request_details`) y, si hay una nota nueva, la incluye en el aviso; si no, avisa el cambio de estado de forma genérica.
+- La primera vez que Sophia ve un ticket solo establece la línea base -- nunca notifica algo que pudo haber pasado antes de empezar a vigilarlo.
+- Solo le llega al solicitante si tiene una conversación de Teams guardada con Sophia; si nunca le ha escrito, no hay canal proactivo al que avisarle.
+
+Variables opcionales:
+
+- `SOPHIA_TICKET_FOLLOWUP_POLLING_ENABLED=false` desactiva el sondeo.
+- `SOPHIA_TICKET_FOLLOWUP_POLL_MINUTES=10` (default) controla el intervalo.
+
+Para probar manualmente sin esperar al intervalo:
+
+```bash
+curl -X POST http://localhost:3001/api/admin/ticket-followups/trigger
+```
+
 ## Seguridad Implementada
 
 - Login contra AD por medio del MCP.

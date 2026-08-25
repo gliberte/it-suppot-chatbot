@@ -64,6 +64,12 @@ import {
   shouldSendBirthdayGreetingToday,
   createBirthdayGreetingText
 } from './lib/birthdays.js';
+import {
+  hasTicketChangedSinceLastPoll,
+  isNewNote,
+  createTicketFollowupMessage,
+  createTicketFollowupTrackingState
+} from './lib/ticket-followups.js';
 
 dotenv.config();
 
@@ -88,6 +94,7 @@ const MAJOR_INCIDENTS_PATH = process.env.MAJOR_INCIDENTS_PATH || path.join(__dir
 const RELEASE_BROADCASTS_PATH = process.env.RELEASE_BROADCASTS_PATH || path.join(__dirname, 'data', 'release_broadcasts.json');
 const TEAMS_CONVERSATION_REFERENCES_PATH = process.env.TEAMS_CONVERSATION_REFERENCES_PATH || path.join(__dirname, 'data', 'teams-conversation-references.json');
 const BIRTHDAYS_PATH = process.env.BIRTHDAYS_PATH || path.join(__dirname, 'data', 'birthdays.json');
+const TICKET_FOLLOWUP_STATE_PATH = process.env.TICKET_FOLLOWUP_STATE_PATH || path.join(__dirname, 'data', 'ticket_followup_state.json');
 const NETWORK_DIAGNOSTICS_PATH = process.env.NETWORK_DIAGNOSTICS_PATH || path.join(__dirname, 'data', 'network_diagnostics_history.json');
 const LICENSE_APPROVALS_PATH = process.env.LICENSE_APPROVALS_PATH || path.join(__dirname, 'data', 'software_license_approvals.json');
 const AUDIO_TRANSCRIPTIONS_PATH = process.env.AUDIO_TRANSCRIPTIONS_PATH || path.join(__dirname, 'data', 'audio_transcriptions_history.json');
@@ -233,6 +240,15 @@ app.post('/api/admin/reminders/trigger', async (req, res) => {
   try {
     const result = await runProactiveStaleTicketReminders();
     res.json({ status: 'success', message: 'Revisión proactiva de recordatorios ejecutada con éxito.', ...result });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.post('/api/admin/ticket-followups/trigger', async (req, res) => {
+  try {
+    const result = await pollTicketFollowupsForNotification();
+    res.json({ status: 'success', message: 'Sondeo de seguimientos de tickets ejecutado con éxito.', ...result });
   } catch (error) {
     res.status(500).json({ status: 'error', message: error.message });
   }
@@ -7941,6 +7957,134 @@ async function runProactiveStaleTicketReminders() {
   }
 }
 
+/* ==========================================================================
+   Sondeo De Seguimientos De Tickets Y Aviso Privado Por Teams
+
+   No existe ningún webhook de ServiceDesk Plus para avisar a Sophia en
+   tiempo real (se verificó directamente en el código de sdp-mcp-server:
+   no hay ningún mecanismo de push). Esto es sondeo periódico, no empuje
+   instantáneo -- ver README para el detalle de esta decisión.
+   ========================================================================== */
+
+async function readTicketFollowupStore() {
+  try {
+    const text = await readFile(TICKET_FOLLOWUP_STATE_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[TicketFollowup] Error leyendo ticket_followup_state.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), tickets: {} };
+  }
+}
+
+async function writeTicketFollowupStore(store) {
+  const tmpPath = `${TICKET_FOLLOWUP_STATE_PATH}.tmp`;
+  await mkdir(path.dirname(TICKET_FOLLOWUP_STATE_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, TICKET_FOLLOWUP_STATE_PATH);
+}
+
+async function pollTicketFollowupsForNotification() {
+  const listResult = await callMcpTool('sdp_list_requests', { filter_by: 'Open_Requests' });
+  const parsed = JSON.parse(listResult.content[0].text);
+  const requests = Array.isArray(parsed?.requests) ? parsed.requests : [];
+
+  const store = await readTicketFollowupStore();
+  store.tickets = store.tickets || {};
+  const appId = process.env.MICROSOFT_APP_ID;
+  let notifiedCount = 0;
+  let checkedCount = 0;
+
+  for (const ticket of requests) {
+    const requesterEmail = String(ticket?.requester?.email_id || ticket?.requester?.email || '').toLowerCase();
+    if (!requesterEmail) continue;
+
+    const reference = teamsConversationReferences.get(requesterEmail);
+    if (!reference) continue; // sin conversación de Teams guardada, no hay canal para avisar
+
+    const requestId = String(ticket.id);
+    const currentLastUpdated = getRequestUpdatedTimestamp(ticket);
+    const storedState = store.tickets[requestId];
+
+    if (!hasTicketChangedSinceLastPoll(storedState, currentLastUpdated)) {
+      if (!storedState && currentLastUpdated) {
+        // Primera vez que se ve este ticket: solo se guarda la línea base.
+        store.tickets[requestId] = createTicketFollowupTrackingState({
+          lastUpdatedTime: currentLastUpdated,
+          lastNoteTimestamp: null,
+          requesterEmail
+        });
+      }
+      continue;
+    }
+
+    checkedCount++;
+    let newestNote = null;
+    try {
+      const detailsResult = await callMcpTool('sdp_get_request_details', { request_id: requestId });
+      const detailsData = JSON.parse(detailsResult.content[0].text);
+      const notes = getRequestNotes(detailsData);
+      newestNote = notes[0] || null;
+    } catch (error) {
+      console.warn(`[TicketFollowup] Error consultando notas del ticket ${requestId}:`, error.message);
+    }
+
+    const noteIsNew = isNewNote(storedState, newestNote);
+    const message = createTicketFollowupMessage({
+      requestId,
+      subject: ticket?.subject,
+      status: getDisplayName(ticket?.status),
+      note: noteIsNew ? newestNote : null
+    });
+
+    try {
+      if (typeof teamsAdapter?.continueConversationAsync === 'function') {
+        await teamsAdapter.continueConversationAsync(appId, reference, async (turnContext) => {
+          await sendTeamsReply(turnContext, message);
+        });
+        notifiedCount++;
+      }
+    } catch (error) {
+      console.warn(`[TicketFollowup] Error notificando ticket ${requestId}:`, error.message);
+    }
+
+    store.tickets[requestId] = createTicketFollowupTrackingState({
+      lastUpdatedTime: currentLastUpdated,
+      lastNoteTimestamp: noteIsNew ? newestNote.createdTimestamp : (storedState?.lastNoteTimestamp || null),
+      requesterEmail
+    });
+  }
+
+  store.updatedAt = new Date().toISOString();
+  await writeTicketFollowupStore(store);
+  console.log(`[TicketFollowup] 🔔 Sondeo completado. Tickets revisados con cambios: ${checkedCount}. Notificaciones enviadas: ${notifiedCount}.`);
+  return { checkedCount, notifiedCount };
+}
+
+function scheduleTicketFollowupPolling() {
+  if (String(process.env.SOPHIA_TICKET_FOLLOWUP_POLLING_ENABLED || 'true').toLowerCase() === 'false') {
+    console.log('[Cron] Sondeo de seguimientos de tickets desactivado por configuración.');
+    return;
+  }
+
+  const intervalMinutes = Number(process.env.SOPHIA_TICKET_FOLLOWUP_POLL_MINUTES || 10);
+  const intervalMs = intervalMinutes * 60 * 1000;
+  console.log(`[Cron] 🔔 Sondeo de seguimientos de tickets programado cada ${intervalMinutes} minutos.`);
+
+  setTimeout(() => {
+    pollTicketFollowupsForNotification().catch((err) => console.warn('[Cron] Fallo inicial de sondeo de seguimientos:', err.message));
+  }, 15000);
+
+  const timer = setInterval(() => {
+    pollTicketFollowupsForNotification().catch((err) => console.warn('[Cron] Fallo en sondeo de seguimientos:', err.message));
+  }, intervalMs);
+
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
+}
+
 function createSolutionConfirmationAdaptiveCard(request) {
   const ticketId = `#${request.id}`;
   const subject = request.subject || 'Sin asunto';
@@ -12255,6 +12399,7 @@ async function startServer() {
     initMCP();
     scheduleDaily830AmReminders();
     scheduleDailyBirthdayGreetings();
+    scheduleTicketFollowupPolling();
     startChartCleanupScheduler();
   });
 }
@@ -12274,7 +12419,7 @@ async function flushRuntimeStateAndExit(signal) {
   }
 }
 
-export { app };
+export { app, teamsConversationReferences };
 
 // Los tests de integracion importan `app` directamente con supertest y no
 // deben levantar el puerto real ni conectar a MCP/Teams. Vitest fija

@@ -44,6 +44,7 @@ data/release_broadcasts.json
 data/software_license_approvals.json
 data/teams-conversation-references.json
 data/birthdays.json
+data/ticket_followup_state.json
 data/ticket_cancellations_history.json
 data/weekly_reports_history.json
 data/*.tmp

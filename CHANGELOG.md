@@ -9,6 +9,17 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.2] - 2026-08-21
+
+### Added
+- **🔔 Aviso privado de seguimientos de tickets (`lib/ticket-followups.js`, `server.js`):**
+  - **Sondeo, no webhook:** se verificó directamente en `sdp-mcp-server` que ServiceDesk Plus no tiene ningún mecanismo de push disponible en esta integración (cero coincidencias de "webhook"/"notification"/"subscribe" en su código), así que Sophia sondea tickets abiertos cada `SOPHIA_TICKET_FOLLOWUP_POLL_MINUTES` (default 10) comparando `last_updated_time` contra el último valor visto por ticket.
+  - **Solo al dueño del ticket, en privado por Teams:** si el ticket cambió, consulta sus notas y avisa con el texto del seguimiento nuevo (o, si el cambio fue de estado sin nota nueva, un aviso genérico). Nunca a otros ni a un canal.
+  - **Sin ruido en el primer sondeo:** un ticket nunca visto antes solo establece línea base -- no dispara un aviso por algo que pudo haber pasado antes de que Sophia empezara a vigilarlo.
+  - **Endpoint manual `POST /api/admin/ticket-followups/trigger`** para probar sin esperar al intervalo, siguiendo el mismo patrón que `/api/admin/reminders/trigger`.
+  - **12 pruebas unitarias** en `lib/__tests__/ticket-followups.test.js` y **3 pruebas de integración** que cubren el ciclo completo (HTTP → sondeo → notas → envío mockeado a Teams), incluyendo que no avisa sin conversación de Teams guardada ni la primera vez que ve un ticket. 168 tests en total con `npm test`.
+  - `server.js` ahora también exporta `teamsConversationReferences` y los tests mockean `botbuilder` -- necesario para poder probar el envío privado a Teams sin depender de credenciales reales de Bot Framework.
+
 ## [0.54.1] - 2026-08-18
 
 ### Added
