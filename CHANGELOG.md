@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.3] - 2026-08-25
+
+### Fixed
+- **HOTFIX: el sondeo de seguimientos de tickets (v0.54.2) nunca encontraba a nadie a quién avisar (`server.js`):**
+  - **Causa real:** `sdp_list_requests` sin `fields_required` explícito no incluye el objeto `requester` en la respuesta de ServiceDesk Plus -- se confirmó contra una respuesta real capturada en `sdp-mcp-server/ticket_history.json`, donde un ticket típico solo trae `created_time`/`request_type`/`subject`/`technician`/`id`/`category`/`subcategory`/`status`, sin `requester`. Como el sondeo necesita el email del solicitante para saber a quién avisar, todos los tickets se descartaban antes de siquiera revisar si tenían conversación de Teams guardada -- por eso la primera corrida en producción dejó `data/ticket_followup_state.json` completamente vacío pese a haber 28 conversaciones de Teams guardadas y decenas de tickets abiertos.
+  - **Corregido** pasando `fields_required: ['subject', 'status', 'requester', 'last_updated_time']` explícito en esa consulta.
+
 ## [0.54.2] - 2026-08-21
 
 ### Added

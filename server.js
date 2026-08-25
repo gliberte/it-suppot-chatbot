@@ -7986,7 +7986,15 @@ async function writeTicketFollowupStore(store) {
 }
 
 async function pollTicketFollowupsForNotification() {
-  const listResult = await callMcpTool('sdp_list_requests', { filter_by: 'Open_Requests' });
+  // SDP no incluye el objeto `requester` por defecto en /requests (confirmado
+  // contra una respuesta real capturada en sdp-mcp-server/ticket_history.json:
+  // solo trae created_time/request_type/subject/technician/id/category/
+  // subcategory/status). Sin pedirlo explicito, todo ticket queda sin email
+  // de solicitante y este sondeo nunca encuentra a quien avisar.
+  const listResult = await callMcpTool('sdp_list_requests', {
+    filter_by: 'Open_Requests',
+    fields_required: ['subject', 'status', 'requester', 'last_updated_time']
+  });
   const parsed = JSON.parse(listResult.content[0].text);
   const requests = Array.isArray(parsed?.requests) ? parsed.requests : [];
 
