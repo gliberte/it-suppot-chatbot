@@ -221,6 +221,25 @@ Para probar manualmente sin esperar al intervalo:
 curl -X POST http://localhost:3001/api/admin/ticket-followups/trigger
 ```
 
+## Aviso De Tickets Nuevos Al Personal Técnico IT
+
+Mismo modelo de sondeo, para un público distinto: cada `SOPHIA_NEW_TICKET_ALERTS_POLL_MINUTES` (default 10), Sophia revisa si se creó algún ticket nuevo (`created_time` posterior a la última línea base guardada en `data/new_ticket_alerts_state.json`, ignorado por git) y le avisa en privado por Teams a todo el personal listado en `IT_TECHNICAL_STAFF_EMAILS` -- una lista propia, distinta de `SUPPORT_ADMIN_EMAILS`.
+
+- La primera vez que corre solo establece la línea base -- no avisa de tickets que ya existían antes de activar esto.
+- Igual que los demás avisos proactivos, solo le llega a quien tenga una conversación de Teams guardada con Sophia.
+
+Variables:
+
+- `IT_TECHNICAL_STAFF_EMAILS`: lista separada por comas de correos del personal técnico a avisar.
+- `SOPHIA_NEW_TICKET_ALERTS_ENABLED=false` desactiva el sondeo.
+- `SOPHIA_NEW_TICKET_ALERTS_POLL_MINUTES=10` (default) controla el intervalo.
+
+Para probar manualmente:
+
+```bash
+curl -X POST http://localhost:3001/api/admin/new-ticket-alerts/trigger
+```
+
 ## Seguridad Implementada
 
 - Login contra AD por medio del MCP.

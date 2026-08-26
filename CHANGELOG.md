@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.4] - 2026-08-25
+
+### Added
+- **🆕 Aviso de tickets nuevos al personal técnico IT (`lib/new-ticket-alerts.js`, `server.js`):**
+  - **Mismo modelo de sondeo que el aviso de seguimientos** (no hay webhook de ServiceDesk Plus disponible): cada `SOPHIA_NEW_TICKET_ALERTS_POLL_MINUTES` (default 10) revisa si hay tickets con `created_time` posterior a la última línea base guardada (`data/new_ticket_alerts_state.json`, ignorado por git).
+  - **Lista de destinatarios propia:** `IT_TECHNICAL_STAFF_EMAILS`, separada de `SUPPORT_ADMIN_EMAILS` -- decisión explícita para no mezclar "administradores de soporte" con "personal técnico a avisar de tickets nuevos".
+  - **Sin ruido en el primer sondeo:** la primera corrida solo establece línea base, nunca avisa de tickets que ya existían antes de activar esto.
+  - **Endpoint manual `POST /api/admin/new-ticket-alerts/trigger`** para probar sin esperar al intervalo.
+  - **6 pruebas unitarias** en `lib/__tests__/new-ticket-alerts.test.js` y **3 pruebas de integración** (aviso real, primer sondeo sin avisar, sin destinatario con Teams guardado). 177 tests en total con `npm test`.
+
 ## [0.54.3] - 2026-08-25
 
 ### Fixed
