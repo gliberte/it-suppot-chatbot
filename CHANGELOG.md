@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.5] - 2026-08-25
+
+### Added
+- **🔔 Sophia ahora te avisa cuando tu ticket cambia:** si alguien agrega un seguimiento a tu solicitud o cambia su estado, te llega un mensaje privado de Sophia contándote qué pasó -- ya no tienes que estar revisando manualmente. Solo te llega a ti, nunca a un canal ni a otros compañeros, y solo si le has escrito a Sophia en Teams alguna vez.
+- **🎂 Sophia puede recordar tu cumpleaños:** solo dile la fecha por chat (ej. "mi cumpleaños es el 15 de marzo") y ese día te va a felicitar en privado. Guarda únicamente el día y el mes, nunca el año, y puedes pedirle que lo borre cuando quieras.
+- **🆕 El equipo de soporte se entera de tickets nuevos más rápido:** ahora reciben un aviso apenas se crea una solicitud, así que puedes esperar una atención más ágil.
+
 ## [0.54.4] - 2026-08-25
 
 ### Added
