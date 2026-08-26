@@ -209,6 +209,16 @@ const cases = [
     expect: { action: 'reply' }
   },
   {
+    name: 'Técnico asignado pide cambiar el estado de su ticket',
+    message: 'Marca el ticket 15200 como Resuelto',
+    user: USER_NORMAL,
+    expect: {
+      action: 'call_tool',
+      toolName: 'sdp_update_request',
+      argsContains: { request_id: '15200', status: 'Resuelto' }
+    }
+  },
+  {
     name: 'Consulta SAP HANA califica el esquema obligatorio',
     message: '¿Cuántas facturas se generaron este mes en SAP?',
     user: USER_ADMIN,

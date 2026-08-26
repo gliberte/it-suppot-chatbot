@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.6] - 2026-08-25
+
+### Fixed
+- **Sophia ahora sabe que puede cambiar el estado de un ticket (`agent-orchestrator.js`):**
+  - **Causa real:** el backend ya autorizaba al solicitante, al técnico asignado (por el campo Técnico asignado) o a un administrador a modificar un ticket vía `sdp_update_request` (`assertToolAllowedForUser` ya validaba `isRequester || isTechnician`), pero esa herramienta nunca apareció en el catálogo del prompt -- solo se mencionaba para decirle a Sophia que NO la usara para seguimientos ni para MCI. La IA nunca la elegía porque no sabía que existía para su propósito real.
+  - **Corregido** agregando la entrada 11 al catálogo: cambiar estado/prioridad de un ticket vía `tool_args.status`/`tool_args.priority`, aclarando quién puede pedirlo (solicitante, técnico asignado o admin) y remitiendo a `sdp_add_note`/`sdp_update_mci` para sus casos ya cubiertos.
+  - **Verificado con el arnés de evaluación** (`npm run eval:agent`): nuevo caso "Técnico asignado pide cambiar el estado de su ticket" en 3/3 contra Gemini real, y las 20 pruebas existentes siguen en verde (sin regresiones).
+
 ## [0.54.5] - 2026-08-25
 
 ### Added
