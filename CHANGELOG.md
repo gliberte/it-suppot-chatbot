@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.11] - 2026-08-27
+
+### Ops
+- **Endpoint temporal de diagnóstico `POST /api/admin/test-card/send` (`server.js`):** envía un Adaptive Card arbitrario (recibido en el body) a un usuario ya conocido de Teams (`email`), reutilizando `teamsConversationReferences` y `sendTeamsReply`. Se agregó para validar en Teams real si elementos de schema nuevos (`ProgressBar`, schema 1.6) que sí renderizan en el Adaptive Card Designer también renderizan en el host real de Teams, antes de usarlos en el rediseño del informe ejecutivo. Candidato a eliminar una vez resuelta esa validación.
+
 ## [0.54.10] - 2026-08-27
 
 ### Added

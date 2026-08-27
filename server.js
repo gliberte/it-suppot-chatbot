@@ -288,6 +288,42 @@ app.post('/api/admin/weekly-report', async (req, res) => {
   }
 });
 
+// DIAGNÓSTICO TEMPORAL: envía un Adaptive Card arbitrario a un usuario ya conocido de Teams,
+// para validar en Teams real elementos nuevos (ej. ProgressBar, schema 1.6) antes de usarlos
+// en una tarjeta de producción. Candidato a eliminar una vez resuelta esa validación.
+app.post('/api/admin/test-card/send', async (req, res) => {
+  try {
+    const userKey = String(req.body?.email || '').trim().toLowerCase();
+    const card = req.body?.card;
+    if (!userKey) {
+      return res.status(400).json({ status: 'error', message: 'Falta "email" en el body.' });
+    }
+    if (!card || typeof card !== 'object') {
+      return res.status(400).json({ status: 'error', message: 'Falta "card" (objeto Adaptive Card) en el body.' });
+    }
+    const reference = teamsConversationReferences.get(userKey);
+    if (!reference) {
+      return res.status(404).json({ status: 'error', message: `No hay conversación de Teams registrada para "${userKey}". Debe haberle escrito a Sophia por Teams al menos una vez.` });
+    }
+    if (typeof teamsAdapter?.continueConversationAsync !== 'function') {
+      return res.status(500).json({ status: 'error', message: 'teamsAdapter no está disponible en este entorno.' });
+    }
+
+    const appId = process.env.MICROSOFT_APP_ID;
+    await teamsAdapter.continueConversationAsync(appId, reference, async (turnContext) => {
+      await sendTeamsReply(turnContext, {
+        type: 'adaptive_card',
+        summaryText: req.body?.summaryText || 'Tarjeta de prueba',
+        card
+      });
+    });
+
+    res.json({ status: 'success', message: `Tarjeta de prueba enviada a ${userKey}.` });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 async function callMcpTool(name, args = {}) {
   if (name === 'sap_hana_query') {
     const sqlQuery = args.query || args.sqlQuery || args.sql || args.sql_query || '';
