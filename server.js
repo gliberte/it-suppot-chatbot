@@ -5928,17 +5928,21 @@ async function sendWeeklyExecutiveReportToExecutives({ force = false } = {}) {
     warnings
   };
 
-  const configuredExecs = (process.env.IT_EXECUTIVE_EMAILS || process.env.SUPPORT_ADMIN_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
-  const recipients = configuredExecs.length > 0 ? configuredExecs : ['luis.solano@bacosa.com', 'algis.morales@bacosa.com'];
+  const adminEmails = getCsvEnvSet('SUPPORT_ADMIN_EMAILS');
+  const adminAadIds = getCsvEnvSet('TEAMS_ADMIN_AAD_OBJECT_IDS');
+  const execEmails = getCsvEnvSet('IT_EXECUTIVE_EMAILS');
+
+  // El listado de destinatarios debe reflejar exactamente la misma unión (admin ∪ ejecutivos)
+  // que usa el envío real más abajo -- antes solo mostraba una de las dos variables, sin
+  // deduplicar, lo que producía correos repetidos y una lista que no coincidía con quién
+  // realmente recibía el mensaje.
+  const configuredRecipients = [...new Set([...adminEmails, ...execEmails])].sort();
+  const recipients = configuredRecipients.length > 0 ? configuredRecipients : ['luis.solano@bacosa.com', 'algis.morales@bacosa.com'];
 
   const card = createWeeklyExecutiveReportCard(reportData);
   const appId = process.env.MICROSOFT_APP_ID;
   let deliveredCount = 0;
   const deliveredRecipients = [];
-
-  const adminEmails = getCsvEnvSet('SUPPORT_ADMIN_EMAILS');
-  const adminAadIds = getCsvEnvSet('TEAMS_ADMIN_AAD_OBJECT_IDS');
-  const execEmails = getCsvEnvSet('IT_EXECUTIVE_EMAILS');
 
   for (const [userKey, reference] of teamsConversationReferences.entries()) {
     const isMatchedRecipient = adminEmails.has(userKey) || adminAadIds.has(userKey) || execEmails.has(userKey);

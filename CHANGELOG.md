@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.9] - 2026-08-27
+
+### Fixed
+- **El campo `recipients` del informe ejecutivo semanal no coincidía con quién realmente lo recibía (`server.js`):** al probar en producción (v0.54.8) se observó un correo duplicado (`luis.solano@bacosa.com` dos veces) en `recipients`. Causa real: ese campo se armaba leyendo solo `IT_EXECUTIVE_EMAILS` (o `SUPPORT_ADMIN_EMAILS` como respaldo si la primera no estaba configurada), sin deduplicar, mientras que el envío real por Teams ya usaba la unión de ambas variables (`SUPPORT_ADMIN_EMAILS` ∪ `IT_EXECUTIVE_EMAILS`) más los AAD Object IDs de `TEAMS_ADMIN_AAD_OBJECT_IDS`. Corregido para que `recipients` refleje exactamente la misma unión deduplicada que usa el envío, así el historial (`data/weekly_reports_history.json`) y la respuesta del endpoint quedan consistentes con la entrega real.
+- **Ver también v0.54.8** más abajo: mismo commit de trabajo, corrige que el informe ejecutivo semanal enviaba métricas y un adjunto PDF falsos.
+
 ## [0.54.8] - 2026-08-27
 
 ### Fixed
