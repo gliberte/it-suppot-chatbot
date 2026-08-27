@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.14] - 2026-08-27
+
+### Fixed
+- **Corrección al registro anterior (v0.54.13): el piso mínimo de `safeProgressBarValue()` NO resolvió el `ProgressBar` indeterminado con valor cero.** Probado en producción real después del hotfix: las barras con valor 0 (ej. un técnico sin tickets abiertos) siguen mostrándose animadas/indeterminadas en Teams, incluso con el piso mínimo de `0.01` en vez de `0`. Se decidió aceptarlo como detalle cosmético menor en vez de seguir investigando -- ver `docs/runbook-produccion.md`, sección "Barras De Progreso En Adaptive Cards". El código de `safeProgressBarValue()` se deja tal cual (no hace daño), pero no se debe asumir que resuelve este problema.
+
 ## [0.54.13] - 2026-08-27
 
 ### Fixed
