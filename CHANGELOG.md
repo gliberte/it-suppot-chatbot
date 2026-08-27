@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.15] - 2026-08-27
+
+### Added
+- **Sophia ahora registra localmente el comentario obligatorio de los cambios de estado que ella misma hace (`server.js`):** se investigó a fondo (ver `docs/runbook-produccion.md`) y se confirmó que ServiceDesk Plus **no expone ese comentario por ningún endpoint de su API REST v3** (se descartaron `/history`, `/history/{id}`, el objeto base del ticket, `/notes` y `/conversations`), aunque sí se ve en el portal web. Como Sophia sí conoce el comentario que ella misma envía al cambiar un estado, ahora lo guarda en `data/status_change_comments.json` (ignorado por git) y lo muestra en la tarjeta de detalle del ticket cuando el estado actual coincide con el que registró.
+  - **Limitación honesta:** solo funciona para cambios hechos *a través de Sophia*. Un cambio de estado hecho directamente en el portal de SDP sigue sin poder mostrarse, porque Sophia nunca se entera de ese comentario.
+
+Verificado con `npm test` (177/177, sin regresiones).
+
 ## [0.54.14] - 2026-08-27
 
 ### Fixed

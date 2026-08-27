@@ -112,6 +112,7 @@ const PASSWORD_EXPIRATION_ALERTS_PATH = process.env.PASSWORD_EXPIRATION_ALERTS_P
 const LOAN_EQUIPMENT_REQUESTS_PATH = process.env.LOAN_EQUIPMENT_REQUESTS_PATH || path.join(__dirname, 'data', 'loan_equipment_requests.json');
 const INFRASTRUCTURE_HEALTH_PATH = process.env.INFRASTRUCTURE_HEALTH_PATH || path.join(__dirname, 'data', 'infrastructure_health_history.json');
 const SECURITY_OTP_CHALLENGES_PATH = process.env.SECURITY_OTP_CHALLENGES_PATH || path.join(__dirname, 'data', 'security_otp_challenges.json');
+const STATUS_CHANGE_COMMENTS_PATH = process.env.STATUS_CHANGE_COMMENTS_PATH || path.join(__dirname, 'data', 'status_change_comments.json');
 const sessions = new Map();
 const teamsSessions = new Map();
 const teamsConversationReferences = new Map();
@@ -5848,6 +5849,50 @@ async function writeWeeklyReportsStore(store) {
   await rename(tmpPath, WEEKLY_REPORTS_PATH);
 }
 
+// ServiceDesk Plus no expone por ninguna API el comentario obligatorio de un cambio de
+// estado (confirmado investigando: no está en /history, /history/{id}, el objeto base del
+// ticket, /notes ni /conversations -- ver docs/runbook-produccion.md). Como alternativa,
+// Sophia guarda localmente el comentario de los cambios de estado que ELLA MISMA hace, para
+// poder mostrarlo en la tarjeta de detalle. Cambios hechos directo en el portal de SDP siguen
+// sin poder recuperarse.
+async function readStatusChangeCommentsStore() {
+  try {
+    const text = await readFile(STATUS_CHANGE_COMMENTS_PATH, 'utf8');
+    return JSON.parse(text);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[StatusChangeComments] Error leyendo status_change_comments.json:', error.message);
+    }
+    return { updatedAt: new Date().toISOString(), byRequestId: {} };
+  }
+}
+
+async function writeStatusChangeCommentsStore(store) {
+  const tmpPath = `${STATUS_CHANGE_COMMENTS_PATH}.tmp`;
+  await mkdir(path.dirname(STATUS_CHANGE_COMMENTS_PATH), { recursive: true });
+  await writeFile(tmpPath, JSON.stringify(store, null, 2), 'utf8');
+  await rename(tmpPath, STATUS_CHANGE_COMMENTS_PATH);
+}
+
+async function recordSophiaStatusChangeComment({ requestId, status, comments, user }) {
+  if (!requestId || !status) return;
+  try {
+    const store = await readStatusChangeCommentsStore();
+    const entries = Array.isArray(store.byRequestId[requestId]) ? store.byRequestId[requestId] : [];
+    entries.unshift({
+      status,
+      comments: comments || 'Actualizado desde Sophia (Chatbot)',
+      changedBy: user?.name || 'Sophia',
+      changedAt: new Date().toISOString()
+    });
+    store.byRequestId[requestId] = entries.slice(0, 10);
+    store.updatedAt = new Date().toISOString();
+    await writeStatusChangeCommentsStore(store);
+  } catch (error) {
+    console.warn('[StatusChangeComments] Error guardando comentario de cambio de estado:', error.message);
+  }
+}
+
 function isFinishedRequestStatus(request) {
   const status = normalizeComparableText(getDisplayName(request?.status));
   return status.includes('resuelt') || status.includes('cerrad') || status.includes('closed') || status.includes('resolved');
@@ -9348,7 +9393,7 @@ async function runSupportTurn({
     }
 
     if (responseChannel === 'teams' && aiDecision.tool_name === 'sdp_get_request_details') {
-      const card = createTicketDetailsAdaptiveCard(toolOutput);
+      const card = await createTicketDetailsAdaptiveCard(toolOutput);
       if (card) {
         onCard?.(card);
         return;
@@ -9481,6 +9526,14 @@ async function executeConfirmedAction(action, user, session = null) {
     args: auditArgs,
     outcome: 'confirmed_success'
   });
+  if (action.toolName === 'sdp_update_request' && confirmedArgs?.request_id && confirmedArgs?.status) {
+    await recordSophiaStatusChangeComment({
+      requestId: confirmedArgs.request_id,
+      status: confirmedArgs.status,
+      comments: confirmedArgs.comments,
+      user
+    });
+  }
   rememberLastTicketFromToolOutput(session, action.toolName, toolResult.content?.[0]?.text);
   if (action.toolName === 'sdp_create_request' && createdRequestId) {
     rememberLastTicket(session, {
@@ -9508,7 +9561,7 @@ async function executeConfirmedAction(action, user, session = null) {
 
   if (action.toolName === 'sdp_update_mci' && confirmedArgs?.request_id) {
     const details = await callMcpTool('sdp_get_request_details', { request_id: confirmedArgs.request_id });
-    const card = createTicketDetailsAdaptiveCard(details.content[0].text);
+    const card = await createTicketDetailsAdaptiveCard(details.content[0].text);
     if (card) {
       card.summaryText = `MCI #${confirmedArgs.request_id} actualizada`;
       return card;
@@ -10822,7 +10875,19 @@ function buildMciStatusTimeline(progressStr = '', statusName = '') {
   return '[🔵 Inicio (0%)] ➔ [⚪ En Avance] ➔ [⚪ Completado]';
 }
 
-function createTicketDetailsAdaptiveCard(toolOutput) {
+async function getSophiaStatusChangeCommentForCurrentStatus(request) {
+  try {
+    const store = await readStatusChangeCommentsStore();
+    const entries = store.byRequestId?.[String(request.id)];
+    if (!Array.isArray(entries) || entries.length === 0) return null;
+    const currentStatus = normalizeComparableText(getDisplayName(request.status));
+    return entries.find((entry) => normalizeComparableText(entry.status) === currentStatus) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function createTicketDetailsAdaptiveCard(toolOutput) {
   let data;
   try {
     data = JSON.parse(toolOutput);
@@ -10854,6 +10919,7 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
   const resolution = stripHtml(getResolutionText(request.resolution));
   const notes = getRequestNotes(request);
   const noteWarning = getNotesWarning(data, request);
+  const sophiaStatusComment = await getSophiaStatusChangeCommentForCurrentStatus(request);
 
   const body = [
     {
@@ -10895,6 +10961,40 @@ function createTicketDetailsAdaptiveCard(toolOutput) {
       items: rows.map(([label, value]) => createDetailFactRow(label, value))
     }
   ];
+
+  // ServiceDesk Plus no expone por API el comentario obligatorio de un cambio de estado
+  // (ver docs/runbook-produccion.md). Sophia solo puede mostrar el que ella misma guardó
+  // al hacer el cambio -- los hechos directo en el portal de SDP no se pueden recuperar.
+  if (sophiaStatusComment) {
+    body.push({
+      type: 'Container',
+      spacing: 'Medium',
+      separator: true,
+      items: [
+        {
+          type: 'TextBlock',
+          text: '💬 Comentario del cambio de estado (vía Sophia)',
+          weight: 'Bolder',
+          size: 'Small',
+          isSubtle: true
+        },
+        {
+          type: 'TextBlock',
+          text: sophiaStatusComment.comments,
+          wrap: true,
+          spacing: 'Small'
+        },
+        {
+          type: 'TextBlock',
+          text: `${sophiaStatusComment.changedBy} · ${formatIsoDateTime(sophiaStatusComment.changedAt) || sophiaStatusComment.changedAt}`,
+          wrap: true,
+          spacing: 'None',
+          size: 'Small',
+          isSubtle: true
+        }
+      ]
+    });
+  }
 
   if (description) {
     body.push(createDetailTextBlock('Descripción', description, { maxLength: 3000 }));

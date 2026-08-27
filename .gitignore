@@ -48,6 +48,7 @@ data/ticket_followup_state.json
 data/new_ticket_alerts_state.json
 data/ticket_cancellations_history.json
 data/weekly_reports_history.json
+data/status_change_comments.json
 data/*.tmp
 *.local
 .env

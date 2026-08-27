@@ -659,3 +659,18 @@ Dos alternativas que se probaron antes y **no funcionan**, para no repetir el er
 Verificado tanto en el [Adaptive Card Designer](https://adaptivecards.microsoft.com/designer) (Preview, no solo el lienzo de edición) como enviando la tarjeta real a Teams con el endpoint temporal `POST /api/admin/test-card/send` (ver `server.js`, sección "DIAGNÓSTICO TEMPORAL").
 
 **Trampa adicional, sin resolver, aceptada como limitación conocida:** un `ProgressBar` con `"value": 0` (o `NaN`/`undefined`) lo renderiza Teams como **indeterminado/animado** ("cargando..."), no como una barra vacía fija -- pasó con un técnico que tenía 0 tickets abiertos, mientras el resto de las barras (con valores > 0) se veían normales. Se intentó `safeProgressBarValue()` en `server.js`, que manda un piso mínimo positivo (`0.01`) en vez de `0`, pero **probado en producción real, el problema persiste** -- Teams sigue mostrando la animación aun con ese valor mínimo. Se decidió aceptarlo como detalle cosmético menor (barras con valor cero se ven animadas) en vez de seguir investigando; el código del piso mínimo se dejó porque no hace daño, pero no resuelve el problema real.
+
+## Comentario Obligatorio De Cambio De Estado (No Recuperable Por API)
+
+Cuando un técnico cambia el estado de un ticket en el portal web de ServiceDesk Plus, SDP pide un "Comentario de cambio de estado" obligatorio y lo muestra después en la pestaña **Historial** del ticket (ej. "Estado cambiado de En Espera a En Proceso / Comentarios: ..."). **Ese comentario no está disponible por ningún endpoint de la API REST v3** de esta instancia -- se investigó a fondo (ticket real #13738, instancia con `conversations` deshabilitado) y se descartaron, en orden:
+
+- `/requests/{id}/history` (lista): el cambio de estado aparece en el `diff`, pero sin ningún campo de comentario.
+- `/requests/{id}/history/{entryId}` (detalle individual de una entrada de historial): el endpoint no existe en esta instancia (`404 Invalid URL`).
+- `/requests/{id}` (objeto base del ticket): tampoco lo trae, confirmado buscando el texto literal del comentario en el payload crudo.
+- `/requests/{id}/notes`: vacío para ese ticket (no es un filtro, genuinamente no hay notas ahí).
+- `/requests/{id}/conversations`: deshabilitado por completo en esta instancia (`404` en ambas variantes).
+- Nombres de campo candidatos (`status_change_comments`, `history_notes`, `additional_comments`, etc.): ninguno aparece en ningún payload.
+
+**Conclusión:** el portal web de SDP saca ese dato de un endpoint interno que no forma parte de la API pública v3, o de un módulo/versión de API no habilitado en esta instalación. Si en el futuro alguien quiere retomar esto, lo más productivo es preguntarle directamente a soporte de ManageEngine cuál es el endpoint correcto, en vez de seguir adivinando por prueba y error.
+
+**Solución parcial implementada:** ya que Sophia sí sabe qué comentario envió al cambiar un estado (el mismo que manda como `status_change_comments` a `sdp_update_request`), lo guarda localmente en `data/status_change_comments.json` (ignorado por git, hasta 10 entradas por ticket) al momento de confirmar el cambio. La tarjeta de detalle del ticket (`createTicketDetailsAdaptiveCard`) lo muestra si el estado actual del ticket coincide con el que Sophia registró. **Limitación importante:** esto solo funciona para cambios de estado hechos *a través de Sophia* -- los hechos directamente en el portal de SDP (como el del ejemplo #13738, hecho por Eliseo Quintana en el portal) siguen sin poder mostrarse, porque Sophia nunca se enteró de ese comentario.
