@@ -9,6 +9,16 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.8] - 2026-08-27
+
+### Fixed
+- **El informe ejecutivo semanal enviaba métricas y un adjunto falsos (`server.js`):** al programarlo por cron se detectó que las 5 métricas (`ticketsProcessed`, `slaCompliance`, `csatAvg`, `mciCount`, `kbaCreated`) estaban hardcodeadas -- siempre los mismos 5 valores fijos cada semana -- y la tarjeta afirmaba que había "un archivo PDF adjunto" que nunca existió ni se generaba en ningún lugar del código.
+  - **Corregido con `computeWeeklyExecutiveMetrics()`:** calcula las 3 métricas para las que sí hay datos reales -- tickets resueltos/cerrados en los últimos 7 días y su cumplimiento de SLA (comparando `due_by_time` contra la última actualización) vía `sdp_list_requests`, incidentes mayores (MCI) resueltos en la ventana vía `mci_only: true`, y artículos KBA aprobados en la ventana desde `data/knowledge-candidates.json`.
+  - **CSAT también ahora es real:** se recuperan las notas de cada ticket resuelto (`sdp_get_request_details`) y se promedian las calificaciones registradas por la encuesta ⭐ `[Encuesta CSAT]` que Sophia ya guarda como nota del ticket (mismo patrón que el "reporte ejecutivo" conversacional existente).
+  - **Sin inventar números:** si una métrica no tiene datos suficientes (ej. ningún ticket con `due_by_time`, o cero calificaciones CSAT) la tarjeta muestra "No disponible" en vez de un valor falso; cualquier error al consultar SDP queda visible como advertencia en la propia tarjeta.
+  - **Se quitó la mención al PDF adjunto**, reemplazada por una nota aclarando que las métricas se calculan sobre los últimos 7 días de actividad real.
+  - Verificado con `npm test` (177/177, sin regresiones).
+
 ## [0.54.7] - 2026-08-27
 
 ### Ops

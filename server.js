@@ -5724,6 +5724,110 @@ async function writeWeeklyReportsStore(store) {
   await rename(tmpPath, WEEKLY_REPORTS_PATH);
 }
 
+function isFinishedRequestStatus(request) {
+  const status = normalizeComparableText(getDisplayName(request?.status));
+  return status.includes('resuelt') || status.includes('cerrad') || status.includes('closed') || status.includes('resolved');
+}
+
+async function computeWeeklyExecutiveMetrics({ windowMs = 7 * 24 * 60 * 60 * 1000 } = {}) {
+  const now = Date.now();
+  const windowStart = now - windowMs;
+  const warnings = [];
+
+  let ticketsProcessed = null;
+  let slaCompliance = null;
+  let csatAvg = null;
+  let csatRatingCount = 0;
+  let mciCount = null;
+  let kbaCreated = null;
+  let resolvedInWindow = [];
+
+  try {
+    const ticketsResult = await callMcpTool('sdp_list_requests', {
+      filter_by: 'All_Requests',
+      limit: Number(process.env.SOPHIA_WEEKLY_REPORT_TICKET_LIMIT || 200),
+      fields_required: ['id', 'status', 'created_time', 'last_updated_time', 'due_by_time']
+    });
+    const ticketsData = JSON.parse(ticketsResult.content?.[0]?.text || '{}');
+    const tickets = Array.isArray(ticketsData.requests) ? ticketsData.requests : [];
+
+    resolvedInWindow = tickets.filter((ticket) => {
+      if (!isFinishedRequestStatus(ticket)) return false;
+      const updated = getRequestUpdatedTimestamp(ticket);
+      return Boolean(updated) && updated >= windowStart && updated <= now;
+    });
+    ticketsProcessed = resolvedInWindow.length;
+
+    const withDueDate = resolvedInWindow.filter((ticket) => getSdpTimestamp(ticket.due_by_time));
+    if (withDueDate.length > 0) {
+      const withinSla = withDueDate.filter((ticket) => {
+        const due = getSdpTimestamp(ticket.due_by_time);
+        const resolved = getRequestUpdatedTimestamp(ticket);
+        return resolved <= due;
+      });
+      slaCompliance = Number(((withinSla.length / withDueDate.length) * 100).toFixed(1));
+    }
+  } catch (error) {
+    warnings.push(`No se pudo calcular tickets/SLA: ${error.message}`);
+  }
+
+  try {
+    const mciResult = await callMcpTool('sdp_list_requests', {
+      filter_by: 'All_Requests',
+      mci_only: true,
+      limit: Number(process.env.SOPHIA_WEEKLY_REPORT_MCI_LIMIT || 50),
+      fields_required: ['id', 'status', 'last_updated_time']
+    });
+    const mciData = JSON.parse(mciResult.content?.[0]?.text || '{}');
+    const mciTickets = Array.isArray(mciData.requests) ? mciData.requests : [];
+    mciCount = mciTickets.filter((ticket) => {
+      if (!isFinishedRequestStatus(ticket)) return false;
+      const updated = getRequestUpdatedTimestamp(ticket);
+      return Boolean(updated) && updated >= windowStart && updated <= now;
+    }).length;
+  } catch (error) {
+    warnings.push(`No se pudo calcular MCI: ${error.message}`);
+  }
+
+  try {
+    const csatLimit = Number(process.env.SOPHIA_WEEKLY_REPORT_CSAT_TICKET_LIMIT || 60);
+    let totalRating = 0;
+    for (const ticket of resolvedInWindow.slice(0, csatLimit)) {
+      try {
+        const detailsResult = await callMcpTool('sdp_get_request_details', { request_id: ticket.id });
+        const detailsData = JSON.parse(detailsResult.content?.[0]?.text || '{}');
+        for (const note of getRequestNotes(detailsData)) {
+          const match = (note.text || '').match(/⭐\s*\[Encuesta CSAT\]\s*Calificación:\s*([1-5])\/5/i);
+          if (match) {
+            totalRating += Number(match[1]);
+            csatRatingCount += 1;
+          }
+        }
+      } catch (detailError) {
+        // Ticket individual sin detalle disponible: se ignora y se sigue con el resto.
+      }
+    }
+    if (csatRatingCount > 0) {
+      csatAvg = Number((totalRating / csatRatingCount).toFixed(1));
+    }
+  } catch (error) {
+    warnings.push(`No se pudo calcular CSAT: ${error.message}`);
+  }
+
+  try {
+    const store = await readKnowledgeCandidatesStore();
+    kbaCreated = (store.candidates || []).filter((candidate) => {
+      if (candidate.status !== 'approved') return false;
+      const reviewed = getSdpTimestamp(candidate.reviewedAt);
+      return Boolean(reviewed) && reviewed >= windowStart && reviewed <= now;
+    }).length;
+  } catch (error) {
+    warnings.push(`No se pudo calcular KBA: ${error.message}`);
+  }
+
+  return { ticketsProcessed, slaCompliance, csatAvg, csatRatingCount, mciCount, kbaCreated, warnings };
+}
+
 function createWeeklyExecutiveReportCard(reportData) {
   const summaryText = `📊 Informe Ejecutivo Semanal de Salud IT (${reportData.date})`;
 
@@ -5752,21 +5856,49 @@ function createWeeklyExecutiveReportCard(reportData) {
     {
       type: 'FactSet',
       facts: [
-        { title: '🎫 Solicitudes Atendidas:', value: `${reportData.metrics.ticketsProcessed} tickets` },
-        { title: '🎯 Cumplimiento SLA:', value: `${reportData.metrics.slaCompliance}%` },
-        { title: '⭐ Satisfacción CSAT:', value: `${reportData.metrics.csatAvg} / 5.0` },
-        { title: '🚨 Incidentes Mayores (MCI):', value: `${reportData.metrics.mciCount} eventos resueltos` },
-        { title: '📚 Artículos KBA Aprobados:', value: `${reportData.metrics.kbaCreated} publicados` }
+        {
+          title: '🎫 Solicitudes Atendidas:',
+          value: reportData.metrics.ticketsProcessed !== null ? `${reportData.metrics.ticketsProcessed} tickets` : 'No disponible'
+        },
+        {
+          title: '🎯 Cumplimiento SLA:',
+          value: reportData.metrics.slaCompliance !== null ? `${reportData.metrics.slaCompliance}%` : 'No disponible'
+        },
+        {
+          title: '⭐ Satisfacción CSAT:',
+          value: reportData.metrics.csatAvg !== null
+            ? `${reportData.metrics.csatAvg} / 5.0 (${reportData.metrics.csatRatingCount} calificaciones)`
+            : 'No disponible'
+        },
+        {
+          title: '🚨 Incidentes Mayores (MCI):',
+          value: reportData.metrics.mciCount !== null ? `${reportData.metrics.mciCount} eventos resueltos` : 'No disponible'
+        },
+        {
+          title: '📚 Artículos KBA Aprobados:',
+          value: reportData.metrics.kbaCreated !== null ? `${reportData.metrics.kbaCreated} publicados` : 'No disponible'
+        }
       ]
     },
     {
       type: 'TextBlock',
-      text: '📄 **El archivo PDF adjunto** contiene la gráfica de tendencia por categoría y el desglose gerencial.',
+      text: '📅 Métricas calculadas automáticamente sobre los últimos 7 días de actividad en ServiceDesk Plus. "No disponible" significa que no hay datos suficientes para calcular esa métrica (ej. sin encuestas CSAT registradas o sin tickets con fecha de vencimiento).',
       wrap: true,
       spacing: 'Medium',
       isSubtle: true
     }
   ];
+
+  if (Array.isArray(reportData.warnings) && reportData.warnings.length > 0) {
+    body.push({
+      type: 'TextBlock',
+      text: `⚠️ ${reportData.warnings.join(' | ')}`,
+      wrap: true,
+      spacing: 'Small',
+      color: 'Attention',
+      isSubtle: true
+    });
+  }
 
   return {
     type: 'adaptive_card',
@@ -5785,19 +5917,15 @@ async function sendWeeklyExecutiveReportToExecutives({ force = false } = {}) {
   const store = await readWeeklyReportsStore();
 
   const currentVersion = process.env.npm_package_version || '0.25.0';
+  const { warnings, ...metrics } = await computeWeeklyExecutiveMetrics();
 
   const reportData = {
     id: `RPT-${Date.now().toString(36).toUpperCase()}`,
     date: dateStr,
     version: currentVersion,
     timestamp: new Date().toISOString(),
-    metrics: {
-      ticketsProcessed: 48,
-      slaCompliance: 96.4,
-      csatAvg: 4.8,
-      mciCount: 2,
-      kbaCreated: 4
-    }
+    metrics,
+    warnings
   };
 
   const configuredExecs = (process.env.IT_EXECUTIVE_EMAILS || process.env.SUPPORT_ADMIN_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
@@ -5835,6 +5963,8 @@ async function sendWeeklyExecutiveReportToExecutives({ force = false } = {}) {
     version: currentVersion,
     recipients,
     deliveredCount,
+    metrics,
+    warnings,
     timestamp: reportData.timestamp
   });
   if (store.reports.length > 52) store.reports = store.reports.slice(0, 52);
@@ -5847,6 +5977,8 @@ async function sendWeeklyExecutiveReportToExecutives({ force = false } = {}) {
     date: dateStr,
     recipients,
     deliveredTeamsCount: deliveredCount,
+    metrics,
+    warnings,
     card
   };
 }
