@@ -3390,22 +3390,14 @@ async function handleExecutiveItTurn({ message, user, onText, onCard, onWorking,
 
   await Promise.resolve(onWorking?.('Claro, preparo un panorama ejecutivo con tickets recientes, carga técnica, seguimientos y MCI.'));
 
-  const forceTechnicianDetail = isTechnicianDetailOverrideRequest(message);
   const report = await buildExecutiveItReport(user);
-  const card = createExecutiveItReportCard(report, user, { forceTechnicianDetail });
+  const card = createExecutiveItReportCard(report, user);
   if (responseChannel === 'teams' && card) {
     onCard?.(card);
   } else {
-    onText(formatExecutiveItReportText(report, user, { forceTechnicianDetail }));
+    onText(formatExecutiveItReportText(report, user));
   }
   return true;
-}
-
-// Permite que un perfil ejecutivo (ej. Yariela / Gerente IT), a quien normalmente se le oculta
-// el desglose de carga por técnico individual, lo pida explícitamente con esta frase.
-function isTechnicianDetailOverrideRequest(message = '') {
-  const normalized = normalizeComparableText(message);
-  return /\b(detalle|desglose)\b[\s\w]{0,20}\bpor tecnico\b/.test(normalized);
 }
 
 function isExecutiveItReportRequest(message = '') {
@@ -3567,8 +3559,30 @@ function getExecutiveCsatSummary(tickets) {
   };
 }
 
+// Fila con etiqueta + valor arriba y una barra ProgressBar debajo (elemento nativo de
+// Adaptive Cards, schema >= 1.6). Verificado en el Adaptive Card Designer y en Teams real
+// -- ver docs/runbook-produccion.md. Los intentos previos con Image (width:"stretch" no es
+// válido) y con Container vacío + style (no pinta nada sin contenido) no funcionaron.
+function createExecutiveProgressRow({ label, valueText, value, max, color = 'Accent' }) {
+  return {
+    type: 'Container',
+    spacing: 'Small',
+    items: [
+      {
+        type: 'ColumnSet',
+        columns: [
+          { type: 'Column', width: 'stretch', items: [{ type: 'TextBlock', text: label, weight: 'Bolder', size: 'Small', wrap: true }] },
+          { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: valueText, size: 'Small', isSubtle: true, wrap: true, horizontalAlignment: 'Right' }] }
+        ]
+      },
+      { type: 'ProgressBar', value, max, color }
+    ]
+  };
+}
+
 function createExecutiveCategoriesBlock(categories = []) {
   if (!categories || categories.length === 0) return null;
+  const max = Math.max(...categories.map(({ count }) => count || 0), 1);
 
   return {
     type: 'Container',
@@ -3582,19 +3596,17 @@ function createExecutiveCategoriesBlock(categories = []) {
         size: 'Small',
         wrap: true
       },
-      {
-        type: 'FactSet',
-        spacing: 'Small',
-        facts: categories.map(({ category, count }, idx) => ({
-          title: `${idx + 1}. ${category}:`,
-          value: `${count} ticket${count === 1 ? '' : 's'}`
-        }))
-      }
+      ...categories.map(({ category, count }) => createExecutiveProgressRow({
+        label: category,
+        valueText: `${count} ticket${count === 1 ? '' : 's'}`,
+        value: count || 0,
+        max
+      }))
     ]
   };
 }
 
-function createExecutiveItReportCard(report, user, { forceTechnicianDetail = false } = {}) {
+function createExecutiveItReportCard(report, user) {
   const executiveName = user?.name || 'Gerencia IT';
   const newTickets = report.newTickets || [];
   const technicianLoad = report.technicianLoad || [];
@@ -3602,10 +3614,7 @@ function createExecutiveItReportCard(report, user, { forceTechnicianDetail = fal
   const mciProgress = report.mciProgress || [];
   const summaryText = `Reporte ejecutivo IT para ${executiveName}.`;
 
-  // Para el perfil ejecutivo (Yariela / Gerente IT) no se enumeran técnicos individualmente,
-  // salvo que lo pida explícitamente con "detalle/desglose por técnico" (forceTechnicianDetail).
   const isExecutiveProfile = Boolean(getExecutiveItProfile(user));
-  const showTechnicianBreakdown = !isExecutiveProfile || forceTechnicianDetail;
 
   const openCount = (report.tickets || []).filter((t) => {
     const s = normalizeComparableText(getDisplayName(t.status));
@@ -3646,12 +3655,7 @@ function createExecutiveItReportCard(report, user, { forceTechnicianDetail = fal
   ];
 
   body.push(createExecutiveTicketsBlock(newTickets));
-
-  // Sección de técnicos: para administradores operativos, o para perfil ejecutivo gerencial
-  // solo cuando pidió explícitamente el detalle por técnico.
-  if (showTechnicianBreakdown) {
-    body.push(createExecutiveTechniciansBlock(technicianLoad));
-  }
+  body.push(createExecutiveTechniciansBlock(technicianLoad));
 
   if (report.categoryDistribution?.length > 0) {
     body.push(createExecutiveCategoriesBlock(report.categoryDistribution));
@@ -3710,7 +3714,9 @@ function createExecutiveItReportCard(report, user, { forceTechnicianDetail = fal
     card: {
       $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
       type: 'AdaptiveCard',
-      version: '1.4',
+      // 1.6 (no 1.4) porque el elemento ProgressBar de las barras de carga/categorías/MCI
+      // lo requiere. Verificado en Teams real, no solo en el Adaptive Card Designer.
+      version: '1.6',
       body
     }
   };
@@ -3752,9 +3758,25 @@ function createExecutiveTicketsBlock(tickets) {
 }
 
 function createExecutiveTechniciansBlock(stats) {
-  return createExecutiveSection('Carga por personal técnico', stats, (entry) => (
-    `${entry.technician}: ${entry.open} abiertos, ${entry.high} alta prioridad, ${entry.waiting} en espera/suspendidos`
-  ), 'No encontré carga técnica en el rango revisado.');
+  if (!stats || stats.length === 0) {
+    return createExecutiveSection('Carga por personal técnico', [], () => '', 'No encontré carga técnica en el rango revisado.');
+  }
+  const max = Math.max(...stats.map((entry) => entry.open || 0), 1);
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      { type: 'TextBlock', text: 'Carga por personal técnico', weight: 'Bolder', wrap: true },
+      ...stats.map((entry) => createExecutiveProgressRow({
+        label: entry.technician,
+        valueText: `${entry.open} abiertos · ${entry.high} alta`,
+        value: entry.open || 0,
+        max
+      }))
+    ]
+  };
 }
 
 function createExecutiveFollowUpsBlock(tickets) {
@@ -3766,9 +3788,46 @@ function createExecutiveFollowUpsBlock(tickets) {
 }
 
 function createExecutiveMciBlock(mciRequests) {
-  return createExecutiveSection('Avance de MCI', mciRequests, (request) => (
-    `#${request.id} - ${truncateText(request.subject || 'Sin asunto', 80)}\nLíder: ${getMciLeaderDisplayValue(request) || '-'} | Avance: ${getMciProgressValue(request) || '-'} | Predictiva: ${truncateText(getMciPredictiveValue(request) || '-', 80)}`
-  ), 'No encontré MCI en el rango revisado.');
+  if (!mciRequests || mciRequests.length === 0) {
+    return createExecutiveSection('Avance de MCI', [], () => '', 'No encontré MCI en el rango revisado.');
+  }
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items: [
+      { type: 'TextBlock', text: 'Avance de MCI', weight: 'Bolder', wrap: true },
+      ...mciRequests.map((request) => {
+        // getMciProgressValue devuelve algo como "80%" o '' si no hay dato.
+        const progressText = getMciProgressValue(request);
+        const parsed = progressText ? parseFloat(progressText) : NaN;
+        const percent = Number.isFinite(parsed) ? Math.max(0, Math.min(100, Math.round(parsed))) : null;
+        const color = percent === null ? 'Default' : percent >= 70 ? 'Good' : percent >= 40 ? 'Warning' : 'Attention';
+
+        return {
+          type: 'Container',
+          style: 'emphasis',
+          spacing: 'Small',
+          items: [
+            { type: 'TextBlock', text: `#${request.id} - ${truncateText(request.subject || 'Sin asunto', 80)}`, weight: 'Bolder', size: 'Small', wrap: true },
+            { type: 'TextBlock', text: `Líder: ${getMciLeaderDisplayValue(request) || '-'}`, size: 'Small', isSubtle: true, spacing: 'None', wrap: true },
+            percent === null
+              ? { type: 'TextBlock', text: 'Avance no disponible', size: 'Small', isSubtle: true, wrap: true, spacing: 'Small' }
+              : {
+                  type: 'ColumnSet',
+                  spacing: 'Small',
+                  columns: [
+                    { type: 'Column', width: 'stretch', verticalContentAlignment: 'Center', items: [{ type: 'ProgressBar', value: percent, max: 100, color }] },
+                    { type: 'Column', width: 'auto', verticalContentAlignment: 'Center', items: [{ type: 'TextBlock', text: `${percent}%`, weight: 'Bolder', size: 'Small', wrap: false }] }
+                  ]
+                },
+            { type: 'TextBlock', text: `Predictiva: ${truncateText(getMciPredictiveValue(request) || '-', 80)}`, size: 'Small', isSubtle: true, wrap: true, spacing: 'Small' }
+          ]
+        };
+      })
+    ]
+  };
 }
 
 function createExecutiveSection(title, items, renderItem, emptyText) {
@@ -3794,7 +3853,7 @@ function createExecutiveSection(title, items, renderItem, emptyText) {
   };
 }
 
-function formatExecutiveItReportText(report, user, { forceTechnicianDetail = false } = {}) {
+function formatExecutiveItReportText(report, user) {
   const lines = [
     `Reporte ejecutivo IT para ${user?.name || 'Gerencia IT'}`,
     `Generado: ${formatIsoDateTime(report.generatedAt)}`,
@@ -3805,7 +3864,7 @@ function formatExecutiveItReportText(report, user, { forceTechnicianDetail = fal
     `MCI revisadas: ${report.mci?.length || 0}`
   ];
 
-  if (forceTechnicianDetail && report.technicianLoad?.length > 0) {
+  if (report.technicianLoad?.length > 0) {
     lines.push('', 'Carga por personal técnico:');
     for (const entry of report.technicianLoad) {
       lines.push(`- ${entry.technician}: ${entry.open} abiertos, ${entry.high} alta prioridad, ${entry.waiting} en espera/suspendidos`);

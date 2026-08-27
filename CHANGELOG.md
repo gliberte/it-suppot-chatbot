@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.12] - 2026-08-27
+
+### Changed
+- **Rediseño del "reporte ejecutivo IT" con barras reales en vez de texto plano/FactSet (`server.js`):** "Carga por personal técnico", "Categorías con Mayor Volumen de Incidentes" y "Avance de MCI" ahora usan el elemento nativo `ProgressBar` (barra proporcional coloreada) en vez de listas de texto con `-` o un `FactSet`. Requirió subir el schema del card de `1.4` a `1.6` (`ProgressBar` no existe en 1.4). Documentado el hallazgo -- y dos técnicas que NO funcionan (`Image` con `width:"stretch"`, `Container` vacío con `style`) -- en `docs/runbook-produccion.md`. Verificado con una tarjeta de prueba real enviada a Teams (no solo en el Adaptive Card Designer).
+- **El bloque "Carga por personal técnico" ahora se muestra siempre**, incluso para el perfil ejecutivo (Yariela / Gerente IT) -- antes estaba oculto por defecto para ese perfil. Con el nuevo diseño en barras se consideró suficientemente digerible para mostrarlo sin pedirlo explícitamente, así que se eliminó la frase de activación "detalle/desglose por técnico" agregada en la versión anterior (ya no hace falta).
+
+Verificado con `npm test` (177/177, sin regresiones).
+
 ## [0.54.11] - 2026-08-27
 
 ### Ops

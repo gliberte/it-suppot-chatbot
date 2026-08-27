@@ -646,3 +646,14 @@ Validar:
 curl http://localhost:3001/api/teams/health
 curl -k https://localhost/api/teams/health
 ```
+
+## Barras De Progreso En Adaptive Cards (ProgressBar)
+
+Para representar valores proporcionales (carga por técnico, volumen por categoría, avance de MCI) en una tarjeta de Teams, el único elemento nativo que funciona de verdad es `ProgressBar` (`{ "type": "ProgressBar", "value": N, "max": M, "color": "Accent" | "Good" | "Warning" | "Attention" | ... }`), y **requiere declarar `"version": "1.6"` en el `AdaptiveCard`** (no `"1.4"`).
+
+Dos alternativas que se probaron antes y **no funcionan**, para no repetir el error:
+
+- **`Image` con `"width": "stretch"`**: no es una propiedad válida (`stretch` es un valor de `size`, no de `width`); el resultado es una imagen minúscula sin estirar, no una barra.
+- **`Container` vacío con `"style"` (`accent`/`good`/etc.) y `"items": []`**: en el editor de Design (Adaptive Card Designer) se ve como un placeholder punteado "Empty Container", y en el render real de Teams **no pinta absolutamente nada** (altura cero, invisible). Un `Container` sin contenido no dibuja su color de fondo pase lo que pase con `minHeight`.
+
+Verificado tanto en el [Adaptive Card Designer](https://adaptivecards.microsoft.com/designer) (Preview, no solo el lienzo de edición) como enviando la tarjeta real a Teams con el endpoint temporal `POST /api/admin/test-card/send` (ver `server.js`, sección "DIAGNÓSTICO TEMPORAL").
