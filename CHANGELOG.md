@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.16] - 2026-08-27
+
+### Fixed
+- **HOTFIX: pedir cambiar el estado de un ticket Y dejar un comentario en un solo mensaje se enrutaba solo a `sdp_add_note`, perdiendo el cambio de estado (`agent-orchestrator.js`):** detectado en producción -- Eliseo pidió "colócalo en espera y coméntale que...", Sophia solo agregó la nota (por la palabra "comentario" en las instrucciones de `sdp_add_note`) y nunca cambió el estado; tuvo que preguntarle después "¿y lo cambiaste de estado?" para que Sophia lo hiciera aparte.
+  - **Corregido** aclarando en el catálogo (herramientas 5 y 11) y en la regla de oro correspondiente que, si el mensaje pide cambiar el estado Y da una justificación/comentario para ese cambio, es **una sola acción** `sdp_update_request` con `tool_args.comments`, nunca `sdp_add_note` ni dos acciones separadas.
+  - **Verificado con el arnés de evaluación** (`npm run eval:agent`): nuevo caso con el mensaje real de producción, 21/21 contra Gemini real (sin regresiones en los 20 casos existentes).
+
 ## [0.54.15] - 2026-08-27
 
 ### Added

@@ -219,6 +219,24 @@ const cases = [
     }
   },
   {
+    // Bug real de producción: este mensaje se enrutaba a sdp_add_note (por la palabra
+    // "comentario"), perdiendo el cambio de estado que también se pidió explícitamente.
+    name: 'Cambio de estado con comentario en el mismo mensaje -> una sola acción sdp_update_request',
+    message: 'Coloca el ticket 13738 en estado de en espera y colócale el siguiente comentario: Personal ingresa en el turno 3 de 10:00 p.m a 6:00., la Ing. Mirentxu tratará de comunicarle que llegue antes de mi hora de salida.',
+    user: USER_NORMAL,
+    expect: {
+      action: 'call_tool',
+      toolName: 'sdp_update_request',
+      argsContains: { request_id: '13738', status: 'En Espera' },
+      customCheck: (toolArgs) => {
+        const comments = String(toolArgs?.comments || '');
+        return comments.toLowerCase().includes('turno 3')
+          ? null
+          : `tool_args.comments no incluyó el texto del comentario pedido (comments="${comments}")`;
+      }
+    }
+  },
+  {
     name: 'Consulta SAP HANA califica el esquema obligatorio',
     message: '¿Cuántas facturas se generaron este mes en SAP?',
     user: USER_ADMIN,
