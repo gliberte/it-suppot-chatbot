@@ -3354,14 +3354,22 @@ async function handleExecutiveItTurn({ message, user, onText, onCard, onWorking,
 
   await Promise.resolve(onWorking?.('Claro, preparo un panorama ejecutivo con tickets recientes, carga técnica, seguimientos y MCI.'));
 
+  const forceTechnicianDetail = isTechnicianDetailOverrideRequest(message);
   const report = await buildExecutiveItReport(user);
-  const card = createExecutiveItReportCard(report, user);
+  const card = createExecutiveItReportCard(report, user, { forceTechnicianDetail });
   if (responseChannel === 'teams' && card) {
     onCard?.(card);
   } else {
-    onText(formatExecutiveItReportText(report, user));
+    onText(formatExecutiveItReportText(report, user, { forceTechnicianDetail }));
   }
   return true;
+}
+
+// Permite que un perfil ejecutivo (ej. Yariela / Gerente IT), a quien normalmente se le oculta
+// el desglose de carga por técnico individual, lo pida explícitamente con esta frase.
+function isTechnicianDetailOverrideRequest(message = '') {
+  const normalized = normalizeComparableText(message);
+  return /\b(detalle|desglose)\b[\s\w]{0,20}\bpor tecnico\b/.test(normalized);
 }
 
 function isExecutiveItReportRequest(message = '') {
@@ -3550,7 +3558,7 @@ function createExecutiveCategoriesBlock(categories = []) {
   };
 }
 
-function createExecutiveItReportCard(report, user) {
+function createExecutiveItReportCard(report, user, { forceTechnicianDetail = false } = {}) {
   const executiveName = user?.name || 'Gerencia IT';
   const newTickets = report.newTickets || [];
   const technicianLoad = report.technicianLoad || [];
@@ -3558,8 +3566,10 @@ function createExecutiveItReportCard(report, user) {
   const mciProgress = report.mciProgress || [];
   const summaryText = `Reporte ejecutivo IT para ${executiveName}.`;
 
-  // Para el perfil ejecutivo (Yariela / Gerente IT) no se enumeran técnicos individualmente
+  // Para el perfil ejecutivo (Yariela / Gerente IT) no se enumeran técnicos individualmente,
+  // salvo que lo pida explícitamente con "detalle/desglose por técnico" (forceTechnicianDetail).
   const isExecutiveProfile = Boolean(getExecutiveItProfile(user));
+  const showTechnicianBreakdown = !isExecutiveProfile || forceTechnicianDetail;
 
   const openCount = (report.tickets || []).filter((t) => {
     const s = normalizeComparableText(getDisplayName(t.status));
@@ -3601,8 +3611,9 @@ function createExecutiveItReportCard(report, user) {
 
   body.push(createExecutiveTicketsBlock(newTickets));
 
-  // Sección de técnicos: solo para administradores operativos, no para perfil ejecutivo gerencial
-  if (!isExecutiveProfile) {
+  // Sección de técnicos: para administradores operativos, o para perfil ejecutivo gerencial
+  // solo cuando pidió explícitamente el detalle por técnico.
+  if (showTechnicianBreakdown) {
     body.push(createExecutiveTechniciansBlock(technicianLoad));
   }
 
@@ -3747,8 +3758,8 @@ function createExecutiveSection(title, items, renderItem, emptyText) {
   };
 }
 
-function formatExecutiveItReportText(report, user) {
-  return [
+function formatExecutiveItReportText(report, user, { forceTechnicianDetail = false } = {}) {
+  const lines = [
     `Reporte ejecutivo IT para ${user?.name || 'Gerencia IT'}`,
     `Generado: ${formatIsoDateTime(report.generatedAt)}`,
     '',
@@ -3756,7 +3767,16 @@ function formatExecutiveItReportText(report, user) {
     `Técnicos con carga: ${report.technicianLoad?.length || 0}`,
     `Seguimientos recientes: ${report.recentFollowUps?.length || 0}`,
     `MCI revisadas: ${report.mci?.length || 0}`
-  ].join('\n');
+  ];
+
+  if (forceTechnicianDetail && report.technicianLoad?.length > 0) {
+    lines.push('', 'Carga por personal técnico:');
+    for (const entry of report.technicianLoad) {
+      lines.push(`- ${entry.technician}: ${entry.open} abiertos, ${entry.high} alta prioridad, ${entry.waiting} en espera/suspendidos`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 async function handleActiveSituationTurn({ message, user, onText, onCard, responseChannel }) {

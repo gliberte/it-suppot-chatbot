@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.10] - 2026-08-27
+
+### Added
+- **Frase para desbloquear el desglose por técnico en el perfil ejecutivo (`server.js`):** el perfil "Gerente de IT" (Yariela Saucedo de Vallarino, `getExecutiveItProfile`) siempre tuvo oculta la sección "Carga por personal técnico" del reporte ejecutivo, sin ninguna forma de solicitarla. Ahora, si el mensaje incluye "detalle por técnico" o "desglose por técnico" (ej. *"reporte ejecutivo con detalle por técnico"*), `createExecutiveItReportCard`/`formatExecutiveItReportText` muestran esa sección igual que a un administrador operativo, sin afectar el comportamiento por defecto (sigue oculta si no se pide explícitamente).
+
 ## [0.54.9] - 2026-08-27
 
 ### Fixed
