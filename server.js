@@ -3559,6 +3559,15 @@ function getExecutiveCsatSummary(tickets) {
   };
 }
 
+// Teams renderiza un ProgressBar con value 0/NaN/undefined como indeterminado (animado,
+// "cargando"), no como una barra vacía -- confirmado en producción (la barra de un técnico
+// con 0 tickets abiertos salía animada mientras el resto se veían fijas). Se manda un piso
+// mínimo positivo para que siempre sea determinado, aunque el valor real sea cero.
+function safeProgressBarValue(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0.01;
+}
+
 // Fila con etiqueta + valor arriba y una barra ProgressBar debajo (elemento nativo de
 // Adaptive Cards, schema >= 1.6). Verificado en el Adaptive Card Designer y en Teams real
 // -- ver docs/runbook-produccion.md. Los intentos previos con Image (width:"stretch" no es
@@ -3575,7 +3584,7 @@ function createExecutiveProgressRow({ label, valueText, value, max, color = 'Acc
           { type: 'Column', width: 'auto', items: [{ type: 'TextBlock', text: valueText, size: 'Small', isSubtle: true, wrap: true, horizontalAlignment: 'Right' }] }
         ]
       },
-      { type: 'ProgressBar', value, max, color }
+      { type: 'ProgressBar', value: safeProgressBarValue(value), max, color }
     ]
   };
 }
@@ -3818,7 +3827,7 @@ function createExecutiveMciBlock(mciRequests) {
                   type: 'ColumnSet',
                   spacing: 'Small',
                   columns: [
-                    { type: 'Column', width: 'stretch', verticalContentAlignment: 'Center', items: [{ type: 'ProgressBar', value: percent, max: 100, color }] },
+                    { type: 'Column', width: 'stretch', verticalContentAlignment: 'Center', items: [{ type: 'ProgressBar', value: safeProgressBarValue(percent), max: 100, color }] },
                     { type: 'Column', width: 'auto', verticalContentAlignment: 'Center', items: [{ type: 'TextBlock', text: `${percent}%`, weight: 'Bolder', size: 'Small', wrap: false }] }
                   ]
                 },

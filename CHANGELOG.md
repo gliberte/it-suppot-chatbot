@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.13] - 2026-08-27
+
+### Fixed
+- **HOTFIX: un `ProgressBar` con `value: 0` se renderiza animado/indeterminado en Teams, no como barra vacía (`server.js`):** detectado en producción -- la barra de un técnico sin tickets abiertos aparecía "cargando" en vez de vacía, mientras el resto (con valores > 0) se veían fijas. `safeProgressBarValue()` manda un piso mínimo positivo (`0.01`) cuando el valor real es `0`, `NaN` o `undefined`, para forzar que Teams siempre lo trate como determinado. Aplica a las tres barras del reporte ejecutivo (técnicos, categorías, MCI).
+
 ## [0.54.12] - 2026-08-27
 
 ### Changed
