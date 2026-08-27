@@ -9,6 +9,11 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.7] - 2026-08-27
+
+### Ops
+- **Resumen ejecutivo semanal ahora se documenta como job de cron (`docs/runbook-produccion.md`):** `npm run prod:weekly-report` ya existía como script standalone (mismo patrón que `prod:daily-report` y `prod:broadcast`: hace `POST` a `/api/admin/weekly-report` sobre la instancia local), pero no estaba en el runbook ni programado -- solo se disparaba a mano. Se agregó la sección "Resumen Ejecutivo Semanal" con el cron recomendado (lunes 7:00 a.m.) y una nota explícita de que `sendWeeklyExecutiveReportToExecutives` no tiene guarda de "ya se envió esta semana" (cada corrida genera y envía un reporte nuevo), para no disparar el cron más de una vez por semana.
+
 ## [0.54.6] - 2026-08-25
 
 ### Fixed

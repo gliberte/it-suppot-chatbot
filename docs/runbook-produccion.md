@@ -132,6 +132,25 @@ Resultado esperado:
 {"success":true,"endpoint":"/api/teams/messages","configured":{...}}
 ```
 
+## Resumen Ejecutivo Semanal
+
+Enviar manualmente el resumen ejecutivo a la gerencia (destinatarios: `IT_EXECUTIVE_EMAILS`, o `SUPPORT_ADMIN_EMAILS` si esa variable no está configurada):
+
+```bash
+cd /opt/sophia/it-support-chatbot
+npm run prod:weekly-report
+```
+
+Este script solo hace un `POST` a `/api/admin/weekly-report` sobre la instancia local de Sophia (igual que `prod:broadcast` con `/api/admin/broadcast-release`) -- no funciona si Sophia (`pm2 status sophia`) no está corriendo.
+
+Cron recomendado, todos los lunes a las 7:00 a.m.:
+
+```cron
+0 7 * * 1 cd /opt/sophia/it-support-chatbot && npm run prod:weekly-report >/dev/null 2>&1
+```
+
+La función no lleva ninguna guarda de "ya se envió esta semana" -- cada corrida genera y envía un reporte nuevo (queda registrado en `data/weekly_reports_history.json`, ignorado por git), así que evita disparar el cron más de una vez por semana o correr `npm run prod:weekly-report` a mano el mismo día que ya corrió el cron.
+
 ## Validar Nginx Y HTTPS
 
 ```bash
