@@ -11798,6 +11798,14 @@ async function assertToolAllowedForUser(toolName, args, user) {
 
   if (isSupportAdmin(user) || isItExecutiveUser(user) || isMciAdmin(user)) return;
 
+  // A quién se le asigna un ticket es una decisión de despacho/triage, no algo que el
+  // solicitante o el técnico actual deban poder decidir por chat -- a diferencia de
+  // sdp_add_note/sdp_update_request/sdp_resolve_request, que sí caen en el chequeo genérico
+  // de abajo (isRequester || isTechnician).
+  if (toolName === 'sdp_assign_request') {
+    throw new Error('Solo un administrador o ejecutivo IT puede reasignar un ticket a otro técnico.');
+  }
+
   const isRequester = userCanAccessRequest(user, data);
   const isTechnician = userMatchesAssignedTechnician(user, data);
 

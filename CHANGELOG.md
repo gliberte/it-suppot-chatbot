@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.19] - 2026-08-27
+
+### Security
+- **`sdp_assign_request` permitía que el solicitante de un ticket lo reasignara a cualquier técnico (`server.js`):** detectado al revisar el fix anterior antes de que llegara más lejos -- a diferencia de `sdp_add_note`/`sdp_update_request`/`sdp_resolve_request` (donde tiene sentido que el solicitante o el técnico asignado tengan voz), a quién se le asigna un ticket es una decisión de despacho/triage. `assertToolAllowedForUser` caía en el chequeo genérico (`isRequester || isTechnician`), así que cualquier empleado podía pedirle a Sophia que reasignara su propio ticket al técnico que quisiera.
+  - **Corregido** restringiendo `sdp_assign_request` a solo administradores/ejecutivos IT, con su propio mensaje de error. Se actualizó también el catálogo del prompt para que Sophia no lo intente con un usuario normal.
+  - **Verificado con el arnés de evaluación** (`npm run eval:agent`): caso nuevo confirmando que un usuario normal NO dispara `sdp_assign_request`, más el caso existente confirmando que un admin sí puede -- 24/24 contra Gemini real. `npm test` 177/177.
+
 ## [0.54.18] - 2026-08-27
 
 ### Fixed

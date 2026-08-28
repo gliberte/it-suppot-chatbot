@@ -256,10 +256,12 @@ const cases = [
   },
   {
     // Mismo hueco que sdp_update_request/sdp_resolve_request: sdp_assign_request está
-    // autorizada en el backend pero nunca estuvo en el catálogo de la IA.
-    name: 'Usuario pide reasignar un ticket a otro técnico',
+    // autorizada en el backend pero nunca estuvo en el catálogo de la IA. Reasignar es una
+    // decisión de despacho/triage, así que solo se prueba con un admin (ver el caso
+    // siguiente para el rechazo a un usuario normal).
+    name: 'Administrador pide reasignar un ticket a otro técnico',
     message: 'Reasigna el ticket 15200 a Jaime Lasso',
-    user: USER_NORMAL,
+    user: USER_ADMIN,
     expect: {
       action: 'call_tool',
       toolName: 'sdp_assign_request',
@@ -270,6 +272,16 @@ const cases = [
           ? null
           : `tool_args.technician_name no incluyó el nombre del técnico pedido (technician_name="${technicianName}")`;
       }
+    }
+  },
+  {
+    // Reasignar es solo para admins/ejecutivos IT -- ni el solicitante ni el técnico
+    // asignado deberían poder hacerlo (a diferencia de sdp_add_note/sdp_update_request).
+    name: 'Usuario normal NO debe poder reasignar un ticket',
+    message: 'Reasigna el ticket 15200 a Jaime Lasso',
+    user: USER_NORMAL,
+    expect: {
+      toolNameNot: 'sdp_assign_request'
     }
   },
   {
