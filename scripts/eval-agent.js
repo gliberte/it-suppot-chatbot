@@ -63,6 +63,25 @@ const cases = [
     }
   },
   {
+    // Bug real de producción: Gemini razonaba "role es 'user', no técnico" y decidía
+    // requester_name (el servidor lo corregía después, pero el texto de la respuesta
+    // seguía diciendo "donde eres el solicitante", confundiendo al usuario). role "user"
+    // no implica "no es técnico" -- SDP gratuito solo permite 5 técnicos nativos.
+    name: 'Usuario role="user" pide sus tickets asignados (puede ser técnico igual)',
+    message: 'Hola, me dices cuales son mis tikets asignados',
+    user: USER_NORMAL,
+    expect: {
+      action: 'call_tool',
+      toolName: 'sdp_list_requests',
+      argsContains: { assigned_technician_name: USER_NORMAL.name },
+      customCheck: (toolArgs, aiDecision) => (
+        toolArgs?.requester_name
+          ? 'no debía incluir requester_name cuando el usuario pide explícitamente sus tickets asignados'
+          : null
+      )
+    }
+  },
+  {
     name: 'Usuario normal pide sus MCI',
     message: 'Quiero ver mis MCI',
     user: USER_NORMAL,

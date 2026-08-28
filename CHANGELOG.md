@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.23] - 2026-08-27
+
+### Fixed
+- **HOTFIX: Gemini asumía "role es 'user' → no es técnico" y respondía con texto incorrecto, aunque la consulta real ya quedaba corregida del lado del servidor (`agent-orchestrator.js`):** detectado en producción -- un técnico (fuera de los 5 técnicos nativos de la licencia gratuita de SDP, ver v0.54.22) preguntó "cuáles son mis tickets asignados"; Gemini razonó "es un usuario regular y no un técnico" y decidió `requester_name`, aunque el chequeo determinista agregado en v0.54.22 corrigió la consulta real a `assigned_technician_name` -- pero el texto que Sophia le mostró seguía diciendo "donde eres el solicitante", generando confusión y obligando al usuario a aclarar "no donde soy técnico asignado" en un segundo turno.
+  - **Corregido** aclarando explícitamente en el prompt que `role: "user"` no implica que la persona no sea técnico (la mayoría del personal técnico real solo existe en el campo personalizado "Técnico asignado", no como rol especial), y que cualquier forma de la palabra "asignado" debe usar `tool_args.assigned_technician_name` con el nombre del usuario autenticado.
+  - **Verificado con el arnés de evaluación** (`npm run eval:agent`): nuevo caso con el mensaje real de producción, 3/3 aislado y 26/26 contra Gemini real (sin regresiones). `npm test` 182/182.
+
 ## [0.54.22] - 2026-08-27
 
 ### Fixed
