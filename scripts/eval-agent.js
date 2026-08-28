@@ -255,6 +255,24 @@ const cases = [
     }
   },
   {
+    // Mismo hueco que sdp_update_request/sdp_resolve_request: sdp_assign_request está
+    // autorizada en el backend pero nunca estuvo en el catálogo de la IA.
+    name: 'Usuario pide reasignar un ticket a otro técnico',
+    message: 'Reasigna el ticket 15200 a Jaime Lasso',
+    user: USER_NORMAL,
+    expect: {
+      action: 'call_tool',
+      toolName: 'sdp_assign_request',
+      argsContains: { request_id: '15200' },
+      customCheck: (toolArgs) => {
+        const technicianName = String(toolArgs?.technician_name || '');
+        return technicianName.toLowerCase().includes('jaime')
+          ? null
+          : `tool_args.technician_name no incluyó el nombre del técnico pedido (technician_name="${technicianName}")`;
+      }
+    }
+  },
+  {
     name: 'Consulta SAP HANA califica el esquema obligatorio',
     message: '¿Cuántas facturas se generaron este mes en SAP?',
     user: USER_ADMIN,

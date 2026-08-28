@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.18] - 2026-08-27
+
+### Fixed
+- **Sophia no sabía que podía reasignar un ticket a otro técnico (`agent-orchestrator.js`):** tercer caso del mismo hueco (`sdp_update_request`, `sdp_resolve_request`, y ahora `sdp_assign_request`) -- el backend ya autorizaba la acción, pero nunca apareció en el catálogo de la IA. Encontrado proactivamente al auditar todas las herramientas SDP del MCP server contra el catálogo del prompt, tras el lanzamiento público de Sophia.
+  - **Corregido** agregando la entrada 13 al catálogo: `technician_name` con el nombre exacto del técnico.
+  - **Bug relacionado encontrado y corregido en `sdp-mcp-server`:** `sdp_assign_request` solo actualizaba el campo nativo `technician` de SDP, pero el resto del código de Sophia (`getAssignedTechnicianValue`, carga por técnico del reporte ejecutivo, tarjeta de detalle) usa el campo personalizado `udf_pick_2701` ("Técnico asignado") como fuente de verdad. Sin corregirlo, reasignar un ticket habría dejado los dos campos desincronizados -- ahora se actualizan ambos en la misma llamada.
+  - **Verificado con el arnés de evaluación** (`npm run eval:agent`): nuevo caso de reasignación, 23/23 contra Gemini real (sin regresiones). `npm test` 177/177.
+
 ## [0.54.17] - 2026-08-27
 
 ### Fixed
