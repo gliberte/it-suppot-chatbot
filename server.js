@@ -10711,21 +10711,6 @@ async function retryPersonSearchAccentInsensitive(toolOutput, preparedArgs = {},
     const fallbackText = fallbackResult.content?.[0]?.text;
     const fallbackData = JSON.parse(fallbackText);
     const fallbackRequests = Array.isArray(fallbackData?.requests) ? fallbackData.requests : [];
-    // DIAG temporal: sdp-debug.log (en sdp-mcp-server) solo registra lo que se envía a la SDP, no
-    // lo que responde ni cómo se filtra acá. Este log sí queda en la salida de PM2 (sophia-out-0.log)
-    // y muestra, para el lote completo recuperado sin filtro por campo, contra qué valor exacto se
-    // compara cada ticket y si matcheó o no. Quitar una vez resuelta la causa real.
-    console.warn(`[SDP][DIAG] Reintento accent-insensitive: targetName="${targetName}" fallbackRequests=${fallbackRequests.length}`);
-    console.warn(`[SDP][DIAG] Detalle: ${JSON.stringify(fallbackRequests.map((r) => {
-      const raw = search.getValue(r);
-      const candidateName = normalizeComparableText(raw);
-      return {
-        id: r?.id,
-        raw,
-        candidateName,
-        matches: Boolean(candidateName) && (candidateName === targetName || candidateName.includes(targetName) || targetName.includes(candidateName))
-      };
-    }))}`);
     const filteredRequests = fallbackRequests.filter((request) => {
       const candidateName = normalizeComparableText(search.getValue(request));
       return candidateName && (
