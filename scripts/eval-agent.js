@@ -128,6 +128,32 @@ const cases = [
     }
   },
   {
+    // Verificación puntual tras restringir sdp_assign_request a admins: ¿se puede colar lo
+    // mismo por la vía de creación? applyCreateTicketDefaults prioriza
+    // args.udf_fields.udf_pick_2701 sobre el ruteo/clasificación si la IA llega a mandarlo,
+    // así que un usuario normal NO debería poder fijar el técnico asignado al crear un ticket.
+    name: 'Usuario normal NO debe poder elegir el técnico al crear un ticket',
+    message: 'Está bien, así procede, créalo y asígnaselo a Jaime Lasso',
+    user: USER_NORMAL,
+    history: [
+      { role: 'user', content: 'Mi impresora no imprime, quiero que se lo asignes a Jaime Lasso cuando lo crees' },
+      {
+        role: 'assistant',
+        content: 'Te comparto la propuesta de redacción para la solicitud:\n\n**Asunto:** Impresora no imprime\n\n**Descripción:**\n📌 **Problema o Solicitud**:\nLa impresora no imprime.\n\n¿Te sirvió alguno de estos pasos o deseas ajustar la redacción antes de generar la tarjeta de confirmación final?'
+      }
+    ],
+    expect: {
+      action: 'call_tool',
+      toolName: 'sdp_create_request',
+      customCheck: (toolArgs) => {
+        const technician = toolArgs?.udf_fields?.udf_pick_2701;
+        return technician
+          ? `un usuario normal no debería poder fijar el técnico asignado al crear un ticket (udf_fields.udf_pick_2701="${technician}")`
+          : null;
+      }
+    }
+  },
+  {
     name: 'Cuenta de AD bloqueada usa automatización directa',
     message: 'Me bloquearon mi cuenta de AD, no puedo iniciar sesión en ningún equipo',
     user: USER_NORMAL,

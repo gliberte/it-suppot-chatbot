@@ -9,6 +9,12 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.20] - 2026-08-27
+
+### Security
+- **Prueba de regresión: confirmado que un usuario normal tampoco puede elegir el técnico asignado al crear un ticket (`scripts/eval-agent.js`):** tras restringir `sdp_assign_request` a admins/ejecutivos IT (v0.54.19), se verificó la vía adyacente -- `sdp_create_request` prioriza `tool_args.udf_fields.udf_pick_2701` sobre el ruteo/clasificación si la IA llegara a mandarlo. Probado con un mensaje real pidiendo explícitamente "asígnaselo a Jaime Lasso" al crear: Gemini **no** fijó el campo de asignación real, solo dejó la preferencia como nota de texto en la descripción, dejando que el ruteo normal decida el técnico. No fue necesario ningún cambio de código -- solo se agrega como prueba de regresión permanente.
+  - **Verificado con el arnés de evaluación** (`npm run eval:agent`): 25/25 contra Gemini real (sin regresiones). `npm test` 177/177.
+
 ## [0.54.19] - 2026-08-27
 
 ### Security
