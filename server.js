@@ -35,7 +35,8 @@ import {
   userCanReadRequest,
   userCanSeeListRequest,
   mciUpdateChangesLeader,
-  getDisallowedLeaderMciUpdateFields
+  getDisallowedLeaderMciUpdateFields,
+  hasAssignedTechnicianScope
 } from './lib/authz.js';
 import {
   createPendingActionStore,
@@ -1998,9 +1999,7 @@ function hasRequesterScope(message) {
   return /\b(solicitante|del solicitante|como solicitante|reportad[oa]\s+por|cread[oa]\s+por)\b/i.test(String(message || ''));
 }
 
-function hasAssignedTechnicianScope(message) {
-  return /\b(t[eé]cnico asignado|tecnico asignado|asignad[oa]s?\s+a|como t[eé]cnico asignado|como tecnico asignado)\b/i.test(String(message || ''));
-}
+// hasAssignedTechnicianScope vive en lib/authz.js (función pura, con pruebas unitarias).
 
 function getSelfAssignedTechnicianScope(user, args = {}, message = '') {
   if (!hasAssignedTechnicianScope(message)) return null;

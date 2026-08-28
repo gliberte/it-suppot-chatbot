@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.22] - 2026-08-27
+
+### Fixed
+- **Un técnico fuera de los 5 técnicos nativos que permite la licencia gratuita de SDP recibía 0 resultados al pedir sus tickets asignados (`lib/authz.js`, `server.js`):** ese personal solo existe en el picklist personalizado `udf_pick_2701` ("Técnico asignado"), nunca como `technician` nativo de SDP. La lógica para reconocer "mis tickets asignados" (`hasAssignedTechnicianScope`) ya sabía comparar contra `udf_pick_2701` -- el problema real era que exigía la preposición "asignado(s) **a** ..." explícita (ej. "asignados a mí"), así que frases naturales como "mis tickets asignados" o "tickets que tengo asignados" nunca activaban ese alcance; la consulta caía en `requester_id` (tickets que la persona solicitó, no los que tiene asignados) y devolvía 0.
+  - **Corregido** ampliando la detección a cualquier forma de la palabra "asignado/a/os/as", sin exigir la preposición. El mecanismo de resolución (paginación + hidratación de `udf_pick_2701` bajo demanda + filtrado, ya construido en `sdp-mcp-server`) no necesitó ningún cambio -- ya estaba listo para esto, solo nunca se activaba. Con esto la respuesta también es eficiente: usa el filtrado por técnico del backend en vez de traer todos los tickets y filtrar del lado del cliente.
+  - **Se extrae `hasAssignedTechnicianScope` a `lib/authz.js`** (antes vivía sin pruebas dentro de `server.js`) para poder probarla de forma aislada, siguiendo el mismo patrón ya establecido en el proyecto para funciones puras de autorización.
+  - **3 pruebas unitarias nuevas** en `lib/__tests__/authz.test.js`. `npm test` 182/182 (179 + 3 nuevas), sin regresiones.
+
 ## [0.54.21] - 2026-08-27
 
 ### Fixed
