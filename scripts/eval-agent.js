@@ -237,6 +237,24 @@ const cases = [
     }
   },
   {
+    // Bug real de producción: sdp_resolve_request nunca estuvo en el catálogo de la IA, así
+    // que Sophia nunca la elegía para agregar la resolución de un ticket.
+    name: 'Técnico pide agregar la resolución de su ticket',
+    message: 'Agrega esta resolución al ticket 13738: Se reemplazó el cable de red y se validó conectividad con el usuario.',
+    user: USER_NORMAL,
+    expect: {
+      action: 'call_tool',
+      toolName: 'sdp_resolve_request',
+      argsContains: { request_id: '13738' },
+      customCheck: (toolArgs) => {
+        const resolutionText = String(toolArgs?.resolution_text || '');
+        return resolutionText.toLowerCase().includes('cable de red')
+          ? null
+          : `tool_args.resolution_text no incluyó el texto de la resolución pedido (resolution_text="${resolutionText}")`;
+      }
+    }
+  },
+  {
     name: 'Consulta SAP HANA califica el esquema obligatorio',
     message: '¿Cuántas facturas se generaron este mes en SAP?',
     user: USER_ADMIN,

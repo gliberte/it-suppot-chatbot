@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.17] - 2026-08-27
+
+### Fixed
+- **Sophia no sabía que podía agregar la resolución de un ticket (`agent-orchestrator.js`):** mismo hueco que ya se había corregido antes para `sdp_update_request` -- el backend ya autorizaba `sdp_resolve_request` (solicitante, técnico asignado o admin) y ya llama a `POST /requests/{id}/resolutions` en SDP, pero la herramienta nunca apareció en el catálogo que lee la IA, así que Sophia nunca la elegía cuando un técnico pedía "agrega esta resolución al ticket...".
+  - **Corregido** agregando la entrada 12 al catálogo: `resolution_text` con el texto de la solución, aclarando que esta llamada NO cambia el estado del ticket (eso sigue siendo una acción aparte con `sdp_update_request`, para no asumir de más).
+  - **Verificado con el arnés de evaluación** (`npm run eval:agent`): nuevo caso con un mensaje real ("Agrega esta resolución al ticket..."), 22/22 contra Gemini real (sin regresiones en los 21 casos existentes). `npm test` 177/177.
+
 ## [0.54.16] - 2026-08-27
 
 ### Fixed
