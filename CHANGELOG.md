@@ -9,6 +9,13 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.21] - 2026-08-27
+
+### Fixed
+- **`sophia_warnings` se perdía silenciosamente antes de llegar al usuario, para cualquier herramienta cuya respuesta trajera `request`/`requests[]` (`lib/redaction.js`):** encontrado al verificar el reintento agregado hoy en `sdp-mcp-server` para `sdp_assign_request` (cuando el nombre del técnico no es un técnico nativo válido de SDP -- ver ese repo). `minimizeValue()` tenía ramas tempranas que retornaban solo `{ request: ... }` o `{ ...requests: [...] }`, descartando `sophia_warnings` antes de que el resultado llegara a Gemini para el resumen -- **esto ya afectaba desde antes** a los warnings de `sdp_create_request` (impact/urgency/subcategory rechazados por SDP), no es un problema nuevo.
+  - **Corregido** conservando `sophia_warnings` en ambas ramas, y agregando una instrucción explícita en `getSummarySystemInstruction` para que Sophia siempre las mencione en su respuesta, en vez de omitirlas.
+  - **2 pruebas unitarias nuevas** en `lib/__tests__/redaction.test.js` confirmando que `sophia_warnings` sobrevive el minimizado. `npm test` 179/179 (177 + 2 nuevas), sin regresiones.
+
 ## [0.54.20] - 2026-08-27
 
 ### Security

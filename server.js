@@ -9745,6 +9745,7 @@ function getSummarySystemInstruction(options = {}) {
     'No digas que vas a consultar ni pidas esperar; ya tienes el resultado.',
     'No inventes datos ausentes, correos, teléfonos, técnicos ni IDs.',
     'Si un campo no existe, escribe "Sin asignar" solo para técnico; omite otros campos ausentes.',
+    'Si el resultado técnico incluye "sophia_warnings", menciónalas siempre en una frase clara antes de las Opciones -- son advertencias reales de ServiceDesk Plus (ej. un campo que no se pudo aplicar) que el usuario necesita saber, no las omitas ni las suavices hasta desaparecer.',
     'Mantén la respuesta breve, pero completa. Si hay un patrón evidente, menciónalo en una frase: por ejemplo, estados repetidos, tickets sin técnico o asuntos similares.',
     'Evita sonar excesivamente ceremonial. Puedes usar frases naturales como "Encontré esto", "Lo más relevante es..." o "Veo que...".',
     'Después del resultado, agrega un bloque final **Opciones** con 2 o 3 acciones contextuales que el usuario puede pedir para continuar. Las opciones deben sonar como próximos pasos útiles, no como menú genérico.',
