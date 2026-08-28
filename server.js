@@ -10685,6 +10685,22 @@ async function retryPersonSearchAccentInsensitive(toolOutput, preparedArgs = {},
 
   const fallbackArgs = {
     ...preparedArgs,
+    // El reintento quita el filtro por nombre (assigned_technician_name / mci_leader_name), así que
+    // ya no pasa por la rama de sdp_list_requests que agrega automáticamente el campo UDF necesario
+    // (ver getDefaultFieldsRequired en sdp-mcp-server). Sin fields_required explícito, SDP devuelve su
+    // set de campos por defecto, que NO incluye el campo personalizado -- getValue(request) siempre
+    // da vacío y el filtro local de abajo descarta los 200 tickets aunque el técnico sí tenga tickets.
+    fields_required: mergeFieldsRequired(preparedArgs.fields_required, [
+      'subject',
+      'status',
+      'priority',
+      'technician',
+      'requester',
+      'created_time',
+      'due_by_time',
+      'last_updated_time',
+      search.field
+    ]),
     limit: Math.max(Number(preparedArgs.limit) || 0, 200)
   };
   delete fallbackArgs[search.argName];
