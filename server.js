@@ -1139,7 +1139,9 @@ function createTeamsConfirmationCardBody({ toolName, args = {}, user, intro, sum
     });
   }
 
-  if (toolName === 'sdp_create_request') {
+  if (toolName === 'sdp_create_request' && args.is_mci) {
+    body.push(createCreateMciConfirmationBlock(args, user));
+  } else if (toolName === 'sdp_create_request') {
     body.push(createCreateRequestConfirmationBlock(args, user));
   } else if (toolName === 'sdp_update_mci') {
     body.push(createMciUpdateConfirmationBlock(args));
@@ -1237,6 +1239,46 @@ function createCreateRequestConfirmationBlock(args = {}, user) {
       ]
     });
   }
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items
+  };
+}
+
+function createCreateMciConfirmationBlock(args = {}, user) {
+  const rows = [
+    ['Asunto', args.subject || 'Sin asunto'],
+    ['Líder de MCI', args.mci_leader || '-'],
+    ['Portafolio', args.mci_portfolio || '-'],
+    ['Prioridad', args.mci_priority || '-'],
+    ['Fecha Tope de Ejecución', args.mci_due_date || '-'],
+    ['Técnico asignado', args.mci_technician || args.mci_leader || '-'],
+    ['Solicitante', user?.name || args.requester || '-']
+  ];
+  const items = [
+    {
+      type: 'TextBlock',
+      text: 'MCI preparada',
+      weight: 'Bolder',
+      wrap: true
+    },
+    ...rows.map(([label, value]) => createDetailFactRow(label, value))
+  ];
+
+  if (args.description) {
+    items.push(createDetailTextBlock('Descripción', stripHtml(args.description), { maxLength: 3000 }));
+  }
+
+  items.push({
+    type: 'TextBlock',
+    text: 'El número de MCI se asigna automáticamente al confirmar (el siguiente disponible), y el líder/prioridad/portafolio se validan contra los catálogos reales de SDP antes de crear.',
+    wrap: true,
+    isSubtle: true,
+    spacing: 'Small'
+  });
 
   return {
     type: 'Container',
@@ -2416,6 +2458,12 @@ const SUPPORT_DIAGNOSTIC_PLAYBOOKS = [
 
 function getCreateRequestDiagnosticPrompt({ toolName, args = {}, message = '', history = [] }) {
   if (toolName !== 'sdp_create_request') return null;
+  // Una MCI ya trae su propia prioridad (mci_priority, elegida en conversación contra el
+  // catálogo real) y no tiene categoría/ruta de clasificación -- este triage/playbook de
+  // diagnóstico es para fallas reportadas. Sin este corte, la falta de clasificación hacía que
+  // shouldAskPriorityTriageForRoute metiera a Sophia en un cuestionario de triage de incidentes
+  // ("¿bloquea la operación?") en vez de mostrar la tarjeta de confirmación de la MCI.
+  if (args.is_mci) return null;
 
   const text = [
     message,
