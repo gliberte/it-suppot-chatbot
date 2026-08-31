@@ -1368,6 +1368,10 @@ function formatPendingActionSummary({ toolName, args, user, intro }) {
 }
 
 function formatCreateRequestConfirmation(args = {}, user, intro) {
+  if (args.is_mci) {
+    return formatCreateMciConfirmation(args, user, intro);
+  }
+
   const classification = args.sophia_classification || {};
   const assignedTechnician = getDisplayName(args.udf_fields?.udf_pick_2701) || args.udf_fields?.udf_pick_2701 || '-';
   const lines = [
@@ -1405,6 +1409,36 @@ function formatCreateRequestConfirmation(args = {}, user, intro) {
   }
 
   lines.push('', 'Revisa estos datos antes de confirmar.');
+  return lines.join('\n');
+}
+
+function formatCreateMciConfirmation(args = {}, user, intro) {
+  const lines = [
+    intro || 'Preparé esta MCI (Meta Crucialmente Importante) para ServiceDesk Plus.',
+    '',
+    '**MCI preparada**',
+    '',
+    `| Campo | Valor |`,
+    `| --- | --- |`,
+    `| Asunto | ${escapeMarkdownTableValue(args.subject || 'Sin asunto')} |`,
+    `| Líder de MCI | ${escapeMarkdownTableValue(args.mci_leader || '-')} |`,
+    `| Portafolio | ${escapeMarkdownTableValue(args.mci_portfolio || '-')} |`,
+    `| Prioridad | ${escapeMarkdownTableValue(args.mci_priority || '-')} |`,
+    `| Fecha Tope de Ejecución | ${escapeMarkdownTableValue(args.mci_due_date || '-')} |`,
+    `| Técnico asignado | ${escapeMarkdownTableValue(args.mci_technician || args.mci_leader || '-')} |`,
+    `| Solicitante | ${escapeMarkdownTableValue(user?.name || args.requester || '-')} |`
+  ];
+
+  if (args.description) {
+    lines.push('', `**Descripción**`, truncateText(redactSensitiveText(stripHtml(args.description)), 2000));
+  }
+
+  lines.push(
+    '',
+    'El número de MCI se asigna automáticamente al confirmar (el siguiente disponible), y el líder/prioridad/portafolio se validan contra los catálogos reales de SDP antes de crear.',
+    '',
+    'Revisa estos datos antes de confirmar.'
+  );
   return lines.join('\n');
 }
 
@@ -1606,9 +1640,21 @@ async function prepareToolArgs(toolName, toolArgs, user, message = '', session =
     normalizeCreateRequestAliases(args);
     args.requester = user.name;
     args.requester_id = getRequesterId(user);
-    const classification = await classifyTicketWithKnowledge({ ...args, message }, user);
-    applyTicketClassificationToArgs(args, classification, message);
-    sanitizeCreateRequestArgs(args);
+    if (args.is_mci) {
+      // Una MCI no pasa por el clasificador de categoría/subcategoría/técnico asignado -- ese
+      // modelo está pensado para fallas reportadas (SAP, Red, Laptop...), no para nombrar
+      // proyectos/metas, y fue justo lo que le puso categoría "Red / Red Local" a una MCI real la
+      // vez pasada. Los campos propios de la MCI (líder, prioridad, portafolio, número, etapa,
+      // técnico asignado) los resuelve sdp_create_request en sdp-mcp-server contra los catálogos
+      // reales de SDP, no aquí.
+      if (args.description) {
+        args.description = formatStructuredTicketDescription(args.description);
+      }
+    } else {
+      const classification = await classifyTicketWithKnowledge({ ...args, message }, user);
+      applyTicketClassificationToArgs(args, classification, message);
+      sanitizeCreateRequestArgs(args);
+    }
   }
 
   if (toolName === 'sdp_update_mci') {
@@ -9552,6 +9598,10 @@ async function executeConfirmedAction(action, user, session = null) {
       console.warn('[MajorIncident] Error registrando ticket creado:', err.message);
     });
 
+    if (confirmedArgs.is_mci) {
+      const mciInfo = extractMciInfoFromToolResult(toolResult);
+      return formatCreatedMciSummary({ requestId: createdRequestId, args: confirmedArgs, mciInfo });
+    }
     return formatCreatedTicketSummary({ requestId: createdRequestId, args: confirmedArgs });
   }
   if (action.toolName !== 'sdp_update_mci' && confirmedArgs?.request_id) {
@@ -9592,6 +9642,40 @@ async function executeConfirmedAction(action, user, session = null) {
   }
 
   return summarizeToolOutput(toolResult.content[0].text);
+}
+
+function formatCreatedMciSummary({ requestId, args = {}, mciInfo }) {
+  const info = mciInfo || {};
+  const lines = [
+    `Listo, creé la MCI #${requestId}.`,
+    '',
+    '**Resumen**',
+    `| Campo | Valor |`,
+    `| --- | --- |`,
+    `| MCI | #${escapeMarkdownTableValue(requestId)} |`,
+    `| Asunto | ${escapeMarkdownTableValue(args.subject || 'Sin asunto')} |`,
+    `| Líder de MCI | ${escapeMarkdownTableValue(info.leader || args.mci_leader || '-')} |`,
+    `| Portafolio | ${escapeMarkdownTableValue(info.portfolio || args.mci_portfolio || '-')} |`,
+    `| Prioridad | ${escapeMarkdownTableValue(info.priority || args.mci_priority || '-')} |`,
+    `| Número de MCI | ${escapeMarkdownTableValue(info.mci_number || '-')} |`,
+    `| Etapa | ${escapeMarkdownTableValue(info.stage || '-')} |`,
+    `| Técnico asignado | ${escapeMarkdownTableValue(info.technician || '-')} |`,
+    `| Fecha Tope de Ejecución | ${escapeMarkdownTableValue(info.due_date || args.mci_due_date || '-')} |`
+  ];
+
+  if (info.ran_out_of_numbers) {
+    lines.push('', `⚠️ El picklist de "Num. MCI" no tiene más números libres predefinidos, así que quedó como "Por Asignar #". Alguien de IT debe asignarle el número real manualmente.`);
+  }
+
+  lines.push(
+    '',
+    '**Opciones**',
+    `- Ver detalle de la MCI #${requestId}`,
+    `- Actualizar el avance de la MCI #${requestId}`,
+    '- Consultar mis MCI'
+  );
+
+  return lines.join('\n');
 }
 
 function formatCreatedTicketSummary({ requestId, args = {} }) {
@@ -9650,7 +9734,13 @@ function prepareConfirmedActionArgs(action) {
     args.udf_fields = { ...args.udf_fields };
   }
 
-  if (action.toolName === 'sdp_create_request') {
+  if (action.toolName === 'sdp_create_request' && args.is_mci) {
+    // Los defaults de categoría/subcategoría/prioridad y el técnico asignado por defecto
+    // (SDP_DEFAULT_UDF_PICK_2701) son para tickets normales -- una MCI resuelve su propio líder,
+    // prioridad, portafolio, número y técnico asignado en sdp_create_request (sdp-mcp-server)
+    // contra los catálogos reales de SDP, así que no pasa por applyCreateTicketDefaults.
+    sanitizeCreateRequestArgs(args);
+  } else if (action.toolName === 'sdp_create_request') {
     applyCreateTicketDefaults(args);
     normalizeCreateRequestUdfFields(args);
     sanitizeCreateRequestArgs(args);
@@ -9676,6 +9766,15 @@ function extractRequestIdFromToolResult(toolResult) {
       data?.response?.request?.id ||
       data?.operation?.details?.request_id ||
       null;
+  } catch {
+    return null;
+  }
+}
+
+function extractMciInfoFromToolResult(toolResult) {
+  try {
+    const data = JSON.parse(toolResult?.content?.[0]?.text || '{}');
+    return data?.sophia_mci_info || null;
   } catch {
     return null;
   }
@@ -11775,6 +11874,16 @@ async function assertToolAllowedForUser(toolName, args, user) {
   if (toolName === 'sap_hana_query') {
     if (!isSupportAdmin(user)) {
       throw new Error('No tienes autorización para consultar la base de datos de SAP HANA.');
+    }
+    return;
+  }
+
+  // Crear una MCI nueva (a diferencia de un ticket normal) es una decisión de gestión de
+  // proyectos/portafolio, no algo que cualquier solicitante deba poder disparar por chat --
+  // mismo criterio que ya se aplica a sdp_assign_request.
+  if (toolName === 'sdp_create_request' && args?.is_mci) {
+    if (!isSupportAdmin(user) && !isItExecutiveUser(user) && !isMciAdmin(user)) {
+      throw new Error('Solo un administrador, ejecutivo IT o administrador MCI puede crear una nueva MCI.');
     }
     return;
   }
