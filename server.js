@@ -5627,7 +5627,9 @@ function generateExamplesForRelease(highlights = [], latestBlock = '') {
     examples.push('💬 *"Solicito cerrar el ticket 12860"*');
   }
 
-  if (/mci|metas|crucialmente|lider/i.test(fullText)) {
+  if (/crea(r)?\s+(una\s+)?mci|nueva\s+mci|registrar\s+(una\s+)?mci/i.test(fullText)) {
+    examples.push('💬 *"Crea una MCI para el proyecto X"*');
+  } else if (/mci|metas|crucialmente|lider/i.test(fullText)) {
     examples.push('💬 *"Ver mis MCI activas"*');
   }
 

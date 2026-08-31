@@ -9,6 +9,14 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.24] - 2026-08-31
+
+### Added
+- **Sophia ahora puede crear MCI (Metas Crucialmente Importantes) reales, no solo listarlas o actualizarlas:** pídele "crea una MCI para..." y reúne en conversación el Líder, el Portafolio, la Prioridad y la Fecha Tope de Ejecución, valida cada uno contra los catálogos reales de ServiceDesk Plus, calcula el número de MCI automáticamente y arma el resto de campos técnicos. Restringido a administradores, ejecutivos IT y administradores MCI.
+
+### Fixed
+- **La búsqueda de tickets por Técnico asignado o Líder de MCI ya no falla por tildes:** antes, escribir el nombre sin acento (ej. "Purificacion" en vez de "Purificación") podía devolver 0 resultados aunque la persona sí tuviera tickets asignados.
+
 ## [0.54.23] - 2026-08-27
 
 ### Fixed
