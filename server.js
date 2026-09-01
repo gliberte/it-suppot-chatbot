@@ -2511,7 +2511,29 @@ function shouldAskPriorityTriageForRoute(routeName, text = '') {
 function getPriorityTriagePrompt({ message = '', preparedText = '', history = [] }) {
   const normalizedMessage = normalizeRoutingText(message);
   const normalizedPreparedText = normalizeRoutingText(preparedText);
-  if (inferPriorityFromText(message) || hasHighImpactPriorityEvidence(normalizedMessage) || hasPriorityTriageEvidence(normalizedPreparedText)) return null;
+
+  // El mensaje actual y la redacción propuesta (subject/description del turno más reciente) no
+  // alcanzan por sí solos: si el usuario ya dijo "fue algo urgente" un par de turnos antes y
+  // luego solo responde con un dato adicional (ej. una fecha), esa palabra nunca vuelve a
+  // aparecer en preparedText a menos que la IA la haya re-escrito textualmente en la
+  // descripción -- y normalmente no lo hace, solo la reconoce en su respuesta ("Eso es
+  // importante para darle la prioridad correcta") sin dejarla en el texto que este chequeo mira.
+  // Sin este barrido de mensajes recientes del usuario, Sophia terminaba preguntando de nuevo lo
+  // que ya le habían contestado (caso real: Patricia dijo "urgente" y luego la hora exacta del
+  // evento, y aun así le salieron las 4 preguntas de triage, incluida "¿Desde cuándo ocurre?").
+  const recentUserText = normalizeChatHistory(history)
+    .filter((entry) => entry.role === 'user')
+    .slice(-6)
+    .map((entry) => normalizeRoutingText(entry.content))
+    .join(' ');
+
+  if (
+    inferPriorityFromText(message) ||
+    hasHighImpactPriorityEvidence(normalizedMessage) ||
+    hasPriorityTriageEvidence(normalizedPreparedText) ||
+    inferPriorityFromText(recentUserText) ||
+    hasHighImpactPriorityEvidence(recentUserText)
+  ) return null;
 
   const recentAssistant = normalizeChatHistory(history)
     .filter((entry) => entry.role === 'assistant')
