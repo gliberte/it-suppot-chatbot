@@ -6879,18 +6879,22 @@ function createOnboardingGuideAdaptiveCard(guide, user) {
 }
 
 async function handleOnboardingGuidesTurn({ message, user, onText, onCard, responseChannel }) {
-  const text = String(message || '').toLowerCase().trim();
+  const text = normalizeComparableText(message);
   if (!text) return false;
 
   let matchedGuide = null;
   for (const item of ONBOARDING_CATALOG) {
-    if (item.keywords.some((kw) => text.includes(kw))) {
+    if (item.keywords.some((kw) => text.includes(normalizeComparableText(kw)))) {
       matchedGuide = item;
       break;
     }
   }
 
-  if (!matchedGuide && (text.includes('guia') || text.includes('manual') || text.includes('onboarding') || text.includes('induccion'))) {
+  // OJO: esto intercepta el mensaje ANTES que la IA -- tiene que ser preciso. Con .includes()
+  // simple, "guia" hacía match como substring de "guiar" (ej. "debo guiar a colaboradores a la
+  // planta"), disparando a ciegas la primera guía del catálogo (correo en celular) para un
+  // mensaje que no tenía nada que ver con onboarding. \b exige que sea la palabra completa.
+  if (!matchedGuide && /\b(guia|manual|onboarding|induccion)\b/.test(text)) {
     matchedGuide = ONBOARDING_CATALOG[0];
   }
 
