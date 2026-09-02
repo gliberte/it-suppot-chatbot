@@ -917,6 +917,34 @@ async function downloadTeamsImageAttachment(context, attachment) {
     return ensureDownloadedImageSize({ base64, mimeType });
   }
 
+  // Confirmado en producción (Ariagna Pérez, 2026-09-02, imagen reenviada de WhatsApp): los
+  // adjuntos alojados en OneDrive/SharePoint -- lo típico en chats personales de Teams -- traen
+  // contentUrl como un enlace de VISTA para navegador, no descargable con un GET autenticado
+  // simple (dio 403 tanto con el token del bot como sin él). El archivo crudo vive en
+  // content.downloadUrl, una URL pre-firmada que además NO debe llevar el token del bot --
+  // mandárselo también puede dar 403. Se intenta primero, y si no está o falla, se cae al camino
+  // anterior (contentUrl + token) por si aplica para otro tipo de adjunto.
+  const downloadUrl = attachment?.content?.downloadUrl;
+  if (downloadUrl) {
+    try {
+      const response = await fetch(downloadUrl);
+      if (response.ok) {
+        const mimeType = response.headers.get('content-type')?.split(';')[0]
+          || attachment.contentType
+          || inferImageMimeType(downloadUrl)
+          || 'image/png';
+        const arrayBuffer = await response.arrayBuffer();
+        return ensureDownloadedImageSize({
+          base64: Buffer.from(arrayBuffer).toString('base64'),
+          mimeType
+        });
+      }
+      console.warn(`[Teams] content.downloadUrl respondió ${response.status}, probando contentUrl como respaldo.`);
+    } catch (err) {
+      console.warn('[Teams] Error descargando adjunto vía content.downloadUrl, probando contentUrl como respaldo:', err.message);
+    }
+  }
+
   if (!attachment?.contentUrl) {
     throw new Error('La imagen no incluye una URL descargable.');
   }
