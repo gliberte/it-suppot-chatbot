@@ -12,7 +12,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { formatKnowledgeContext, searchKnowledge } from './rag.js';
 import { getTicketRoutingMap, normalizeRoutingText, resolveTicketRoutingFromText } from './ticket-routing.js';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'fs/promises';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 import { generateMciProgressChart, generateTechnicianLoadChart, generateSapGenericChart, startChartCleanupScheduler } from './chart-generator.js';
 import { CloudAdapter, ConfigurationBotFrameworkAuthentication, TeamsActivityHandler, TurnContext } from 'botbuilder';
 import {
@@ -158,6 +158,64 @@ const REQUEST_SCOPED_MUTATION_TOOLS = new Set([
 app.use(cors({ origin: CLIENT_ORIGIN }));
 app.use(express.json());
 app.use('/exports', express.static(path.join(__dirname, 'public', 'exports')));
+
+// Enlaces firmados y con vencimiento para mostrar imágenes adjuntas de SDP dentro de las
+// tarjetas de Teams (ver createAttachmentsDetailBlock). El cliente de Teams solo puede pedir una
+// URL de imagen normal -- no puede mandar el authtoken de SDP -- así que este endpoint hace de
+// proxy autenticado del lado del servidor. La firma HMAC + expiración evita que sea un acceso
+// público abierto a cualquier adjunto de cualquier ticket (mismo nivel de exposición, de hecho
+// más estricto, que /exports arriba, que sirve sin firma ni vencimiento).
+const ATTACHMENT_LINK_SECRET = process.env.ATTACHMENT_LINK_SECRET
+  || process.env.MICROSOFT_APP_PASSWORD
+  || process.env.SDP_API_KEY
+  || 'sophia-attachment-link-fallback-secret';
+const ATTACHMENT_LINK_TTL_MS = Number(process.env.ATTACHMENT_LINK_TTL_HOURS || 72) * 60 * 60 * 1000;
+
+function signAttachmentLink(requestId, attachmentId, expiresAt) {
+  const payload = `${requestId}:${attachmentId}:${expiresAt}`;
+  return createHmac('sha256', ATTACHMENT_LINK_SECRET).update(payload).digest('base64url');
+}
+
+function buildAttachmentLink(requestId, attachmentId) {
+  const expiresAt = Date.now() + ATTACHMENT_LINK_TTL_MS;
+  const signature = signAttachmentLink(requestId, attachmentId, expiresAt);
+  const base = process.env.PUBLIC_URL || 'https://sophia.bacosa.com';
+  return `${base}/api/attachments/${encodeURIComponent(requestId)}/${encodeURIComponent(attachmentId)}?exp=${expiresAt}&sig=${signature}`;
+}
+
+function verifyAttachmentLink(requestId, attachmentId, expiresAtRaw, signatureRaw) {
+  const expiresAt = Number(expiresAtRaw);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
+
+  const expectedSignature = signAttachmentLink(requestId, attachmentId, expiresAt);
+  const providedBuffer = Buffer.from(String(signatureRaw || ''));
+  const expectedBuffer = Buffer.from(expectedSignature);
+  if (providedBuffer.length !== expectedBuffer.length) return false;
+  return timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+app.get('/api/attachments/:requestId/:attachmentId', async (req, res) => {
+  const { requestId, attachmentId } = req.params;
+  const { exp, sig } = req.query;
+
+  if (!verifyAttachmentLink(requestId, attachmentId, exp, sig)) {
+    res.status(403).send('Enlace inválido o vencido.');
+    return;
+  }
+
+  try {
+    const result = await callMcpTool('sdp_get_attachment_content', { request_id: requestId, attachment_id: attachmentId });
+    const data = JSON.parse(result.content[0].text);
+    if (!data?.base64) throw new Error('La SDP no devolvió contenido de archivo.');
+
+    res.setHeader('Content-Type', data.mimeType || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(Buffer.from(data.base64, 'base64'));
+  } catch (error) {
+    console.error(`[Attachments] Error sirviendo adjunto ${attachmentId} del ticket ${requestId}:`, error.message);
+    res.status(502).send('No se pudo obtener el adjunto de ServiceDesk Plus.');
+  }
+});
 
 const PORT = 3001;
 
@@ -11232,6 +11290,9 @@ async function createTicketDetailsAdaptiveCard(toolOutput) {
     body.push(createDetailTextBlock('Seguimientos', noteWarning));
   }
 
+  const attachmentsBlock = createAttachmentsDetailBlock(request);
+  if (attachmentsBlock) body.push(attachmentsBlock);
+
   body.push(createDetailOptionsBlock(ticketId, request));
 
   return {
@@ -11312,6 +11373,9 @@ function createMciDetailsAdaptiveCard(request) {
   if (description) {
     body.push(createDetailTextBlock('Descripción', description));
   }
+
+  const mciAttachmentsBlock = createAttachmentsDetailBlock(request);
+  if (mciAttachmentsBlock) body.push(mciAttachmentsBlock);
 
   body.push(createMciDetailOptionsBlock(mciId));
 
@@ -11711,6 +11775,61 @@ function createDetailTextBlock(title, text, options = {}) {
         spacing: index === 0 ? 'Small' : 'None'
       }))
     ]
+  };
+}
+
+// SDP ya trae request.attachments[] con id/name/content_type/size/content_url al leer el
+// detalle de un ticket -- antes esta tarjeta no mostraba nada sobre adjuntos, aunque el ticket
+// sí tuviera imágenes/archivos. Las imágenes se muestran embebidas (vía el proxy firmado
+// /api/attachments/:requestId/:attachmentId); el resto de archivos solo se lista por nombre.
+function createAttachmentsDetailBlock(request) {
+  const attachments = Array.isArray(request?.attachments) ? request.attachments : [];
+  if (attachments.length === 0) return null;
+
+  const items = [
+    {
+      type: 'TextBlock',
+      text: `📎 Adjuntos (${attachments.length})`,
+      weight: 'Bolder',
+      size: 'Small',
+      isSubtle: true
+    }
+  ];
+
+  for (const attachment of attachments) {
+    const isImage = String(attachment?.content_type || '').startsWith('image/');
+    if (isImage && attachment?.id) {
+      items.push({
+        type: 'Image',
+        url: buildAttachmentLink(request.id, attachment.id),
+        altText: attachment.name || 'Imagen adjunta',
+        size: 'Medium',
+        spacing: 'Small'
+      });
+      items.push({
+        type: 'TextBlock',
+        text: attachment.name || 'Imagen adjunta',
+        wrap: true,
+        size: 'Small',
+        isSubtle: true,
+        spacing: 'None'
+      });
+    } else {
+      const sizeLabel = attachment?.size?.display_value ? ` (${attachment.size.display_value})` : '';
+      items.push({
+        type: 'TextBlock',
+        text: `📄 ${attachment?.name || 'Archivo adjunto'}${sizeLabel}`,
+        wrap: true,
+        spacing: 'Small'
+      });
+    }
+  }
+
+  return {
+    type: 'Container',
+    spacing: 'Medium',
+    separator: true,
+    items
   };
 }
 
