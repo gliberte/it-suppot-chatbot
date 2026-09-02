@@ -4043,13 +4043,25 @@ async function handleActiveSituationTurn({ message, user, onText, onCard, respon
 function parseActiveSituationAdminCommand(message = '') {
   const normalized = normalizeComparableText(message);
 
-  if (/\b(mci|ticket|tickets|solicitud|solicitudes)\b/.test(normalized) || /#?\d{4,8}\b/.test(normalized)) {
+  // Antes también excluía la palabra suelta "ticket"/"solicitud" en cualquier parte del mensaje
+  // -- pero eso descartaba de plano una corrección como "no es un ticket, es una incidencia
+  // activa" (caso real: la palabra "ticket" aparece ahí precisamente para NEGARLA). Un ID de
+  // ticket real (#12345) o la palabra "mci" siguen siendo señales confiables de que el mensaje
+  // no es un comando de situación; la palabra "ticket" sola ya no lo es.
+  if (/\bmci\b/.test(normalized) || /#?\d{4,8}\b/.test(normalized)) {
     return null;
   }
 
-  const isRegister = /\b(registra|registrar|crea|crear|nueva|abrir|abre)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
-  const isUpdate = /\b(actualiza|actualizar|modifica|modificar)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
-  const isClose = /\b(cierra|cerrar|resuelve|resolver|finaliza|finalizar)\b/.test(normalized) && /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
+  const hasSituationKeyword = /\b(situacion|incidente|falla|anomalia|alerta)\b/.test(normalized);
+  const hasRegisterVerb = /\b(registra|registrar|crea|crear|nueva|abrir|abre)\b/.test(normalized);
+  // Cubre también la forma afirmativa ("es una incidencia activa", "esto es una situación
+  // activa") que alguien usa para corregir a Sophia a mitad de conversación, sin un verbo
+  // imperativo como "registra"/"crea".
+  const assertsActiveSituation = /\b(es|esto es|esta es|se trata de)\b[\s\S]*\b(incidencia activa|situacion activa)\b/.test(normalized);
+
+  const isRegister = (hasRegisterVerb && hasSituationKeyword) || assertsActiveSituation;
+  const isUpdate = /\b(actualiza|actualizar|modifica|modificar)\b/.test(normalized) && hasSituationKeyword;
+  const isClose = /\b(cierra|cerrar|resuelve|resolver|finaliza|finalizar)\b/.test(normalized) && hasSituationKeyword;
   if (!isRegister && !isUpdate && !isClose) return null;
 
   const system = extractSituationSystem(message);
@@ -5218,6 +5230,17 @@ async function runNetworkDiagnostics(user) {
 
 function isNetworkDiagnosticsRequest(message = '') {
   const norm = normalizeComparableText(message);
+
+  // Si el mensaje ya trae un ID de ticket junto con una acción sobre ESE ticket (cambiar estado,
+  // agregar resolución/respuesta, seguimiento, prioridad), es una instrucción sobre un ticket
+  // existente -- aunque mencione la palabra "diagnóstico" como parte del texto que quiere guardar.
+  // Caso real: Kassim cerrando el ticket 13778 con una resolución que empezaba "Luego de realizar
+  // el diagnóstico, se determinó que..."; sin este resguardo, "diagnostico" secuestraba el mensaje
+  // completo hacia un diagnóstico de red nuevo, tres veces seguidas, ignorando el cierre pedido.
+  const referencesExistingTicketAction = /#?\d{4,8}\b/.test(norm) &&
+    /\b(estado|cerrado|cerrar|resuelto|resolver|resolucion|respuesta|seguimiento|nota|prioridad)\b/.test(norm);
+  if (referencesExistingTicketAction) return false;
+
   return /\b(diagnostico|diagnóstico|diagnosticar|ping|probar conexion|probar conexión|verificar red|falla de red|red lenta|internet lento|falla de vpn|falla de impresora|diagnostico de red|chequeo en tiempo real|monitoreo en tiempo real|chequeo real|chequeo de red|chequeo sap|verificar sap)\b/.test(norm);
 }
 
