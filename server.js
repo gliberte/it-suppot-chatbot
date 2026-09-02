@@ -5402,23 +5402,17 @@ function createNetworkDiagnosticsCard(result) {
 }
 
 async function handleNetworkDiagnosticsTurn({ message, user, onText, onCard, responseChannel }) {
-  if (message.startsWith('__sophia_run_diagnostics') || isNetworkDiagnosticsRequest(message)) {
-    const result = await runNetworkDiagnostics(user);
-    const card = createNetworkDiagnosticsCard(result);
-    if (responseChannel === 'teams' && card) {
-      onCard?.(card);
-    } else {
-      const summaryText = result.targets.map((t) => `- ${t.name}: ${t.status.toUpperCase()} (${t.latencyMs}ms) - ${t.detail}`).join('\n');
-      onText(`📡 Reporte de Auto-Diagnóstico (${result.id}):\n\n${summaryText}`);
-    }
-    return true;
-  }
-
-  if (message.startsWith('__sophia_create_ticket_from_diag:')) {
-    onText('Entendido, estoy preparando la creación del ticket en ServiceDesk Plus con el informe técnico de diagnóstico adjunto...');
-    return false;
-  }
-
+  // DESACTIVADO (2026-09-02): este "diagnóstico" era completamente falso -- 5 objetivos fijos y
+  // latencias con Math.random(), sin ninguna llamada de red real, presentado además como
+  // "Resumen de conectividad en tiempo real desde tu puesto de trabajo" (ni siquiera corre desde
+  // el puesto del usuario, corre en el servidor). Podía reportar "ok" con la VPN caída o
+  // "advertencia" con SAP perfecto, y hasta se podía adjuntar esa data inventada a un ticket real
+  // vía "Crear Ticket con Diagnóstico". No hay reemplazo real todavía -- ver conversación sobre
+  // qué diagnósticos sí se pueden implementar (ping/TCP/HTTP reales desde el servidor, con la
+  // limitación de que reflejan la red del servidor, no necesariamente la del usuario que escribe).
+  // runNetworkDiagnostics/createNetworkDiagnosticsCard quedan sin uso pero no se borran todavía,
+  // por si se reaprovecha la estructura de la tarjeta para una versión real.
+  void message; void user; void onText; void onCard; void responseChannel;
   return false;
 }
 
@@ -9001,25 +8995,6 @@ function createCapabilitiesHelpAdaptiveCard(user) {
     },
     {
       type: 'Container',
-      style: 'emphasis',
-      spacing: 'Small',
-      items: [
-        {
-          type: 'TextBlock',
-          text: '📡 **3. Auto-Diagnóstico de Red e Impresoras Nivel 1**',
-          weight: 'Bolder',
-          wrap: true
-        },
-        {
-          type: 'TextBlock',
-          text: 'Ejecuto pruebas en tiempo real de conectividad a servidores SAP, VPN FortiClient, Gateway e Impresoras Zebra/HP.\n👉 *Ejemplo:* *"Diagnostica mi red e impresoras"*.',
-          wrap: true,
-          isSubtle: true
-        }
-      ]
-    },
-    {
-      type: 'Container',
       style: 'default',
       spacing: 'Small',
       items: [
@@ -9154,10 +9129,6 @@ async function handleCapabilitiesHelpTurn({ message, user, onText, onCard, respo
       '### 🔑 2. Autogestión de Cuentas y Desbloqueo de Active Directory',
       'Verifico el estado de tu usuario de Windows/Active Directory y procedo con el desbloqueo en tiempo real.',
       '👉 *Ejemplo:* *"Mi usuario de Windows está bloqueado y no puedo iniciar sesión"*.',
-      '',
-      '### 📡 3. Auto-Diagnóstico de Red e Impresoras Nivel 1',
-      'Ejecuto pruebas en tiempo real de conectividad a servidores SAP, VPN FortiClient, Gateway e Impresoras Zebra/HP.',
-      '👉 *Ejemplo:* *"Diagnostica mi red e impresoras"*.',
       '',
       '### 📝 4. Solicitud y Aprobación de Licencias de Software (1-Clic)',
       'Gestión y despacho de solicitudes de licencias (PowerBI Pro, M365, Visio, Adobe, SAP, AutoCAD) al chat del aprobador.',
