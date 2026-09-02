@@ -8,6 +8,17 @@ export function normalizeRoutingText(value) {
     .trim();
 }
 
+// text.includes(keyword) hacía match por substring simple, sin límite de palabra -- ej. la
+// palabra "movil" (parte del keyword "móvil"/celulares) aparece como substring literal dentro de
+// "movilidad", así que un ticket sobre una puerta que "afecta la movilidad" en un laboratorio se
+// clasificaba como "Teléfonos / Celulares" (caso real: ticket #13783). Con límite de palabra,
+// "movil" solo hace match como palabra completa, no como substring de otra.
+function keywordMatchesText(text, normalizedKeyword) {
+  if (!normalizedKeyword) return false;
+  const pattern = normalizedKeyword.replace(/\s+/g, '\\s+');
+  return new RegExp(`\\b${pattern}\\b`).test(text);
+}
+
 export function resolveTicketRoutingFromText(input, env = process.env) {
   const subject = typeof input === 'string' ? input : input?.subject;
   const description = typeof input === 'string' ? '' : input?.description;
@@ -16,7 +27,7 @@ export function resolveTicketRoutingFromText(input, env = process.env) {
   const match = routingMap
     .map((route) => ({
       route,
-      matchedKeywords: route.keywords.filter((keyword) => text.includes(normalizeRoutingText(keyword)))
+      matchedKeywords: route.keywords.filter((keyword) => keywordMatchesText(text, normalizeRoutingText(keyword)))
     }))
     .find((candidate) => candidate.matchedKeywords.length > 0);
 
