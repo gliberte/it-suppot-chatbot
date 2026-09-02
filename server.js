@@ -5734,8 +5734,12 @@ function generateExamplesForRelease(highlights = [], latestBlock = '') {
     examples.push('💬 *"Agrega un seguimiento al ticket 12860: Este caso ya fue atendido por Eliseo Quintana"*');
   }
 
-  if (/cierre|cancelaci.n|cerrar ticket|cancelar solicitud/i.test(fullText)) {
+  if (/cierre|cierra|cancelaci.n|cerrar (un |el )?ticket|cancelar solicitud/i.test(fullText)) {
     examples.push('💬 *"Solicito cerrar el ticket 12860"*');
+  }
+
+  if (/imagen|imágenes|adjunt|captura/i.test(fullText)) {
+    examples.push('💬 *"Muéstrame el detalle del ticket 12860"* (para ver las imágenes adjuntas)');
   }
 
   if (/crea(r)?\s+(una\s+)?mci|nueva\s+mci|registrar\s+(una\s+)?mci/i.test(fullText)) {

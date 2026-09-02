@@ -9,6 +9,17 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.25] - 2026-09-02
+
+### Added
+- **Las tarjetas de detalle de ticket y de MCI ahora muestran las imágenes adjuntas directamente**, sin tener que entrar a ServiceDesk Plus a verlas.
+
+### Fixed
+- **Sophia ya no vuelve a preguntar por la prioridad o urgencia de un ticket si ya la mencionaste antes en la misma conversación.**
+- **Cerrar un ticket con un comentario de resolución ya no falla**: ServiceDesk Plus rechazaba el cierre en varios casos y Sophia no lograba completarlo.
+- **Adjuntar una imagen a un ticket es más confiable**: antes, si el archivo no llegaba a subirse, Sophia podía reportar éxito sin haberlo subido en realidad; ahora avisa si algo falla, y también se puede adjuntar una imagen a un ticket existente sin tener que escribir además una nota.
+- **Sophia ya no confunde palabras sueltas con una orden**: mencionar "diagnóstico" dentro del texto de una resolución, o "guiar" en un mensaje sin relación, ya no dispara por error un diagnóstico de red o una guía de onboarding.
+
 ## [0.54.24] - 2026-08-31
 
 ### Added
