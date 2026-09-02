@@ -61,6 +61,32 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_SAP_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      // Antes no existía ninguna ruta para WMS/PDT -- un ticket real sobre "WMS dando problemas
+      // en las PDT" en varias bodegas cayó al fallback genérico (categoría "Contraseñas" /
+      // "Usuario Windows", sin relación alguna). Categoría y subcategoría confirmadas contra el
+      // catálogo real de SDP (existe "PDTs" como categoría propia, con "Chainway" como su única
+      // subcategoría configurada -- esa es la marca de las PDT usadas).
+      name: 'warehouse_pdt',
+      keywords: ['pdt', 'pdts', 'terminal portatil', 'terminales portatiles', 'chainway', 'colector de datos', 'lector inalambrico'],
+      category: env.SDP_PDT_CATEGORY || 'PDTs',
+      subcategory: env.SDP_PDT_SUBCATEGORY || 'Chainway',
+      priority: env.SDP_PDT_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_PDT_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
+      // "Manhattan" es el WMS real de la empresa -- separado de warehouse_pdt (arriba) porque un
+      // problema de aplicativo/licencias de Manhattan no es lo mismo que una PDT física fallando,
+      // aunque ambos se mencionen como "WMS". Subcategoría sin fijar (a diferencia de PDTs) porque
+      // el catálogo real tiene varias subcategorías bajo Manhattan (Aplicativo, Configuraciones,
+      // Autorizaciones/licencias) y no hay evidencia todavía de cuál aplica por defecto.
+      name: 'manhattan_wms',
+      keywords: ['manhattan', 'wms'],
+      category: env.SDP_MANHATTAN_CATEGORY || 'Manhattan',
+      subcategory: env.SDP_MANHATTAN_SUBCATEGORY || null,
+      priority: env.SDP_MANHATTAN_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_MANHATTAN_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'web_hosting_dns',
       keywords: [
         'subdominio',

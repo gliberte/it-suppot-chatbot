@@ -2398,14 +2398,18 @@ function applyTicketClassificationToArgs(args, classification, originalMessage =
 }
 
 function resolveCreateRequestPriority(args, suggestion, originalMessage = '') {
-  const explicitPriority = inferExplicitPriorityFromText(originalMessage);
-  if (explicitPriority) return explicitPriority;
-
   const combinedText = [
     originalMessage,
     args.subject,
     args.description
   ].filter(Boolean).join(' ');
+
+  // Antes solo miraba originalMessage (el mensaje crudo del chat) -- si el usuario nunca dijo
+  // "urgente"/"prioridad alta" en el chat, pero la descripción que la IA redactó sí lo afirma
+  // explícitamente (ej. "...por lo que la prioridad es Alta", caso real: ticket #13782, WMS/PDT
+  // en 4 bodegas), esa afirmación se ignoraba por completo y el ticket terminaba en "Media".
+  const explicitPriority = inferExplicitPriorityFromText(combinedText);
+  if (explicitPriority) return explicitPriority;
 
   if (hasHighImpactPriorityEvidence(normalizeRoutingText(combinedText))) return 'Alta';
 
@@ -2778,16 +2782,24 @@ function inferPriorityFromText(text) {
 
 function inferExplicitPriorityFromText(text) {
   const normalized = normalizeRoutingText(text);
-  if (/\b(prioridad alta|alta prioridad|urgente|critico|critica)\b/.test(normalized)) return 'Alta';
-  if (/\b(prioridad baja|baja prioridad)\b/.test(normalized)) return 'Baja';
-  if (/\b(prioridad media|media prioridad|prioridad normal|normal)\b/.test(normalized)) return 'Media';
+  // "prioridad alta" no cubre "la prioridad es Alta" (caso real: ticket #13782, la descripción
+  // redactada por la IA terminaba en "...por lo que la prioridad es Alta" y no se reconocía) --
+  // se agrega "es" opcional entre "prioridad" y el nivel.
+  if (/\b(prioridad\s+(es\s+)?alta|alta\s+prioridad|urgente|critico|critica)\b/.test(normalized)) return 'Alta';
+  if (/\b(prioridad\s+(es\s+)?baja|baja\s+prioridad)\b/.test(normalized)) return 'Baja';
+  if (/\b(prioridad\s+(es\s+)?media|media\s+prioridad|prioridad\s+(es\s+)?normal|normal)\b/.test(normalized)) return 'Media';
   return undefined;
 }
 
 function hasHighImpactPriorityEvidence(normalizedText) {
-  const broadScope = /\b(varios usuarios|todos|todo el area|toda el area|area completa|departamento completo|planta completa)\b/.test(normalizedText);
+  // \bbodega\b / \boperacion\b no reconocían plurales ("bodegas") ni "operatividad" -- caso real:
+  // ticket #13782 describía "varias ubicaciones" y "Bodegas 10, 8, CEDI y Chiriquí" con la
+  // operatividad "seriamente comprometida", y ninguna de las tres señales (broadScope,
+  // operationBlocked, criticalOperation) se activaba por estos huecos, aunque el impacto descrito
+  // fuera claramente alto.
+  const broadScope = /\b(varios usuarios|varias (ubicaciones|areas|sedes|sucursales|bodegas|plantas)|multiples (ubicaciones|areas|sedes|sucursales|bodegas|plantas)|todos|todo el area|toda el area|area completa|departamento completo|planta completa)\b/.test(normalizedText);
   const operationBlocked = /\b(bloquea|bloqueado|no podemos trabajar|detenido|parado|fuera de servicio|sin operar|no funciona nada)\b/.test(normalizedText);
-  const criticalOperation = /\b(ventas|despacho|produccion|facturacion|caja|bodega|operacion|planta)\b/.test(normalizedText);
+  const criticalOperation = /\b(ventas|despacho|produccion|facturacion|caja|bodegas?|operacion|operatividad|plantas?)\b/.test(normalizedText);
   const explicitCriticalImpact = /\b(no podemos facturar|no puedo facturar|no podemos despachar|no puedo despachar|no podemos vender|no puedo vender|produccion detenida|produccion parada|facturacion detenida|despacho detenido)\b/.test(normalizedText);
 
   return explicitCriticalImpact || (operationBlocked && (broadScope || criticalOperation)) || (broadScope && criticalOperation);
