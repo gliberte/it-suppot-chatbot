@@ -5271,52 +5271,66 @@ async function writeNetworkDiagnosticsStore(store) {
   await rename(tmpPath, NETWORK_DIAGNOSTICS_PATH);
 }
 
-async function runNetworkDiagnostics(user) {
+// Chequeo HTTP real (no simulado): mide si el servicio responde y cuánto tarda desde el
+// servidor de Sophia. Cualquier respuesta HTTP -- incluso 401/403/404 -- cuenta como "alcanzable":
+// lo que nos interesa es si hay conectividad de red y el servicio está en pie, no si esta
+// petición concreta sin autenticar tendría éxito.
+async function checkHttpDiagnosticTarget({ name, url }) {
+  if (!url) {
+    return { name, target: 'sin configurar', status: 'error', latencyMs: 0, detail: 'No hay URL configurada para este servicio.' };
+  }
+
+  const startedAt = Date.now();
+  try {
+    const response = await axios.get(url, { timeout: 5000, validateStatus: () => true });
+    const latencyMs = Date.now() - startedAt;
+    const status = latencyMs > 3000 ? 'warning' : 'ok';
+    return {
+      name,
+      target: url,
+      status,
+      latencyMs,
+      detail: `Respondió HTTP ${response.status} -- alcanzable desde el servidor de Sophia.`
+    };
+  } catch (error) {
+    const latencyMs = Date.now() - startedAt;
+    return {
+      name,
+      target: url,
+      status: 'error',
+      latencyMs,
+      detail: `No respondió (${error.code || error.message}).`
+    };
+  }
+}
+
+// Reemplaza el diagnóstico simulado (Math.random(), objetivos fijos incluyendo un router que ni
+// siquiera era el de la organización) por chequeos reales -- por ahora solo contra lo que ya
+// tenemos confirmado: SDP y el gateway de SAP HANA. OJO: esto mide alcance desde el SERVIDOR de
+// Sophia, no desde el puesto/VPN/red del usuario que pregunta -- nunca digas "desde tu puesto de
+// trabajo" en el texto de cara al usuario, sería falso otra vez.
+async function runRealNetworkDiagnostics(user) {
   const timestamp = new Date().toISOString();
 
-  const targets = [
-    {
-      name: 'Internet / DNS Público',
-      target: '8.8.8.8 (Google DNS)',
-      status: 'ok',
-      latencyMs: 14 + Math.floor(Math.random() * 8),
-      detail: 'Resolución DNS y salida a internet activa.'
-    },
-    {
-      name: 'Gateway / Red Local Planta',
-      target: '192.168.1.1 (Router Corp)',
-      status: 'ok',
-      latencyMs: 2 + Math.floor(Math.random() * 3),
-      detail: 'Conexión por cable/Wi-Fi local estable.'
-    },
-    {
-      name: 'FortiClient VPN',
-      target: 'vpn.bacosa.local',
-      status: 'ok',
-      latencyMs: 24 + Math.floor(Math.random() * 10),
-      detail: 'Túnel VPN corporativo enrutado correctamente.'
-    },
-    {
-      name: 'Servidor Aplicativo SAP',
-      target: 'sap-app.bacosa.local:3200',
-      status: 'warning',
-      latencyMs: 110 + Math.floor(Math.random() * 40),
-      detail: 'Respuesta en puerto SAP aceptable, pero con ligera latencia.'
-    },
-    {
-      name: 'Impresora Zebra (Etiquetas)',
-      target: '192.168.1.50 (Spooler Zebra)',
-      status: 'ok',
-      latencyMs: 5 + Math.floor(Math.random() * 4),
-      detail: 'Cola de impresión lista y sin trabajos atascados.'
-    }
-  ];
+  const targets = await Promise.all([
+    checkHttpDiagnosticTarget({ name: 'ServiceDesk Plus (SDP)', url: process.env.SDP_URL }),
+    checkHttpDiagnosticTarget({
+      name: 'Gateway de SAP HANA',
+      url: process.env.SAP_HANA_GATEWAY_URL || 'http://192.170.1.209:5678/webhook/df0596a7-f358-480b-8d66-dd51bfc114c6/chat'
+    })
+  ]);
+
+  const overallHealth = targets.some((t) => t.status === 'error')
+    ? 'error'
+    : targets.some((t) => t.status === 'warning')
+      ? 'warning'
+      : 'ok';
 
   const diagResult = {
     id: `DIAG-${Date.now().toString(36).toUpperCase()}`,
-    userEmail: user?.email || 'usuario@bcsrviasophia.local',
+    userEmail: user?.email || null,
     timestamp,
-    overallHealth: 'warning',
+    overallHealth,
     targets
   };
 
@@ -5362,7 +5376,7 @@ function createNetworkDiagnosticsCard(result) {
   const body = [
     {
       type: 'TextBlock',
-      text: '📡 Auto-Diagnóstico de Red & Servicios IT (Nivel 1)',
+      text: '📡 Diagnóstico de Conectividad de Servicios',
       weight: 'Bolder',
       size: 'Medium',
       color: 'Accent',
@@ -5377,7 +5391,7 @@ function createNetworkDiagnosticsCard(result) {
     },
     {
       type: 'TextBlock',
-      text: 'Resumen de conectividad en tiempo real desde tu puesto de trabajo:',
+      text: 'Chequeo real, en este momento, desde el servidor de Sophia -- no desde tu equipo, tu red local ni tu VPN:',
       wrap: true,
       spacing: 'Medium'
     },
@@ -5390,7 +5404,7 @@ function createNetworkDiagnosticsCard(result) {
     },
     {
       type: 'TextBlock',
-      text: '💡 **Sugerencia:** Si experimentas lentitud en SAP, te recomendamos reiniciar tu sesión de FortiClient VPN o probar en 5 minutos.',
+      text: 'ℹ️ Por ahora solo cubre ServiceDesk Plus y el gateway de SAP HANA. Si el problema es de tu red, VPN o una impresora específica, dime y lo registramos como ticket con esos detalles.',
       wrap: true,
       spacing: 'Medium',
       isSubtle: true
@@ -5442,17 +5456,27 @@ function createNetworkDiagnosticsCard(result) {
 }
 
 async function handleNetworkDiagnosticsTurn({ message, user, onText, onCard, responseChannel }) {
-  // DESACTIVADO (2026-09-02): este "diagnóstico" era completamente falso -- 5 objetivos fijos y
-  // latencias con Math.random(), sin ninguna llamada de red real, presentado además como
-  // "Resumen de conectividad en tiempo real desde tu puesto de trabajo" (ni siquiera corre desde
-  // el puesto del usuario, corre en el servidor). Podía reportar "ok" con la VPN caída o
-  // "advertencia" con SAP perfecto, y hasta se podía adjuntar esa data inventada a un ticket real
-  // vía "Crear Ticket con Diagnóstico". No hay reemplazo real todavía -- ver conversación sobre
-  // qué diagnósticos sí se pueden implementar (ping/TCP/HTTP reales desde el servidor, con la
-  // limitación de que reflejan la red del servidor, no necesariamente la del usuario que escribe).
-  // runNetworkDiagnostics/createNetworkDiagnosticsCard quedan sin uso pero no se borran todavía,
-  // por si se reaprovecha la estructura de la tarjeta para una versión real.
-  void message; void user; void onText; void onCard; void responseChannel;
+  // REACTIVADO (2026-09-02) con chequeos reales (runRealNetworkDiagnostics: HTTP real contra SDP
+  // y el gateway de SAP HANA, los dos objetivos confirmados hasta ahora) -- reemplaza la versión
+  // simulada con Math.random() que estuvo desactivada. Sigue siendo un chequeo desde el SERVIDOR
+  // de Sophia, no desde el equipo/red/VPN del usuario; el texto de la tarjeta ya lo aclara.
+  if (message.startsWith('__sophia_run_diagnostics') || isNetworkDiagnosticsRequest(message)) {
+    const result = await runRealNetworkDiagnostics(user);
+    const card = createNetworkDiagnosticsCard(result);
+    if (responseChannel === 'teams' && card) {
+      onCard?.(card);
+    } else {
+      const summaryText = result.targets.map((t) => `- ${t.name}: ${t.status.toUpperCase()} (${t.latencyMs}ms) - ${t.detail}`).join('\n');
+      onText(`📡 Diagnóstico de conectividad desde el servidor de Sophia (${result.id}):\n\n${summaryText}`);
+    }
+    return true;
+  }
+
+  if (message.startsWith('__sophia_create_ticket_from_diag:')) {
+    onText('Entendido, estoy preparando la creación del ticket en ServiceDesk Plus con el informe técnico de diagnóstico adjunto...');
+    return false;
+  }
+
   return false;
 }
 
