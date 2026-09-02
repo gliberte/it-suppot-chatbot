@@ -126,7 +126,13 @@ const READ_ONLY_CHAT_TOOLS = new Set([
   'sdp_search_user',
   'web_search_support',
   'sap_hana_query',
-  'sdp_add_note'
+  'sdp_add_note',
+  // No es de solo lectura (sube un archivo real a SDP), pero es igual de reversible/de bajo
+  // riesgo que sdp_add_note -- mismo criterio, no necesita tarjeta de Confirmar/Cancelar. Antes
+  // no estaba en NINGÚN set permitido, así que pedirle a Sophia adjuntar una imagen a un ticket
+  // existente como acción independiente (sin crear ticket/nota a la vez) quedaba bloqueado por
+  // completo ("No puedo ejecutar esa herramienta porque no está autorizada para el chat").
+  'sdp_upload_attachment'
 ]);
 
 const CONFIRMATION_WORDS = new Set(['confirmar', 'confirma', 'confirmo', 'confírmalo', 'confirmalo', 'si', 'sí', 'ok', 'dale']);
@@ -141,6 +147,7 @@ const TOOLS_REQUIRING_CONFIRMATION = new Set([
 ]);
 const REQUEST_SCOPED_MUTATION_TOOLS = new Set([
   'sdp_add_note',
+  'sdp_upload_attachment',
   'sdp_resolve_request',
   'sdp_assign_request',
   'sdp_update_request',
@@ -1730,6 +1737,7 @@ function isTicketScopedTool(toolName) {
   return [
     'sdp_get_request_details',
     'sdp_add_note',
+    'sdp_upload_attachment',
     'sdp_resolve_request',
     'sdp_assign_request',
     'sdp_update_request'
