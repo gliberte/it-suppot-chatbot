@@ -929,10 +929,11 @@ async function downloadTeamsImageAttachment(context, attachment) {
     try {
       const response = await fetch(downloadUrl);
       if (response.ok) {
-        const mimeType = response.headers.get('content-type')?.split(';')[0]
-          || attachment.contentType
-          || inferImageMimeType(downloadUrl)
-          || 'image/png';
+        const mimeType = resolveAttachmentMimeType([
+          response.headers.get('content-type')?.split(';')[0],
+          attachment.contentType,
+          inferImageMimeType(downloadUrl)
+        ]) || 'image/png';
         const arrayBuffer = await response.arrayBuffer();
         return ensureDownloadedImageSize({
           base64: Buffer.from(arrayBuffer).toString('base64'),
@@ -962,15 +963,35 @@ async function downloadTeamsImageAttachment(context, attachment) {
     throw new Error(`No pude descargar la imagen (${response.status}).`);
   }
 
-  const mimeType = response.headers.get('content-type')?.split(';')[0]
-    || attachment.contentType
-    || inferImageMimeType(attachment.contentUrl)
-    || 'image/png';
+  const mimeType = resolveAttachmentMimeType([
+    response.headers.get('content-type')?.split(';')[0],
+    attachment.contentType,
+    inferImageMimeType(attachment.contentUrl)
+  ]) || 'image/png';
   const arrayBuffer = await response.arrayBuffer();
   return ensureDownloadedImageSize({
     base64: Buffer.from(arrayBuffer).toString('base64'),
     mimeType
   });
+}
+
+// SharePoint/OneDrive suele servir el binario de un adjunto (via content.downloadUrl) con un
+// content-type de transporte genérico ("application/octet-stream") aunque el archivo real sí sea
+// una imagen -- confirmado en producción (sophia-error-0.log, 2026-09-03/04): Sophia rechazaba
+// imágenes reales con "El adjunto no parece ser una imagen (application/octet-stream)" porque ese
+// valor genérico iba primero en la cadena de prioridad y ganaba sobre el content-type correcto
+// que Teams ya traía en los metadatos del adjunto. Ahora se prioriza cualquier candidato que sí
+// diga "image/..." sobre uno genérico/vacío, en el orden que se haya dado; si ninguno es
+// reconociblemente una imagen, se conserva el comportamiento anterior (primer valor no vacío) para
+// no dejar de rechazar adjuntos que de verdad no son imágenes.
+function resolveAttachmentMimeType(candidates) {
+  const isGenericBinary = (value) => {
+    const normalized = String(value || '').toLowerCase().trim();
+    return !normalized || normalized === 'application/octet-stream' || normalized === 'binary/octet-stream';
+  };
+  const imageCandidate = candidates.find((value) => String(value || '').toLowerCase().startsWith('image/'));
+  if (imageCandidate) return imageCandidate;
+  return candidates.find((value) => value && !isGenericBinary(value)) || candidates.find(Boolean) || null;
 }
 
 async function getBotConnectorToken(context) {
