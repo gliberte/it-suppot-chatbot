@@ -114,6 +114,10 @@ const COMMANDS = [
         description: 'Reconstruye y muestra el dialogo cronologico completo de un usuario en Teams; requiere --user y acepta --since, --until, --format, --output, --no-rotated. Por defecto lee el log activo y sus rotados (logrotate, 14 dias).'
       },
       {
+        name: 'report:followup-coverage',
+        description: 'Cruza tickets creados por Sophia (audit.log) contra los avisos de seguimiento realmente enviados (teams-audit.log) para saber que fraccion recibio avance; acepta --since, --until, --format, --output, --only-missing, --no-rotated.'
+      },
+      {
         name: 'routing:check',
         description: 'Valida rutas de clasificacion SDP y ejemplos protegidos.'
       },
