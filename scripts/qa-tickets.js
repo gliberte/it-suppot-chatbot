@@ -1,6 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
+
+// audit.log rota a diario y comprime (deploy/logrotate/sophia: daily, rotate 14, compress,
+// delaycompress), así que --days/--since por sí solos solo verían el archivo activo (con lo de
+// hoy) a menos que se fusionen los rotados. Mismo patrón que report-teams-users.js /
+// get-teams-transcript.js / report-followup-coverage.js.
+const ROTATED_LOOKBACK = 30; // margen sobre el rotate 14 configurado, por si cambia
 
 const LOG_PATH = resolve(process.env.AUDIT_LOG_PATH || 'audit.log');
 const KNOWLEDGE_CANDIDATES_PATH = resolve(process.env.KNOWLEDGE_CANDIDATES_PATH || 'data/knowledge-candidates.json');
@@ -12,13 +19,15 @@ const SINCE = EXPLICIT_SINCE || getSinceFromDays(DAYS);
 const PERIOD_KEY = EXPLICIT_SINCE ? `since:${EXPLICIT_SINCE}` : `days:${DAYS}`;
 const LIMIT = Number(getArgValue('--limit') || process.env.QA_TICKETS_LIMIT || 1000);
 const EMIT_CANDIDATES = hasFlag('--emit-candidates');
+const INCLUDE_ROTATED = !hasFlag('--no-rotated');
 
 if (!existsSync(LOG_PATH)) {
   console.error(`No existe el archivo de auditoria: ${LOG_PATH}`);
   process.exit(1);
 }
 
-const records = readAuditRecords(LOG_PATH)
+const records = readAuditRecords(LOG_PATH, INCLUDE_ROTATED)
+  .sort((a, b) => Date.parse(a.timestamp || 0) - Date.parse(b.timestamp || 0))
   .filter((record) => record.toolName === 'sdp_create_request')
   .filter((record) => !SINCE || Date.parse(record.timestamp || 0) >= Date.parse(SINCE))
   .slice(-LIMIT);
@@ -43,18 +52,39 @@ if (FORMAT === 'json') {
   writeOrPrint(renderText(analysis, emittedCandidates));
 }
 
-function readAuditRecords(path) {
-  return readFileSync(path, 'utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .flatMap((line) => {
+function readAuditRecords(basePath, includeRotated) {
+  const files = [basePath];
+  if (includeRotated) {
+    for (let i = 1; i <= ROTATED_LOOKBACK; i += 1) {
+      const plain = `${basePath}.${i}`;
+      const gz = `${basePath}.${i}.gz`;
+      if (existsSync(plain)) files.push(plain);
+      else if (existsSync(gz)) files.push(gz);
+    }
+  }
+
+  const records = [];
+  for (const file of files) {
+    let content;
+    try {
+      content = file.endsWith('.gz')
+        ? gunzipSync(readFileSync(file)).toString('utf8')
+        : readFileSync(file, 'utf8');
+    } catch (error) {
+      console.error(`Error leyendo ${file}: ${error.message}`);
+      continue;
+    }
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
       try {
-        return [JSON.parse(line)];
+        records.push(JSON.parse(trimmed));
       } catch {
-        return [];
+        // línea corrupta o parcial -- se ignora
       }
-    });
+    }
+  }
+  return records;
 }
 
 function analyze(items) {

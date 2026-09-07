@@ -103,7 +103,7 @@ const COMMANDS = [
     commands: [
       {
         name: 'audit:created-tickets',
-        description: 'Reporta tickets creados por Sophia; acepta filtros como --confirmed, --errors, --since.'
+        description: 'Reporta tickets creados por Sophia; acepta filtros como --confirmed, --errors, --since, --until, --no-rotated. Por defecto lee el log activo y sus rotados (logrotate, 14 dias).'
       },
       {
         name: 'report:teams',
@@ -123,7 +123,7 @@ const COMMANDS = [
       },
       {
         name: 'qa:tickets',
-        description: 'Audita tickets creados por Sophia; con --emit-candidates crea candidatos de mejora.'
+        description: 'Audita las clasificaciones (categoria/ruta/prioridad) que Sophia le dio a los tickets creados: confianza baja, ruta default, prioridad alta sin evidencia, errores de campo SDP. Acepta --days, --since, --format, --output, --no-rotated, --emit-candidates. Por defecto lee el log activo y sus rotados (logrotate, 14 dias).'
       },
       {
         name: 'qa:routing',

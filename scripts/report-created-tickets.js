@@ -1,24 +1,41 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
+import { gunzipSync } from 'zlib';
+
+// audit.log rota a diario y comprime (deploy/logrotate/sophia: daily, rotate 14, compress,
+// delaycompress). Por defecto se fusiona el activo + todos los rotados que existan (mismo patrón
+// que report-teams-users.js / get-teams-transcript.js / report-followup-coverage.js / qa-tickets.js).
+const ROTATED_LOOKBACK = 30;
 
 const LOG_PATH = resolve(process.env.AUDIT_LOG_PATH || 'audit.log');
 const FORMAT = getArgValue('--format') || 'table';
 const OUTPUT = getArgValue('--output');
 const LIMIT = Number(getArgValue('--limit') || process.env.AUDIT_REPORT_LIMIT || 50);
 const SINCE = getArgValue('--since');
+const UNTIL = getArgValue('--until');
 const ONLY_CONFIRMED = hasFlag('--confirmed');
 const ONLY_ERRORS = hasFlag('--errors');
+const INCLUDE_ROTATED = !hasFlag('--no-rotated');
 
 if (!existsSync(LOG_PATH)) {
   console.error(`No existe el archivo de auditoría: ${LOG_PATH}`);
   process.exit(1);
 }
 
-const records = readAuditRecords(LOG_PATH)
+const sinceBoundary = SINCE ? parseBoundary(SINCE, false) : null;
+const untilBoundary = UNTIL ? parseBoundary(UNTIL, true) : null;
+
+const records = readAuditRecords(LOG_PATH, INCLUDE_ROTATED)
+  .sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime())
   .filter((record) => record.toolName === 'sdp_create_request')
   .filter((record) => !ONLY_CONFIRMED || ['confirmed_success', 'success'].includes(record.outcome))
-  .filter((record) => !ONLY_ERRORS || record.outcome.includes('error') || record.error)
-  .filter((record) => !SINCE || new Date(record.timestamp) >= new Date(SINCE))
+  .filter((record) => !ONLY_ERRORS || String(record.outcome || '').includes('error') || record.error)
+  .filter((record) => {
+    const recordTime = new Date(record.timestamp || 0).getTime();
+    if (sinceBoundary !== null && recordTime < sinceBoundary) return false;
+    if (untilBoundary !== null && recordTime > untilBoundary) return false;
+    return true;
+  })
   .slice(-LIMIT);
 
 const rows = records.map(toReportRow);
@@ -31,17 +48,48 @@ if (FORMAT === 'json') {
   writeOrPrint(renderTable(rows));
 }
 
-function readAuditRecords(logPath) {
-  return readFileSync(logPath, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .flatMap((line) => {
+function readAuditRecords(basePath, includeRotated) {
+  const files = [basePath];
+  if (includeRotated) {
+    for (let i = 1; i <= ROTATED_LOOKBACK; i += 1) {
+      const plain = `${basePath}.${i}`;
+      const gz = `${basePath}.${i}.gz`;
+      if (existsSync(plain)) files.push(plain);
+      else if (existsSync(gz)) files.push(gz);
+    }
+  }
+
+  const records = [];
+  for (const file of files) {
+    let content;
+    try {
+      content = file.endsWith('.gz')
+        ? gunzipSync(readFileSync(file)).toString('utf8')
+        : readFileSync(file, 'utf8');
+    } catch (error) {
+      console.error(`Error leyendo ${file}: ${error.message}`);
+      continue;
+    }
+    for (const line of content.split('\n')) {
+      if (!line) continue;
       try {
-        return [JSON.parse(line)];
+        records.push(JSON.parse(line));
       } catch {
-        return [];
+        // línea corrupta o parcial -- se ignora
       }
-    });
+    }
+  }
+  return records;
+}
+
+function parseBoundary(value, isUntil) {
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+  const d = new Date(isDateOnly && isUntil ? `${value.trim()}T23:59:59.999` : value);
+  if (Number.isNaN(d.getTime())) {
+    console.error(`Fecha inválida: "${value}"`);
+    process.exit(1);
+  }
+  return d.getTime();
 }
 
 function toReportRow(record) {
