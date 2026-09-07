@@ -1,10 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, resolve } from 'path';
+import { gunzipSync } from 'zlib';
+
+// logrotate (deploy/logrotate/sophia) rota teams-audit.log a diario, guarda 14 días y comprime
+// todo menos el de ayer. Por defecto esta herramienta junta el activo + todos los rotados que
+// existan, para que --since/--until cubran cualquier fecha dentro de esos 14 días sin tener que
+// descomprimir nada a mano.
+const ROTATED_LOOKBACK = 30; // margen sobre el rotate 14 configurado, por si cambia
 
 const LOG_PATH = resolve(getArgValue('--log-path') || process.env.TEAMS_AUDIT_LOG_PATH || 'teams-audit.log');
 const FORMAT = getArgValue('--format') || 'table';
 const OUTPUT = getArgValue('--output');
 const SINCE = getArgValue('--since');
+const UNTIL = getArgValue('--until');
+const INCLUDE_ROTATED = !process.argv.includes('--no-rotated');
 const SORT_BY = getArgValue('--sort') || 'messages'; // 'messages', 'name', 'lastSeen'
 
 if (!existsSync(LOG_PATH)) {
@@ -12,8 +21,16 @@ if (!existsSync(LOG_PATH)) {
   process.exit(1);
 }
 
-const records = readAuditRecords(LOG_PATH)
-  .filter((record) => !SINCE || new Date(record.timestamp) >= new Date(SINCE));
+const sinceBoundary = parseSinceBoundary(SINCE);
+const untilBoundary = parseUntilBoundary(UNTIL);
+
+const records = readAuditRecords(LOG_PATH, INCLUDE_ROTATED)
+  .filter((record) => {
+    const recordTime = new Date(record.timestamp).getTime();
+    if (sinceBoundary !== null && recordTime < sinceBoundary) return false;
+    if (untilBoundary !== null && recordTime > untilBoundary) return false;
+    return true;
+  });
 
 const userMap = new Map();
 
@@ -102,17 +119,61 @@ if (FORMAT === 'json') {
   writeOrPrint(renderTable(rows));
 }
 
-function readAuditRecords(logPath) {
-  return readFileSync(logPath, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .flatMap((line) => {
+function readAuditRecords(basePath, includeRotated) {
+  const files = [basePath];
+  if (includeRotated) {
+    for (let i = 1; i <= ROTATED_LOOKBACK; i += 1) {
+      const plain = `${basePath}.${i}`;
+      const gz = `${basePath}.${i}.gz`;
+      if (existsSync(plain)) files.push(plain);
+      else if (existsSync(gz)) files.push(gz);
+    }
+  }
+
+  const records = [];
+  for (const file of files) {
+    let content;
+    try {
+      content = file.endsWith('.gz')
+        ? gunzipSync(readFileSync(file)).toString('utf8')
+        : readFileSync(file, 'utf8');
+    } catch (error) {
+      console.error(`Error leyendo ${file}: ${error.message}`);
+      continue;
+    }
+
+    for (const line of content.split('\n')) {
+      if (!line) continue;
       try {
-        return [JSON.parse(line)];
+        records.push(JSON.parse(line));
       } catch {
-        return [];
+        // línea corrupta o parcial -- se ignora
       }
-    });
+    }
+  }
+  return records;
+}
+
+function parseSinceBoundary(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    console.error(`--since inválido: "${value}"`);
+    process.exit(1);
+  }
+  return d.getTime();
+}
+
+function parseUntilBoundary(value) {
+  if (!value) return null;
+  // Una fecha "pelada" (sin hora) debe incluir el día completo, no cortar a medianoche.
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+  const d = new Date(isDateOnly ? `${value.trim()}T23:59:59.999` : value);
+  if (Number.isNaN(d.getTime())) {
+    console.error(`--until inválido: "${value}"`);
+    process.exit(1);
+  }
+  return d.getTime();
 }
 
 function formatDate(isoString) {
