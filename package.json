@@ -20,6 +20,7 @@
     "report:teams": "node scripts/report-teams-users.js",
     "report:transcript": "node scripts/get-teams-transcript.js",
     "report:followup-coverage": "node scripts/report-followup-coverage.js",
+    "report:friction": "node scripts/report-friction-signals.js",
     "qa:routing": "node scripts/check-routing.js",
     "qa:tickets": "node scripts/qa-tickets.js",
     "routing:check": "node scripts/check-routing.js",

@@ -118,6 +118,10 @@ const COMMANDS = [
         description: 'Cruza tickets creados por Sophia (audit.log) contra los avisos de seguimiento realmente enviados (teams-audit.log) para saber que fraccion recibio avance; acepta --since, --until, --format, --output, --only-missing, --no-rotated.'
       },
       {
+        name: 'report:friction',
+        description: 'Detecta senales de friccion real en conversaciones de Teams (doble clic en Confirmar, cancelaciones explicitas, confirmaciones abandonadas) para localizar oportunidades de mejora; acepta --since, --until, --format, --output, --no-rotated.'
+      },
+      {
         name: 'routing:check',
         description: 'Valida rutas de clasificacion SDP y ejemplos protegidos.'
       },
