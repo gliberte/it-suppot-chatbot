@@ -229,7 +229,11 @@ export function getTicketRoutingMap(env = process.env) {
     },
     {
       name: 'printer_zebra',
-      keywords: ['zebra', 'etiqueta', 'etiquetas', 'codigo de barras', 'código de barras'],
+      // "etiqueta"/"etiquetas" sueltas son ambiguas -- caso real (ticket #13798): un correo
+      // "etiquetado" como posible phishing por el filtro de correo matcheó esta ruta y terminó
+      // clasificado como Impresoras/Zebra Etiquetas sin tener nada que ver. Se cambian por frases
+      // compuestas que sí implican una impresora de etiquetas, en vez de la palabra sola.
+      keywords: ['zebra', 'impresora de etiquetas', 'impresora de etiqueta', 'etiquetas no imprimen', 'no imprime etiquetas', 'etiqueta atascada', 'etiquetas atascadas', 'codigo de barras', 'código de barras'],
       category: env.SDP_PRINTER_ZEBRA_CATEGORY || 'Impresoras',
       subcategory: env.SDP_PRINTER_ZEBRA_SUBCATEGORY || 'Zebra Etiquetas',
       priority: env.SDP_PRINTER_ZEBRA_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
@@ -354,7 +358,11 @@ export function getTicketRoutingMap(env = process.env) {
     },
     {
       name: 'password',
-      keywords: ['contraseña', 'clave', 'password', 'bloqueada', 'bloqueado', 'usuario o contraseña'],
+      // "clave" sola es ambigua -- caso real (ticket #13800): "sería clave tener este reporte"
+      // (en el sentido de "importante", no de contraseña) matcheó esta ruta y el ticket terminó
+      // clasificado como Contraseñas sin tener nada que ver. Se cambia por frases compuestas que
+      // sí implican una contraseña, en vez de la palabra sola.
+      keywords: ['contraseña', 'clave de acceso', 'clave de usuario', 'olvide mi clave', 'olvidé mi clave', 'cambiar clave', 'clave bloqueada', 'password', 'bloqueada', 'bloqueado', 'usuario o contraseña'],
       category: env.SDP_PASSWORD_CATEGORY || env.SDP_DEFAULT_CATEGORY || 'Contraseñas',
       subcategory: env.SDP_PASSWORD_SUBCATEGORY || env.SDP_DEFAULT_SUBCATEGORY || 'Usuario Windows',
       priority: env.SDP_PASSWORD_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
