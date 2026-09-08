@@ -2773,9 +2773,20 @@ function applyCreateTicketDefaults(args) {
   args.priority = normalizePriority(args.priority) || (hasRouting
     ? routing.priority
     : process.env.SDP_DEFAULT_PRIORITY || 'Media');
+  // Cuando ninguna regla de ticket-routing.js matchea (hasRouting=false), esto ANTES forzaba
+  // "Contraseñas" como si fuera una clasificación real -- verificado con qa:tickets en producción
+  // (14 días): 31 de 85 tickets cayeron en ruta default, y los que no traían categoría propia
+  // quedaron etiquetados "Contraseñas / Usuario Windows" sin tener nada que ver (ej. "Desinstalación
+  // de software accidental", "Creación de 2 Usuarios Nuevos"), inflando esa categoría con ruido y
+  // extraviando el ticket lejos de quien de verdad lo puede atender. category/subcategory NO son
+  // campos obligatorios en el esquema real de SDP (/requests/metainfo, sin "mandatory": true), así
+  // que ahora se dejan sin asignar en vez de mentir -- category=undefined es más honesto que un
+  // valor inventado, y qa:tickets ya rastrea estos casos (missingCategory/defaultRoute) para poder
+  // agregarles una regla real en ticket-routing.js. SDP_DEFAULT_CATEGORY sigue disponible como
+  // escape hatch explícito si el operador prefiere configurar un fallback a propósito.
   args.category = hasRouting
     ? routing.category
-    : args.category || process.env.SDP_DEFAULT_CATEGORY || 'Contraseñas';
+    : args.category || process.env.SDP_DEFAULT_CATEGORY || undefined;
   args.subcategory = resolveSubcategoryValue(args, routing, hasRouting);
   args.udf_fields = {
     ...(args.udf_fields || {}),
@@ -2797,9 +2808,11 @@ function normalizeCreateRequestUdfFields(args) {
 }
 
 function resolveSubcategoryValue(args, routing, hasRouting) {
+  // Mismo criterio que category en applyCreateTicketDefaults: sin regla que matchee, no se
+  // inventa "Usuario Windows" -- se deja sin asignar (subcategory tampoco es campo obligatorio).
   const value = hasRouting
     ? routing.subcategory
-    : args.subcategory || process.env.SDP_DEFAULT_SUBCATEGORY || 'Usuario Windows';
+    : args.subcategory || process.env.SDP_DEFAULT_SUBCATEGORY || undefined;
 
   if (value === 'NONE' || value === '') return undefined;
   return value;
