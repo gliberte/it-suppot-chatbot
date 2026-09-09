@@ -12715,7 +12715,22 @@ async function handleTeamsMessage(context) {
       analysisPreview: createAuditTextPreview(imageAnalysis.analysisText, 600)
     });
 
-    if (imageAnalysis.analysisText) {
+    if (imageAnalysis.analysisText && !text.trim()) {
+      // Caso real (2026-09-09): una imagen sin ningún texto acompañante (correo personal de Esri,
+      // sin relación con IT) se le pasaba a Gemini como si fuera el mensaje completo -- sin
+      // ninguna pregunta real que responder, generó una respuesta desconectada sobre "listado de
+      // tickets con seguimientos" que no venía de nada en la conversación. Ahora se le deja
+      // explícito que no hay pregunta del usuario, para que reconozca lo que ve y pregunte qué
+      // necesita en vez de inventar una acción o intención que nadie pidió.
+      messageForSophia = [
+        'El usuario envió una imagen sin ningún texto ni pregunta.',
+        '',
+        'Contexto extraído automáticamente de la imagen:',
+        imageAnalysis.analysisText,
+        '',
+        'Responde reconociendo brevemente qué ves en la imagen y pregunta qué necesita que hagas con ella -- no asumas una acción, herramienta o intención que el usuario no haya expresado.'
+      ].join('\n');
+    } else if (imageAnalysis.analysisText) {
       messageForSophia = [
         messageForSophia,
         '',
