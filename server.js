@@ -9284,9 +9284,21 @@ async function runSupportTurn({
   onWorking,
   onConfirmationRequired,
   streamSummary = false,
-  responseChannel = 'web'
+  responseChannel = 'web',
+  skipDeterministicIntercepts = false
 }) {
   onStatus?.('Sophia está analizando tu solicitud...');
+
+  // Los interceptores determinísticos de abajo (isStaleTicketsRequest, isListedTicketFollowUpReviewRequest,
+  // etc.) están pensados para texto REAL escrito por el usuario -- son reglas de palabras clave sobre
+  // 'message'. Cuando 'message' es en realidad el texto sintético que arma el manejador de Teams para una
+  // imagen sin texto acompañante (el análisis de la imagen generado por IA, hasta 4000 caracteres que no se
+  // controlan), ese contenido puede matchear por accidente cualquiera de estas reglas -- caso real
+  // (2026-09-09): una captura de una canción disparó el mismo interceptor de "revisar seguimientos de
+  // tickets listados" que atendía preguntas reales sobre seguimientos, dando una respuesta enlatada sin
+  // relación con la imagen. skipDeterministicIntercepts salta toda esta cadena y va directo a Gemini, que sí
+  // tiene el contexto completo para responder con criterio en vez de un match de palabras sueltas.
+  if (!skipDeterministicIntercepts) {
 
   if (await handleTicketCancellationTurn({
     message,
@@ -9529,6 +9541,8 @@ async function runSupportTurn({
     onText(clarification);
     return;
   }
+
+  } // fin de if (!skipDeterministicIntercepts)
 
   const ragContext = await getRagContextForMessage(message, user);
   const aiDecision = await AgentOrchestrator.processMessage(message, {
@@ -12669,6 +12683,9 @@ async function handleTeamsMessage(context) {
   await saveTeamsConversationReference(context, user);
   const session = getTeamsSession(context.activity, user);
   let messageForSophia = text || 'Analiza la información adjunta y procesa la solicitud de soporte IT.';
+  // true cuando messageForSophia es texto sintético (análisis de imagen sin pregunta real del
+  // usuario) en vez de algo que el usuario escribió -- ver runSupportTurn/skipDeterministicIntercepts.
+  let skipDeterministicIntercepts = false;
 
   if (audioAttachments.length > 0) {
     await context.sendActivity({ type: 'typing' });
@@ -12730,6 +12747,7 @@ async function handleTeamsMessage(context) {
         '',
         'Responde reconociendo brevemente qué ves en la imagen y pregunta qué necesita que hagas con ella -- no asumas una acción, herramienta o intención que el usuario no haya expresado.'
       ].join('\n');
+      skipDeterministicIntercepts = true;
     } else if (imageAnalysis.analysisText) {
       messageForSophia = [
         messageForSophia,
@@ -12888,6 +12906,7 @@ async function handleTeamsMessage(context) {
   try {
     await runSupportTurn({
       message: messageForSophia,
+      skipDeterministicIntercepts,
       user,
       session,
       history: session.history,
