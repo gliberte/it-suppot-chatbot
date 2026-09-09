@@ -12733,19 +12733,21 @@ async function handleTeamsMessage(context) {
     });
 
     if (imageAnalysis.analysisText && !text.trim()) {
-      // Caso real (2026-09-09): una imagen sin ningún texto acompañante (correo personal de Esri,
-      // sin relación con IT) se le pasaba a Gemini como si fuera el mensaje completo -- sin
-      // ninguna pregunta real que responder, generó una respuesta desconectada sobre "listado de
-      // tickets con seguimientos" que no venía de nada en la conversación. Ahora se le deja
-      // explícito que no hay pregunta del usuario, para que reconozca lo que ve y pregunte qué
-      // necesita en vez de inventar una acción o intención que nadie pidió.
+      // Caso real (2026-09-09): una imagen sin ningún texto acompañante se le pasaba a Gemini como
+      // si fuera el mensaje completo -- sin ninguna pregunta real que responder. Primer intento:
+      // decía "no asumas una acción/herramienta", pero seguía siendo demasiado abierto -- con una
+      // captura de una canción sin relación con IT, Gemini igual decidió llamar a sdp_list_requests
+      // buscando tickets por la palabra "Rhinestone Cowboy" tomada del contenido de la imagen, algo
+      // que nadie pidió. Ahora se prohíbe explícitamente cualquier llamada a herramienta para este
+      // mensaje -- la única acción válida es 'reply' reconociendo lo que se ve y preguntando qué
+      // hacer, nunca actuar sobre el contenido de la imagen por cuenta propia.
       messageForSophia = [
-        'El usuario envió una imagen sin ningún texto ni pregunta.',
+        'El usuario envió una imagen sin ningún texto ni pregunta -- no hay ninguna solicitud que atender todavía.',
         '',
         'Contexto extraído automáticamente de la imagen:',
         imageAnalysis.analysisText,
         '',
-        'Responde reconociendo brevemente qué ves en la imagen y pregunta qué necesita que hagas con ella -- no asumas una acción, herramienta o intención que el usuario no haya expresado.'
+        "IMPORTANTE: usa 'action': 'reply' obligatoriamente para este mensaje -- NUNCA llames a ninguna herramienta (ni para buscar tickets, ni por palabra clave, ni ninguna otra). El contenido de la imagen es solo informativo hasta que el usuario diga qué necesita; no lo uses como término de búsqueda ni como base para actuar. Responde reconociendo en una frase breve qué ves en la imagen y pregunta qué necesita que hagas con ella."
       ].join('\n');
       skipDeterministicIntercepts = true;
     } else if (imageAnalysis.analysisText) {
