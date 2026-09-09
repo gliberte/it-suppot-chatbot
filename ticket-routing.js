@@ -204,6 +204,21 @@ export function getTicketRoutingMap(env = process.env) {
       udf_pick_2701: env.SDP_NETWORK_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
     },
     {
+      // Caso real (Yajaira Gonzalez, 2026-09-08): "no puedo pasar con el carnet a la puerta de
+      // facturación" se redirigió por error a Mantenimiento -- pero un carnet/tarjeta que no
+      // autoriza en el lector de una puerta es un problema de control de acceso ELECTRÓNICO
+      // (el lector, la programación/permisos del carnet), no una puerta rota mecánicamente.
+      // "Control de Acceso" / "Tarjeta" es categoría real de SDP (id 3005/2127), verificada en
+      // vivo -- distinto del caso de la puerta del laboratorio (bisagra atascada, sin nada
+      // eléctrico), que sí sigue siendo Mantenimiento/Servicios Generales.
+      name: 'access_control_card',
+      keywords: ['carnet', 'tarjeta de acceso', 'lector de tarjeta', 'lector de carnet', 'control de acceso', 'huella digital', 'pin de acceso'],
+      category: env.SDP_ACCESS_CONTROL_CATEGORY || 'Control de Acceso',
+      subcategory: env.SDP_ACCESS_CONTROL_SUBCATEGORY || 'Tarjeta',
+      priority: env.SDP_ACCESS_CONTROL_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
+      udf_pick_2701: env.SDP_ACCESS_CONTROL_UDF_PICK_2701 || env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
+    },
+    {
       name: 'network_local',
       keywords: ['red local', 'red', 'cable de red', 'punto de red'],
       category: env.SDP_NETWORK_CATEGORY || 'Red',
