@@ -2801,21 +2801,25 @@ function applyCreateTicketDefaults(args) {
   args.priority = normalizePriority(args.priority) || (hasRouting
     ? routing.priority
     : process.env.SDP_DEFAULT_PRIORITY || 'Media');
-  // Cuando ninguna regla de ticket-routing.js matchea (hasRouting=false), esto ANTES forzaba
-  // "Contraseñas" como si fuera una clasificación real -- verificado con qa:tickets en producción
-  // (14 días): 31 de 85 tickets cayeron en ruta default, y los que no traían categoría propia
-  // quedaron etiquetados "Contraseñas / Usuario Windows" sin tener nada que ver (ej. "Desinstalación
-  // de software accidental", "Creación de 2 Usuarios Nuevos"), inflando esa categoría con ruido y
-  // extraviando el ticket lejos de quien de verdad lo puede atender. category/subcategory NO son
-  // campos obligatorios en el esquema real de SDP (/requests/metainfo, sin "mandatory": true), así
-  // que ahora se dejan sin asignar en vez de mentir -- category=undefined es más honesto que un
-  // valor inventado, y qa:tickets ya rastrea estos casos (missingCategory/defaultRoute) para poder
-  // agregarles una regla real en ticket-routing.js. SDP_DEFAULT_CATEGORY sigue disponible como
-  // escape hatch explícito si el operador prefiere configurar un fallback a propósito.
+  // Cuando ninguna regla de ticket-routing.js matchea (hasRouting=false), esto forzaba
+  // "Contraseñas" como si fuera una clasificación real -- verificado con qa:tickets en producción:
+  // tickets como "Desinstalación de software accidental" quedaban etiquetados "Contraseñas /
+  // Usuario Windows" sin tener nada que ver. Se intentó dejar category/subcategory sin asignar (el
+  // esquema /requests/metainfo no los marca "mandatory": true) -- pero verificado en vivo creando
+  // un ticket de prueba real sin esos campos, SDP SÍ los exige para crear ("Please fill the
+  // mandatory fields": category, subcategory, udf_pick_2701), aunque el esquema no lo declare. No
+  // hay ninguna categoría real tipo "General/Otros" en el catálogo de SDP para usar como fallback
+  // honesto. Así que se mantiene un valor por defecto (obligatorio para que SDP acepte el ticket),
+  // pero ahora se marca explícitamente en la descripción cuando es una clasificación sin ruta real,
+  // para que quien lo revise sepa que necesita reclasificarlo -- ya no se hace pasar por una
+  // clasificación real y silenciosa como antes.
   args.category = hasRouting
     ? routing.category
-    : args.category || process.env.SDP_DEFAULT_CATEGORY || undefined;
+    : args.category || process.env.SDP_DEFAULT_CATEGORY || 'Contraseñas';
   args.subcategory = resolveSubcategoryValue(args, routing, hasRouting);
+  if (!hasRouting && args.description) {
+    args.description = `${args.description}\n\n⚠️ Clasificación automática sin ruta real -- Sophia no encontró una regla que aplicara a este caso, la categoría/subcategoría de arriba es un valor por defecto y probablemente necesite corrección manual.`;
+  }
   args.udf_fields = {
     ...(args.udf_fields || {}),
     udf_pick_2701: args.udf_fields?.udf_pick_2701 || routing.udf_pick_2701 || process.env.SDP_DEFAULT_UDF_PICK_2701 || 'Kassim Acevedo'
@@ -2836,11 +2840,12 @@ function normalizeCreateRequestUdfFields(args) {
 }
 
 function resolveSubcategoryValue(args, routing, hasRouting) {
-  // Mismo criterio que category en applyCreateTicketDefaults: sin regla que matchee, no se
-  // inventa "Usuario Windows" -- se deja sin asignar (subcategory tampoco es campo obligatorio).
+  // Ver comentario en applyCreateTicketDefaults: subcategory sí es exigido por SDP en la práctica
+  // al crear, aunque el esquema no lo declare "mandatory" -- verificado en vivo, se mantiene un
+  // valor por defecto en vez de dejarlo sin asignar.
   const value = hasRouting
     ? routing.subcategory
-    : args.subcategory || process.env.SDP_DEFAULT_SUBCATEGORY || undefined;
+    : args.subcategory || process.env.SDP_DEFAULT_SUBCATEGORY || 'Usuario Windows';
 
   if (value === 'NONE' || value === '') return undefined;
   return value;
