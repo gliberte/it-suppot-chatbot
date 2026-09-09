@@ -1605,7 +1605,18 @@ function escapeMarkdownTableValue(value) {
     .trim();
 }
 
-function normalizeTicketToolDecision(aiDecision, message, user) {
+function normalizeTicketToolDecision(aiDecision, message, user, skipDeterministicIntercepts = false) {
+  // Mismo riesgo que los interceptores de antes de Gemini (ver skipDeterministicIntercepts en
+  // runSupportTurn): esta función reinterpreta 'message' con reglas de palabras clave y puede
+  // SOBRESCRIBIR una decisión de Gemini ya correcta -- caso real (2026-09-09): Gemini decidió
+  // correctamente 'action':'reply' reconociendo una imagen sin relación con IT (captura sobre una
+  // canción/reflexión de TikTok), pero esta función lo reescribió a 'call_tool'/sdp_list_requests
+  // buscando tickets por "Rhinestone Cowboy" solo porque el texto sintético de la imagen contenía
+  // palabras como "mi"/"solicitud" que matchean isPersonalKeywordTicketSearchRequest. Cuando el
+  // mensaje es ese texto sintético, se salta esta función entera -- la decisión de Gemini ya es la
+  // correcta y no debe reinterpretarse con reglas pensadas para texto real del usuario.
+  if (skipDeterministicIntercepts) return;
+
   if (isPersonalKeywordTicketSearchRequest(message) && aiDecision?.action !== 'call_tool') {
     aiDecision.action = 'call_tool';
     aiDecision.tool_name = 'sdp_list_requests';
@@ -9550,7 +9561,7 @@ async function runSupportTurn({
     ragContext,
     operationalMemory: sanitizeOperationalMemory(session?.operationalMemory)
   }, normalizeChatHistory(history));
-  normalizeTicketToolDecision(aiDecision, message, user);
+  normalizeTicketToolDecision(aiDecision, message, user, skipDeterministicIntercepts);
   console.log(`[Bridge] IA decidió:`, JSON.stringify(aiDecision, null, 2));
 
   if (aiDecision.action !== 'call_tool') {
