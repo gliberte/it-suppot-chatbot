@@ -9,6 +9,20 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.26] - 2026-09-09
+
+### Fixed
+- **Ya puedes mandarle una imagen a Sophia y sí la analiza:** antes fallaba siempre -- primero por un error de descarga (403) en chats personales, después porque el tipo de archivo no se reconocía como imagen. Ambos quedaron corregidos, y si mandas una imagen sin ningún texto, Sophia reconoce lo que ve y pregunta qué necesitas en vez de responder algo sin relación.
+- **Sophia ya no repite la misma pregunta una y otra vez:** si ya te preguntó algo y le pides que proceda de todos modos (aunque no uses esa frase exacta), prepara la solicitud con la información que ya tiene en vez de insistir en lo mismo.
+- **Mejor clasificación de tickets:** se corrigieron palabras que se malinterpretaban por tener doble sentido (ej. un correo "etiquetado" como phishing ya no se confunde con una impresora de etiquetas), y un carnet o tarjeta que no abre una puerta ahora se reconoce como control de acceso electrónico, no como falla de mantenimiento.
+- El diagnóstico de conectividad ahora hace una comprobación real (SDP y el gateway de SAP) en vez de una simulación.
+
+### Changed
+- **Sophia ya no abre el saludo mencionando tickets** -- se ofrece primero a ayudar a pensar o resolver el problema; un ticket queda como un posible resultado, no como la primera opción.
+- **Sophia reconoce cuando le hacen una broma** y responde con más calidez, sin que eso afloje ningún límite real (nunca va a compartir contraseñas ni hacer transferencias, en broma o en serio).
+- Antes de crear un ticket, Sophia ahora piensa primero si hay un paso razonable para resolver el problema, en vez de saltar directo a redactar una solicitud.
+- Preguntas sobre planilla, salarios o RRHH ahora se responden con el correo real de Capital Humano (capital.humano@bacosa.com) en vez de un "contacta a RRHH" genérico.
+
 ## [0.54.25] - 2026-09-02
 
 ### Added
