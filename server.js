@@ -2095,6 +2095,23 @@ function isPersonalKeywordTicketSearchRequest(message = '') {
   return /\b(busca|buscar|buscame|encuentra|encontrar|filtra|filtrar|contengan|contiene|con la palabra|palabra clave|asunto|relacionad[oa]s? con)\b/.test(text);
 }
 
+// Se usa solo para decidir si ofrecer la referencia sanitizada de un ticket ajeno (ver
+// sdp_get_request_details más abajo). Un mensaje que es solo una referencia pelada al ticket
+// ("9191", "detalle del ticket 9191", "consulta el 9191") NO cuenta como "describió su propio
+// problema" -- caso real (Nitzia Quiroz, 2026-09-01): escribió solo "9191" y recibió el resumen
+// sanitizado de un ticket ajeno sin haber contado ningún síntoma propio. Se quita la fraseología
+// típica de "muéstrame/consulta el ticket <numero>" y, si no queda nada sustancial, se trata como
+// una referencia pelada -- no como alguien buscando una solución a un problema que sí tiene.
+function messageDescribesOwnProblem(message = '') {
+  const text = normalizeComparableText(message)
+    .replace(/\b(detalle|detalles|consulta|consultar|dame|muestrame|ver|busca|buscar|revisa|revisar|abre|abrir|el|del|de|un|una|por favor|porfa|ticket|solicitud|numero|no|id|caso)\b/g, ' ')
+    .replace(/[#.,;:!?()]/g, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.split(' ').filter(Boolean).length >= 2;
+}
+
 function extractTicketKeywordFromMessage(message = '') {
   const raw = String(message || '').trim();
   const quoted = raw.match(/["'“”‘’]([^"'“”‘’]{2,80})["'“”‘’]/);
@@ -9633,12 +9650,23 @@ async function runSupportTurn({
     if (aiDecision.tool_name === 'sdp_get_request_details') {
       const requestData = JSON.parse(toolOutput);
       if (!userCanReadRequest(user, requestData)) {
-        const knowledgeResponse = createSanitizedKnowledgeResponse(requestData);
+        // Antes se ofrecía la referencia sanitizada con solo pedir un ID ajeno pelado (ej. "9191"
+        // sin más contexto -- caso real, Nitzia Quiroz, 2026-09-01), sin verificar que la persona
+        // de verdad tuviera un problema propio parecido. Eso convertía la función en una búsqueda
+        // libre sobre cualquier ticket cerrado de la empresa (nombres de servidores, categorías,
+        // casos) con solo adivinar/probar números de ticket -- no fuga de datos personales (sí se
+        // redactan nombres), pero sí más superficie de exposición operativa de la que se pensó al
+        // diseñarla como "ayuda a encontrar soluciones parecidas". Ahora solo se ofrece cuando el
+        // mensaje muestra que la persona describió su propio síntoma/problema, no cuando es solo
+        // una referencia pelada al ticket.
+        const knowledgeResponse = messageDescribesOwnProblem(message)
+          ? createSanitizedKnowledgeResponse(requestData)
+          : null;
         if (knowledgeResponse) {
           onText(knowledgeResponse);
           return;
         }
-        onText('Encontré ese ticket, pero no pertenece a tu usuario autenticado. Por seguridad no puedo mostrarlo. Si buscas una solución reutilizable, puedo ayudarte a buscar por síntoma, categoría o mensaje de error.');
+        onText('Encontré ese ticket, pero no pertenece a tu usuario autenticado. Por seguridad no puedo mostrarlo. Si buscas una solución reutilizable, cuéntame qué problema tienes y busco por síntoma, categoría o mensaje de error.');
         return;
       }
     }
