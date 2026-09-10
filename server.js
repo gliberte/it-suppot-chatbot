@@ -171,6 +171,19 @@ const ATTACHMENT_LINK_SECRET = process.env.ATTACHMENT_LINK_SECRET
   || 'sophia-attachment-link-fallback-secret';
 const ATTACHMENT_LINK_TTL_MS = Number(process.env.ATTACHMENT_LINK_TTL_HOURS || 72) * 60 * 60 * 1000;
 
+// URL pública del backend, usada para armar enlaces que abre el cliente de Teams (imágenes
+// adjuntas en las tarjetas, descargas de reportes). PUBLIC_URL puede traer el esquema; si solo
+// está PUBLIC_APP_DOMAIN (que es lo que hay configurado en producción) se le antepone https://.
+// El fallback anterior 'https://sophia.bacosa.com' era un dominio que ni siquiera resuelve en
+// DNS -- por eso las miniaturas de los adjuntos salían rotas en Teams.
+function getPublicBaseUrl() {
+  const explicit = String(process.env.PUBLIC_URL || '').trim();
+  if (explicit) return explicit.replace(/\/+$/, '');
+  const domain = String(process.env.PUBLIC_APP_DOMAIN || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  if (domain) return `https://${domain}`;
+  return 'https://sophia.barrazaycia.com';
+}
+
 function signAttachmentLink(requestId, attachmentId, expiresAt) {
   const payload = `${requestId}:${attachmentId}:${expiresAt}`;
   return createHmac('sha256', ATTACHMENT_LINK_SECRET).update(payload).digest('base64url');
@@ -179,7 +192,7 @@ function signAttachmentLink(requestId, attachmentId, expiresAt) {
 function buildAttachmentLink(requestId, attachmentId) {
   const expiresAt = Date.now() + ATTACHMENT_LINK_TTL_MS;
   const signature = signAttachmentLink(requestId, attachmentId, expiresAt);
-  const base = process.env.PUBLIC_URL || 'https://sophia.bacosa.com';
+  const base = getPublicBaseUrl();
   return `${base}/api/attachments/${encodeURIComponent(requestId)}/${encodeURIComponent(attachmentId)}?exp=${expiresAt}&sig=${signature}`;
 }
 
@@ -7792,7 +7805,7 @@ function createReportExportAdaptiveCard(reportResult) {
     {
       type: 'Action.OpenUrl',
       title: '📥 Descargar Reporte (CSV/Excel)',
-      url: `${process.env.PUBLIC_URL || 'https://sophia.bacosa.com'}${reportResult.downloadUrl}`
+      url: `${getPublicBaseUrl()}${reportResult.downloadUrl}`
     }
   ];
 
@@ -7833,7 +7846,7 @@ async function handleReportExportTurn({ message, user, onText, onCard, responseC
     if (responseChannel === 'teams' && card) {
       onCard?.(card);
     } else {
-      onText?.(`📄 **Reporte de Tickets Generado (${result.exportId}):**\n\nSe exportaron **${result.rowCount} registros** a Excel/CSV.\nEnlace de descarga: ${process.env.PUBLIC_URL || 'https://sophia.bacosa.com'}${result.downloadUrl}`);
+      onText?.(`📄 **Reporte de Tickets Generado (${result.exportId}):**\n\nSe exportaron **${result.rowCount} registros** a Excel/CSV.\nEnlace de descarga: ${getPublicBaseUrl()}${result.downloadUrl}`);
     }
     return true;
   } catch (err) {
