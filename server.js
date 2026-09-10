@@ -13244,6 +13244,95 @@ app.post('/api/create-ticket', requireAuth, async (req, res) => {
   }
 });
 
+// Creación de tickets para sistemas automatizados externos.
+// Autenticación: allowlist de IP en EXTERNAL_TICKET_API_ALLOWED_IPS (CSV). Fail-closed: si la
+// variable no está configurada, el endpoint responde 503 (deshabilitado). El servidor escucha en
+// localhost detrás de un proxy inverso, así que la IP real del cliente llega en X-Forwarded-For.
+// Solicitante fijo (cuenta de servicio, no una persona): EXTERNAL_TICKET_REQUESTER_EMAIL. La
+// categoría, subcategoría y prioridad las deriva Sophia con el mismo motor de clasificación que el
+// chat (classifyTicketWithKnowledge + applyTicketClassificationToArgs); el sistema externo solo
+// manda subject y description en texto libre.
+function getExternalClientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return (forwarded || req.ip || req.socket?.remoteAddress || '').toLowerCase();
+}
+
+app.post('/api/external/tickets', async (req, res) => {
+  const allowedIps = getCsvEnvSet('EXTERNAL_TICKET_API_ALLOWED_IPS');
+  if (allowedIps.size === 0) {
+    return res.status(503).json({ success: false, message: 'El endpoint de creación externa de tickets no está habilitado (falta EXTERNAL_TICKET_API_ALLOWED_IPS).' });
+  }
+
+  const clientIp = getExternalClientIp(req);
+  if (!allowedIps.has(clientIp)) {
+    console.warn(`[ExternalTickets] Petición rechazada por IP no autorizada: ${clientIp || '(desconocida)'}`);
+    return res.status(403).json({ success: false, message: 'IP no autorizada.' });
+  }
+
+  const { subject, description } = req.body || {};
+  if (typeof subject !== 'string' || !subject.trim()) {
+    return res.status(400).json({ success: false, message: 'Falta el campo obligatorio "subject" (texto).' });
+  }
+  if (typeof description !== 'string' || !description.trim()) {
+    return res.status(400).json({ success: false, message: 'Falta el campo obligatorio "description" (texto).' });
+  }
+
+  const serviceUser = {
+    name: process.env.EXTERNAL_TICKET_REQUESTER_NAME || 'Alertas IT (Sistema Automatizado)',
+    email: process.env.EXTERNAL_TICKET_REQUESTER_EMAIL || 'alertasit@bacosa.com',
+    sdpRequesterId: process.env.EXTERNAL_TICKET_REQUESTER_ID || '25505',
+    role: 'user'
+  };
+
+  try {
+    const createArgs = {
+      subject: subject.trim(),
+      description: description.trim(),
+      request_type: 'Solicitud',
+      requester: serviceUser.name,
+      requester_id: serviceUser.sdpRequesterId
+    };
+    const classification = await classifyTicketWithKnowledge(createArgs, serviceUser);
+    applyTicketClassificationToArgs(createArgs, classification, description || subject || '');
+    sanitizeCreateRequestArgs(createArgs);
+
+    const result = await callMcpTool('sdp_create_request', createArgs);
+    const data = JSON.parse(result.content[0].text);
+    const createdRequestId = extractRequestIdFromToolResult(result);
+
+    await auditToolCall({
+      user: serviceUser,
+      toolName: 'sdp_create_request',
+      args: {
+        ...(createdRequestId ? { ...createArgs, request_id: createdRequestId } : createArgs),
+        source: 'external_api',
+        client_ip: clientIp
+      },
+      outcome: 'success'
+    });
+
+    res.json({
+      success: true,
+      ticket_id: createdRequestId || null,
+      category: createArgs.category || null,
+      subcategory: createArgs.subcategory || null,
+      priority: createArgs.priority || null,
+      classification_confidence: classification?.confidence || null,
+      sdp_response: data
+    });
+  } catch (error) {
+    console.error('[ExternalTickets] Error creando ticket:', error);
+    await auditToolCall({
+      user: serviceUser,
+      toolName: 'sdp_create_request',
+      args: { subject: String(subject).trim(), source: 'external_api', client_ip: clientIp },
+      outcome: 'error',
+      error: { message: error.message }
+    }).catch(() => {});
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.post('/api/confirm-action', requireAuth, async (req, res) => {
   const { actionId } = req.body;
   const { action, expired } = takePendingAction(req.session, actionId);
