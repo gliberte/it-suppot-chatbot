@@ -13253,8 +13253,18 @@ app.post('/api/create-ticket', requireAuth, async (req, res) => {
 // chat (classifyTicketWithKnowledge + applyTicketClassificationToArgs); el sistema externo solo
 // manda subject y description en texto libre.
 function getExternalClientIp(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  return (forwarded || req.ip || req.socket?.remoteAddress || '').toLowerCase();
+  // Node representa las IPv4 en conexiones directas como "::ffff:10.20.5.18" -- se normaliza.
+  const strip = (ip) => String(ip || '').replace(/^::ffff:/i, '').trim().toLowerCase();
+  const peer = strip(req.socket?.remoteAddress || req.ip);
+  // El backend escucha en todas las interfaces: el cliente puede llegar directo por el puerto
+  // (peer = su IP real) o vía el proxy inverso local (peer = 127.0.0.1/::1, IP real en
+  // X-Forwarded-For). Solo se confía en X-Forwarded-For cuando la conexión inmediata es el proxy
+  // local -- si no, un cliente directo podría falsear ese header.
+  if (peer === '127.0.0.1' || peer === '::1') {
+    const forwarded = strip(String(req.headers['x-forwarded-for'] || '').split(',')[0]);
+    if (forwarded) return forwarded;
+  }
+  return peer;
 }
 
 app.post('/api/external/tickets', async (req, res) => {
