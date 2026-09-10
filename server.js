@@ -985,13 +985,18 @@ async function downloadTeamsImageAttachment(context, attachment) {
 // reconociblemente una imagen, se conserva el comportamiento anterior (primer valor no vacío) para
 // no dejar de rechazar adjuntos que de verdad no son imágenes.
 function resolveAttachmentMimeType(candidates) {
-  const isGenericBinary = (value) => {
-    const normalized = String(value || '').toLowerCase().trim();
-    return !normalized || normalized === 'application/octet-stream' || normalized === 'binary/octet-stream';
-  };
-  const imageCandidate = candidates.find((value) => String(value || '').toLowerCase().startsWith('image/'));
+  const norm = (value) => String(value || '').toLowerCase().trim();
+  // "image/*" es el comodín que Teams manda a veces como contentType del adjunto -- NO es un tipo
+  // MIME concreto: la API de visión de Gemini lo rechaza ("Unsupported MIME type: image/*") y SDP
+  // tampoco lo acepta bien. Se descarta junto con los tipos binarios genéricos; si no queda ningún
+  // tipo usable, el llamador cae a 'image/png' por defecto.
+  const usable = candidates.filter((value) => {
+    const n = norm(value);
+    return n && n !== 'image/*' && n !== 'application/octet-stream' && n !== 'binary/octet-stream';
+  });
+  const imageCandidate = usable.find((value) => norm(value).startsWith('image/'));
   if (imageCandidate) return imageCandidate;
-  return candidates.find((value) => value && !isGenericBinary(value)) || candidates.find(Boolean) || null;
+  return usable[0] || null;
 }
 
 async function getBotConnectorToken(context) {
