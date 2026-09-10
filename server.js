@@ -221,9 +221,26 @@ app.get('/api/attachments/:requestId/:attachmentId', async (req, res) => {
     const data = JSON.parse(result.content[0].text);
     if (!data?.base64) throw new Error('La SDP no devolvió contenido de archivo.');
 
-    res.setHeader('Content-Type', data.mimeType || 'application/octet-stream');
+    const buffer = Buffer.from(data.base64, 'base64');
+    // El endpoint de descarga de SDP suele responder con un content-type genérico
+    // ('application/x-download', 'application/octet-stream'), y algunos clientes de Teams no
+    // renderizan la miniatura de una <Image> si el tipo no es de imagen. Cuando el tipo que
+    // reportó SDP no sirve, se deduce de los magic bytes del propio archivo.
+    const reportedType = String(data.mimeType || '').toLowerCase().split(';')[0].trim();
+    const sniffImageMime = (buf) => {
+      if (buf.length >= 8 && buf.readUInt32BE(0) === 0x89504e47) return 'image/png';
+      if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+      if (buf.length >= 6 && buf.toString('ascii', 0, 6) === 'GIF89a') return 'image/gif';
+      if (buf.length >= 4 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+      return null;
+    };
+    const contentType = reportedType.startsWith('image/')
+      ? reportedType
+      : (sniffImageMime(buffer) || reportedType || 'application/octet-stream');
+
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'private, max-age=3600');
-    res.send(Buffer.from(data.base64, 'base64'));
+    res.send(buffer);
   } catch (error) {
     console.error(`[Attachments] Error sirviendo adjunto ${attachmentId} del ticket ${requestId}:`, error.message);
     res.status(502).send('No se pudo obtener el adjunto de ServiceDesk Plus.');
