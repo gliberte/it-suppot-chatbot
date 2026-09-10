@@ -9838,6 +9838,7 @@ function pickWorkingMessage(seed, options) {
 
 async function executeConfirmedAction(action, user, session = null) {
   const confirmedArgs = prepareConfirmedActionArgs(action);
+  console.log(`[DBG-attach] executeConfirmedAction tool=${action.toolName} sessionPresent=${Boolean(session)} lastImageAttachment=${Boolean(session?.lastImageAttachment)} argsHadFile=${Boolean(confirmedArgs.file_base64)}`);
   if (session?.lastImageAttachment && (action.toolName === 'sdp_add_note' || action.toolName === 'sdp_create_request' || action.toolName === 'sdp_upload_attachment')) {
     if (!confirmedArgs.file_base64) {
       confirmedArgs.file_base64 = session.lastImageAttachment.file_base64;
@@ -12724,12 +12725,14 @@ async function handleTeamsMessage(context) {
     await context.sendActivity({ type: 'typing' });
     try {
       const downloaded = await downloadTeamsImageAttachment(context, imageAttachments[0]);
+      console.log(`[DBG-attach] downloaded=${Boolean(downloaded)} base64Len=${downloaded?.base64?.length || 0} mime=${downloaded?.mimeType}`);
       if (downloaded && downloaded.base64) {
         session.lastImageAttachment = {
           file_base64: downloaded.base64,
           file_mime: downloaded.mimeType || 'image/png',
           file_name: imageAttachments[0].name || 'evidencia_teams.png'
         };
+        console.log(`[DBG-attach] session.lastImageAttachment SET (${session.lastImageAttachment.file_name}, ${session.lastImageAttachment.file_mime})`);
       }
     } catch (attErr) {
       console.warn('[Teams] Error capturando binario de adjunto:', attErr.message);
