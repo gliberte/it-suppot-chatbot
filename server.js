@@ -12778,6 +12778,17 @@ async function handleTeamsMessage(context) {
         'Contexto extraído automáticamente de imagen adjunta:',
         imageAnalysis.analysisText
       ].join('\n');
+      // Caso real (Algis Morales, 2026-09-10): "crea un ticket según lo que interpretas en la
+      // imagen" + imagen en el mismo mensaje. El texto del usuario no está vacío, así que el
+      // bypass no se activaba -- pero el análisis de la imagen (generado por IA, hasta 4000
+      // caracteres) queda concatenado en messageForSophia y puede disparar por accidente cualquier
+      // interceptor determinístico de palabras clave: aquí el análisis contenía "generar ...
+      // informe" (el correo de la captura trataba de enviar un informe) y handleReportExportTurn
+      // generó un reporte en Excel en vez de crear el ticket, tres veces seguidas. Siempre que hay
+      // análisis de imagen mezclado en el mensaje, esas reglas de palabras clave dejan de ser
+      // confiables -- se salta la cadena y decide Gemini, que tiene el texto real del usuario Y el
+      // contexto de la imagen para actuar con criterio.
+      skipDeterministicIntercepts = true;
     } else if (imageAnalysis.errors.length > 0 && !text) {
       await sendTeamsReply(context, `Recibí la imagen, pero no pude analizarla: ${imageAnalysis.errors.join('; ')}. Puedes escribirme el mensaje de error o adjuntar una captura más clara.`);
       return;
