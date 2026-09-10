@@ -13294,6 +13294,13 @@ app.post('/api/external/tickets', async (req, res) => {
     };
     const classification = await classifyTicketWithKnowledge(createArgs, serviceUser);
     applyTicketClassificationToArgs(createArgs, classification, description || subject || '');
+    // Misma advertencia que agrega applyCreateTicketDefaults en el flujo del chat (allí se aplica
+    // en el paso de confirmación, que este endpoint no tiene): si ninguna regla de ticket-routing.js
+    // matcheó, la categoría/subcategoría son un valor por defecto y hay que dejarlo visible para
+    // quien atienda el ticket.
+    if (classification?.routing?.name === 'default' && createArgs.description) {
+      createArgs.description = `${createArgs.description}\n\n⚠️ Clasificación automática sin ruta real -- Sophia no encontró una regla que aplicara a este caso, la categoría/subcategoría de arriba es un valor por defecto y probablemente necesite corrección manual.`;
+    }
     sanitizeCreateRequestArgs(createArgs);
 
     const result = await callMcpTool('sdp_create_request', createArgs);
