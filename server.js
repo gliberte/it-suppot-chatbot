@@ -11965,16 +11965,25 @@ function createAttachmentsDetailBlock(request) {
   for (const attachment of attachments) {
     const isImage = String(attachment?.content_type || '').startsWith('image/');
     if (isImage && attachment?.id) {
+      const fullUrl = buildAttachmentLink(request.id, attachment.id);
+      const label = attachment.name || 'Imagen adjunta';
       items.push({
         type: 'Image',
-        url: buildAttachmentLink(request.id, attachment.id),
-        altText: attachment.name || 'Imagen adjunta',
+        url: fullUrl,
+        altText: label,
         size: 'Medium',
-        spacing: 'Small'
+        spacing: 'Small',
+        // Al tocar la miniatura se abre la imagen a tamaño completo en el navegador. El mismo
+        // enlace va abajo como texto por si el cliente de Teams ignora selectAction en imágenes.
+        selectAction: {
+          type: 'Action.OpenUrl',
+          title: `Abrir ${label}`,
+          url: fullUrl
+        }
       });
       items.push({
         type: 'TextBlock',
-        text: attachment.name || 'Imagen adjunta',
+        text: `[🔍 Ver ${label} a tamaño completo](${fullUrl})`,
         wrap: true,
         size: 'Small',
         isSubtle: true,
