@@ -9,6 +9,20 @@ Formato recomendado:
 - `Security`: controles de seguridad, permisos o auditoría.
 - `Ops`: cambios de despliegue, monitoreo o operación.
 
+## [0.54.27] - 2026-09-11
+
+### Added
+- **Las imágenes que se adjuntan a un ticket ahora sí llegan a ServiceDesk Plus:** antes la subida fallaba siempre en silencio -- Sophia confirmaba que el ticket se había creado, pero la imagen nunca quedaba adjunta. Ya se ve la miniatura directamente en la tarjeta de detalle (de tickets y de MCI), y se puede tocar la imagen -- o el enlace de abajo -- para abrirla a tamaño completo.
+- Nuevo endpoint para que sistemas automatizados externos puedan crear tickets directamente, usando la misma clasificación automática de categoría/prioridad que Sophia usa en el chat.
+
+### Fixed
+- **La descripción de los tickets que crea Sophia ahora se ve con formato en ServiceDesk Plus** (negritas y saltos de línea reales), en vez de salir como un solo bloque de texto plano.
+- Corregido un caso donde enviar una imagen -- sola o junto con texto -- podía terminar generando una respuesta sin relación (como un reporte de tickets exportado) en vez de crear el ticket esperado.
+- Un ticket ya no puede fallar al crearse por falta de categoría: si Sophia no encuentra una ruta clara según el problema descrito, usa un valor por defecto y deja una advertencia visible en la descripción para que se revise manualmente.
+
+### Ops
+- El endpoint de creación externa de tickets queda restringido por lista blanca de IP y usa una cuenta de servicio fija; cada creación queda registrada en la auditoría con su origen.
+
 ## [0.54.26] - 2026-09-09
 
 ### Fixed
