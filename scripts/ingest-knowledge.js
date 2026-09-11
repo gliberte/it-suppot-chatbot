@@ -50,11 +50,26 @@ for (const file of files) {
   }
 }
 
+// Este índice también recibe fragmentos de historial real de tickets/MCI cerrados, generados por
+// scripts/ingest-ticket-history.js (id con prefijo "historial-"). Reescribir el archivo aquí no
+// debe borrarlos -- se preservan tal cual y solo se reemplazan los fragmentos que vienen de
+// knowledge/*.md.
+const existingChunks = existsSync(INDEX_PATH)
+  ? (() => {
+      try {
+        return JSON.parse(readFileSync(INDEX_PATH, 'utf8')).chunks || [];
+      } catch {
+        return [];
+      }
+    })()
+  : [];
+const ticketHistoryChunks = existingChunks.filter((chunk) => chunk.id?.startsWith('historial-'));
+
 mkdirSync(join(process.cwd(), 'data'), { recursive: true });
 writeFileSync(INDEX_PATH, JSON.stringify({
   generatedAt: new Date().toISOString(),
   embeddingModel: EMBEDDING_MODEL,
-  chunks
+  chunks: [...chunks, ...ticketHistoryChunks]
 }, null, 2));
 
 console.log(`Índice RAG generado: ${INDEX_PATH} (${chunks.length} fragmentos)`);
