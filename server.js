@@ -52,6 +52,7 @@ import {
   minimizeAuditArgs,
   createAuditTextPreview,
   getResolutionText,
+  isResolvedKnowledgeStatus,
   createSanitizedKnowledgeResponse,
   escapeRegExp,
   createAdaptiveCardPreview,
@@ -1440,37 +1441,46 @@ function createCreateMciConfirmationBlock(args = {}, user) {
 async function checkForDuplicateRequest(args = {}, user) {
   try {
     const subject = normalizeComparableText(args.subject || '');
-    const userEmail = String(user?.email || '').toLowerCase();
-    const userName = normalizeComparableText(user?.name || user?.displayName || '');
+    const requesterId = getRequesterId(user);
+
+    // Antes esto pedía { filter_by: 'Open_Requests', limit: 25 } -- sin requester_id, SDP no
+    // acepta ese filter_by directamente (ver comentario en sdp-mcp-server sobre "Invalid Input"),
+    // así que sdp_list_requests hacía el filtrado de estado del lado del cliente: paginaba de 50
+    // en 50, sin ningún filtro por solicitante, hasta juntar 25 tickets abiertos DE TODA LA
+    // EMPRESA. Medido en vivo contra la SDP real: ~16 segundos, porque hacía falta recorrer varias
+    // páginas para encontrar suficientes tickets abiertos entre todos los de la compañía. Eso es
+    // exactamente la demora real que hizo que Kassim Acevedo (12-sep-2026) repitiera "Crear de
+    // todos modos" sin ver respuesta a tiempo, generando una segunda tarjeta de confirmación para
+    // el mismo ticket.
+    //
+    // Lo único que este chequeo necesita es SI ESTE USUARIO YA TIENE un ticket abierto parecido --
+    // no los de toda la empresa. Pedir directo por requester_id usa el camino search_criteria de
+    // SDP (una sola llamada, sin paginar) y de paso ya no hace falta comparar email/nombre a mano.
+    if (!requesterId) return null;
 
     const listResult = await callMcpTool('sdp_list_requests', {
-      filter_by: 'Open_Requests',
+      requester_id: requesterId,
       limit: 25
     });
     const data = JSON.parse(listResult.content?.[0]?.text || '{}');
-    const openRequests = Array.isArray(data.requests) ? data.requests : [];
+    const ownRequests = Array.isArray(data.requests) ? data.requests : [];
 
-    for (const req of openRequests) {
-      const reqRequesterEmail = String(req.requester?.email_id || req.requester?.email || '').toLowerCase();
-      const reqRequesterName = normalizeComparableText(getDisplayName(req.requester) || '');
+    for (const req of ownRequests) {
+      if (!req.id || isResolvedKnowledgeStatus(getDisplayName(req.status))) continue;
 
-      const isSameUser = (userEmail && reqRequesterEmail === userEmail) || (userName && reqRequesterName.includes(userName));
+      const reqSubject = normalizeComparableText(req.subject || '');
+      const sameCategory = args.category && normalizeComparableText(getDisplayName(req.category)) === normalizeComparableText(args.category);
 
-      if (isSameUser && req.id) {
-        const reqSubject = normalizeComparableText(req.subject || '');
-        const sameCategory = args.category && normalizeComparableText(getDisplayName(req.category)) === normalizeComparableText(args.category);
+      // Coincidencia por similitud de asunto o misma categoría abierta
+      const subjectMatch = subject && reqSubject && (subject.includes(reqSubject) || reqSubject.includes(subject));
 
-        // Coincidencia por similitud de asunto o misma categoría abierta
-        const subjectMatch = subject && reqSubject && (subject.includes(reqSubject) || reqSubject.includes(subject));
-
-        if (subjectMatch || sameCategory) {
-          return {
-            id: req.id,
-            subject: req.subject || 'Sin asunto',
-            status: getDisplayName(req.status) || 'Abierto',
-            createdTime: req.created_time?.display_value || req.created_time || 'Reciente'
-          };
-        }
+      if (subjectMatch || sameCategory) {
+        return {
+          id: req.id,
+          subject: req.subject || 'Sin asunto',
+          status: getDisplayName(req.status) || 'Abierto',
+          createdTime: req.created_time?.display_value || req.created_time || 'Reciente'
+        };
       }
     }
   } catch (error) {
