@@ -1579,29 +1579,23 @@ function formatCreateRequestConfirmation(args = {}, user, intro) {
     intro || 'Preparé esta solicitud para ServiceDesk Plus.',
     '',
     '**Solicitud preparada**',
-    '',
-    `| Campo | Valor |`,
-    `| --- | --- |`,
-    `| Asunto | ${escapeMarkdownTableValue(args.subject || 'Sin asunto')} |`,
-    `| Categoría | ${escapeMarkdownTableValue(args.category || '-')} |`,
-    `| Subcategoría | ${escapeMarkdownTableValue(args.subcategory || '-')} |`,
-    `| Prioridad | ${escapeMarkdownTableValue(args.priority || '-')} |`,
-    `| Tipo | ${escapeMarkdownTableValue(args.request_type || '-')} |`,
-    `| Técnico asignado | ${escapeMarkdownTableValue(assignedTechnician)} |`,
-    `| Solicitante | ${escapeMarkdownTableValue(user?.name || args.requester || '-')} |`
+    `- **Asunto:** ${escapeMarkdownTableValue(args.subject || 'Sin asunto')}`,
+    `- **Categoría:** ${escapeMarkdownTableValue(args.category || '-')}`,
+    `- **Subcategoría:** ${escapeMarkdownTableValue(args.subcategory || '-')}`,
+    `- **Prioridad:** ${escapeMarkdownTableValue(args.priority || '-')}`,
+    `- **Tipo:** ${escapeMarkdownTableValue(args.request_type || '-')}`,
+    `- **Técnico asignado:** ${escapeMarkdownTableValue(assignedTechnician)}`,
+    `- **Solicitante:** ${escapeMarkdownTableValue(user?.name || args.requester || '-')}`
   ];
 
   if (classification.routing || classification.confidence) {
     lines.push(
       '',
       '**Clasificación Sophia**',
-      '',
-      `| Campo | Valor |`,
-      `| --- | --- |`,
-      `| Ruta | ${escapeMarkdownTableValue(classification.routing || '-')} |`,
-      `| Confianza | ${escapeMarkdownTableValue(classification.confidence || '-')} |`,
-      `| Señales | ${escapeMarkdownTableValue((classification.matchedKeywords || []).join(', ') || '-')} |`,
-      `| Fuente | ${escapeMarkdownTableValue(classification.evidenceSource || '-')} |`
+      `- **Ruta:** ${escapeMarkdownTableValue(classification.routing || '-')}`,
+      `- **Confianza:** ${escapeMarkdownTableValue(classification.confidence || '-')}`,
+      `- **Señales:** ${escapeMarkdownTableValue((classification.matchedKeywords || []).join(', ') || '-')}`,
+      `- **Fuente:** ${escapeMarkdownTableValue(classification.evidenceSource || '-')}`
     );
   }
 
@@ -1618,16 +1612,13 @@ function formatCreateMciConfirmation(args = {}, user, intro) {
     intro || 'Preparé esta MCI (Meta Crucialmente Importante) para ServiceDesk Plus.',
     '',
     '**MCI preparada**',
-    '',
-    `| Campo | Valor |`,
-    `| --- | --- |`,
-    `| Asunto | ${escapeMarkdownTableValue(args.subject || 'Sin asunto')} |`,
-    `| Líder de MCI | ${escapeMarkdownTableValue(args.mci_leader || '-')} |`,
-    `| Portafolio | ${escapeMarkdownTableValue(args.mci_portfolio || '-')} |`,
-    `| Prioridad | ${escapeMarkdownTableValue(args.mci_priority || '-')} |`,
-    `| Fecha Tope de Ejecución | ${escapeMarkdownTableValue(args.mci_due_date || '-')} |`,
-    `| Técnico asignado | ${escapeMarkdownTableValue(args.mci_technician || args.mci_leader || '-')} |`,
-    `| Solicitante | ${escapeMarkdownTableValue(user?.name || args.requester || '-')} |`
+    `- **Asunto:** ${escapeMarkdownTableValue(args.subject || 'Sin asunto')}`,
+    `- **Líder de MCI:** ${escapeMarkdownTableValue(args.mci_leader || '-')}`,
+    `- **Portafolio:** ${escapeMarkdownTableValue(args.mci_portfolio || '-')}`,
+    `- **Prioridad:** ${escapeMarkdownTableValue(args.mci_priority || '-')}`,
+    `- **Fecha Tope de Ejecución:** ${escapeMarkdownTableValue(args.mci_due_date || '-')}`,
+    `- **Técnico asignado:** ${escapeMarkdownTableValue(args.mci_technician || args.mci_leader || '-')}`,
+    `- **Solicitante:** ${escapeMarkdownTableValue(user?.name || args.requester || '-')}`
   ];
 
   if (args.description) {
@@ -9991,17 +9982,15 @@ function formatCreatedMciSummary({ requestId, args = {}, mciInfo }) {
     `Listo, creé la MCI #${requestId}.`,
     '',
     '**Resumen**',
-    `| Campo | Valor |`,
-    `| --- | --- |`,
-    `| MCI | #${escapeMarkdownTableValue(requestId)} |`,
-    `| Asunto | ${escapeMarkdownTableValue(args.subject || 'Sin asunto')} |`,
-    `| Líder de MCI | ${escapeMarkdownTableValue(info.leader || args.mci_leader || '-')} |`,
-    `| Portafolio | ${escapeMarkdownTableValue(info.portfolio || args.mci_portfolio || '-')} |`,
-    `| Prioridad | ${escapeMarkdownTableValue(info.priority || args.mci_priority || '-')} |`,
-    `| Número de MCI | ${escapeMarkdownTableValue(info.mci_number || '-')} |`,
-    `| Etapa | ${escapeMarkdownTableValue(info.stage || '-')} |`,
-    `| Técnico asignado | ${escapeMarkdownTableValue(info.technician || '-')} |`,
-    `| Fecha Tope de Ejecución | ${escapeMarkdownTableValue(info.due_date || args.mci_due_date || '-')} |`
+    `- **MCI:** #${escapeMarkdownTableValue(requestId)}`,
+    `- **Asunto:** ${escapeMarkdownTableValue(args.subject || 'Sin asunto')}`,
+    `- **Líder de MCI:** ${escapeMarkdownTableValue(info.leader || args.mci_leader || '-')}`,
+    `- **Portafolio:** ${escapeMarkdownTableValue(info.portfolio || args.mci_portfolio || '-')}`,
+    `- **Prioridad:** ${escapeMarkdownTableValue(info.priority || args.mci_priority || '-')}`,
+    `- **Número de MCI:** ${escapeMarkdownTableValue(info.mci_number || '-')}`,
+    `- **Etapa:** ${escapeMarkdownTableValue(info.stage || '-')}`,
+    `- **Técnico asignado:** ${escapeMarkdownTableValue(info.technician || '-')}`,
+    `- **Fecha Tope de Ejecución:** ${escapeMarkdownTableValue(info.due_date || args.mci_due_date || '-')}`
   ];
 
   if (info.ran_out_of_numbers) {
@@ -10026,24 +10015,20 @@ function formatCreatedTicketSummary({ requestId, args = {} }) {
     `Listo, creé el ticket #${requestId}.`,
     '',
     '**Resumen**',
-    `| Campo | Valor |`,
-    `| --- | --- |`,
-    `| Ticket | #${escapeMarkdownTableValue(requestId)} |`,
-    `| Asunto | ${escapeMarkdownTableValue(args.subject || 'Sin asunto')} |`,
-    `| Categoría | ${escapeMarkdownTableValue(args.category || '-')} |`,
-    `| Subcategoría | ${escapeMarkdownTableValue(args.subcategory || '-')} |`,
-    `| Prioridad | ${escapeMarkdownTableValue(args.priority || '-')} |`,
-    `| Técnico asignado | ${escapeMarkdownTableValue(assignedTechnician)} |`
+    `- **Ticket:** #${escapeMarkdownTableValue(requestId)}`,
+    `- **Asunto:** ${escapeMarkdownTableValue(args.subject || 'Sin asunto')}`,
+    `- **Categoría:** ${escapeMarkdownTableValue(args.category || '-')}`,
+    `- **Subcategoría:** ${escapeMarkdownTableValue(args.subcategory || '-')}`,
+    `- **Prioridad:** ${escapeMarkdownTableValue(args.priority || '-')}`,
+    `- **Técnico asignado:** ${escapeMarkdownTableValue(assignedTechnician)}`
   ];
 
   if (classification.routing || classification.confidence) {
     lines.push(
       '',
       '**Clasificación Sophia**',
-      `| Campo | Valor |`,
-      `| --- | --- |`,
-      `| Ruta | ${escapeMarkdownTableValue(classification.routing || '-')} |`,
-      `| Confianza | ${escapeMarkdownTableValue(classification.confidence || '-')} |`
+      `- **Ruta:** ${escapeMarkdownTableValue(classification.routing || '-')}`,
+      `- **Confianza:** ${escapeMarkdownTableValue(classification.confidence || '-')}`
     );
   }
 
