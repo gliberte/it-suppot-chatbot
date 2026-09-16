@@ -377,7 +377,14 @@ export function getTicketRoutingMap(env = process.env) {
       // (en el sentido de "importante", no de contraseña) matcheó esta ruta y el ticket terminó
       // clasificado como Contraseñas sin tener nada que ver. Se cambia por frases compuestas que
       // sí implican una contraseña, en vez de la palabra sola.
-      keywords: ['contraseña', 'clave de acceso', 'clave de usuario', 'olvide mi clave', 'olvidé mi clave', 'cambiar clave', 'clave bloqueada', 'password', 'bloqueada', 'bloqueado', 'usuario o contraseña'],
+      //
+      // "bloqueada"/"bloqueado" sueltas tienen el mismo problema -- caso real (ticket #13880):
+      // "la operación no está bloqueada, se puede seguir trabajando con la versión 6 del cubo"
+      // (hablando de un archivo de Excel, en sentido NEGADO) matcheó esta ruta igual, y el ticket
+      // (una solicitud de actualización de un cubo de ventas para Finanzas) quedó clasificado como
+      // Contraseñas/Usuario Windows. Se cambian por frases compuestas que sí implican una cuenta o
+      // usuario bloqueado, igual que se hizo antes con "clave".
+      keywords: ['contraseña', 'clave de acceso', 'clave de usuario', 'olvide mi clave', 'olvidé mi clave', 'cambiar clave', 'clave bloqueada', 'password', 'cuenta bloqueada', 'usuario bloqueado', 'usuario bloqueada', 'mi cuenta está bloqueada', 'usuario o contraseña'],
       category: env.SDP_PASSWORD_CATEGORY || env.SDP_DEFAULT_CATEGORY || 'Contraseñas',
       subcategory: env.SDP_PASSWORD_SUBCATEGORY || env.SDP_DEFAULT_SUBCATEGORY || 'Usuario Windows',
       priority: env.SDP_PASSWORD_PRIORITY || env.SDP_DEFAULT_PRIORITY || 'Media',
