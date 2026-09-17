@@ -12617,6 +12617,45 @@ teamsAdapter.onTurnError = async (context, error) => {
 
 const teamsBot = new TeamsSupportBot();
 
+// Teams renderiza el texto de un mensaje de bot con un subconjunto básico de Markdown
+// (CommonMark) que NO soporta tablas de pipes -- esa es una extensión de GFM. Sin ese soporte,
+// cada fila de "| Campo | Valor |" se trata como texto suelto dentro de un mismo párrafo, y un
+// salto de línea simple entre líneas de un párrafo se colapsa a un espacio -- por eso toda la
+// tabla termina pegada en una sola línea larga (caso real: resumen de creación de ticket, commit
+// ca184e0, ya corregido ahí porque esas tablas salían de plantillas fijas). Pero Gemini también
+// arma sus propias tablas en el texto libre de una respuesta (caso real: "Encontré 6 iniciativas
+// de MCI..." con una tabla de Ticket/Asunto/Estado/Prioridad/Técnico) -- ahí no hay una plantilla
+// que corregir, así que se sanea cualquier tabla de pipes justo antes de enviarla a Teams,
+// convirtiéndola a la lista de viñetas que sí se confirmó que renderiza bien.
+function convertMarkdownTablesToLists(text) {
+  if (!text || !String(text).includes('|')) return text;
+
+  const isTableRow = (line) => /^\s*\|.*\|\s*$/.test(line);
+  const isSeparatorRow = (line) => /^\s*\|(\s*:?-+:?\s*\|)+\s*$/.test(line);
+  const splitRow = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+
+  const lines = String(text).split('\n');
+  const output = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    if (isTableRow(lines[i]) && i + 1 < lines.length && isSeparatorRow(lines[i + 1])) {
+      const headers = splitRow(lines[i]);
+      i += 2; // saltar encabezado y separador -- ya no hacen falta como líneas propias
+      while (i < lines.length && isTableRow(lines[i])) {
+        const cells = splitRow(lines[i]);
+        output.push(`- ${headers.map((h, idx) => `**${h}:** ${cells[idx] ?? '-'}`).join(' · ')}`);
+        i += 1;
+      }
+      continue;
+    }
+    output.push(lines[i]);
+    i += 1;
+  }
+
+  return output.join('\n');
+}
+
 async function sendTeamsReply(context, text) {
   if (text?.type === 'adaptive_card') {
     const card = text.card;
@@ -12625,7 +12664,7 @@ async function sendTeamsReply(context, text) {
       const result = await Promise.race([
         context.sendActivity({
           type: 'message',
-          text: text.summaryText || 'Resultado de Sophia',
+          text: convertMarkdownTablesToLists(text.summaryText) || 'Resultado de Sophia',
           attachments: [
             {
               contentType: 'application/vnd.microsoft.card.adaptive',
@@ -12656,7 +12695,7 @@ async function sendTeamsReply(context, text) {
     }
   }
 
-  const content = text || 'No pude generar una respuesta para ese mensaje.';
+  const content = convertMarkdownTablesToLists(text) || 'No pude generar una respuesta para ese mensaje.';
   console.log(`[Teams] Enviando respuesta a conversation=${context.activity?.conversation?.id || 'unknown'} length=${content.length}`);
 
   try {

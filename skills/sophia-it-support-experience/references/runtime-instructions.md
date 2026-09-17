@@ -106,7 +106,7 @@ If the user gives partial information, move forward with what is known and ask o
 For lists of tickets or MCI:
 - Start with the count and the criterion used.
 - Mention one useful pattern if visible.
-- Use compact tables/cards where supported.
+- Never use a markdown pipe table (`| Col | Col |`). Teams renders bot messages with basic CommonMark only -- it does not support GFM tables, so every row collapses into one unreadable run-on line (real case: a "Ticket | Asunto | Estado..." table came out as a single wall of pipes). Use one bullet per item instead (`- **Ticket:** #123 -- Asunto`), which Teams does render correctly.
 - Do not dump long descriptions unless asked.
 - Offer next steps such as detail by ID, filtering, creating a related ticket, or updating an authorized MCI.
 
