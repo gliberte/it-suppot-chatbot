@@ -13356,7 +13356,11 @@ function getExternalClientIp(req) {
   return peer;
 }
 
-app.post('/api/external/tickets', async (req, res) => {
+// El body-parser global (express.json(), sin límite explícito) usa el default de Express de
+// 100kb -- suficiente para subject/description, pero una imagen en base64 lo supera de inmediato
+// (hasta con compresión, el +33% de base64 hace que hasta una captura chica pase de 100kb). Este
+// endpoint necesita su propio límite más alto, sin tocar el de las demás rutas.
+app.post('/api/external/tickets', express.json({ limit: '10mb' }), async (req, res) => {
   const allowedIps = getCsvEnvSet('EXTERNAL_TICKET_API_ALLOWED_IPS');
   if (allowedIps.size === 0) {
     return res.status(503).json({ success: false, message: 'El endpoint de creación externa de tickets no está habilitado (falta EXTERNAL_TICKET_API_ALLOWED_IPS).' });
@@ -13368,12 +13372,15 @@ app.post('/api/external/tickets', async (req, res) => {
     return res.status(403).json({ success: false, message: 'IP no autorizada.' });
   }
 
-  const { subject, description } = req.body || {};
+  const { subject, description, file_base64, file_name, file_mime } = req.body || {};
   if (typeof subject !== 'string' || !subject.trim()) {
     return res.status(400).json({ success: false, message: 'Falta el campo obligatorio "subject" (texto).' });
   }
   if (typeof description !== 'string' || !description.trim()) {
     return res.status(400).json({ success: false, message: 'Falta el campo obligatorio "description" (texto).' });
+  }
+  if (file_base64 !== undefined && (typeof file_base64 !== 'string' || !file_base64.trim())) {
+    return res.status(400).json({ success: false, message: 'Si envías "file_base64", debe ser un string no vacío con el contenido en Base64 (sin el prefijo "data:...;base64,").' });
   }
 
   const serviceUser = {
@@ -13391,6 +13398,15 @@ app.post('/api/external/tickets', async (req, res) => {
       requester: serviceUser.name,
       requester_id: serviceUser.sdpRequesterId
     };
+    if (file_base64) {
+      // sdp_create_request (sdp-mcp-server) ya sabe qué hacer con estos tres campos: crea el
+      // ticket y, si vienen, sube el adjunto justo después con uploadAttachmentToSdp -- mismo
+      // camino que ya usa el chat de Teams cuando alguien manda una imagen. Si la subida falla,
+      // el ticket igual se crea y el detalle vuelve en sophia_warnings (no lanza).
+      createArgs.file_base64 = file_base64.trim();
+      createArgs.file_name = typeof file_name === 'string' && file_name.trim() ? file_name.trim() : 'evidencia_externa.png';
+      createArgs.file_mime = typeof file_mime === 'string' && file_mime.trim() ? file_mime.trim() : 'image/png';
+    }
     const classification = await classifyTicketWithKnowledge(createArgs, serviceUser);
     applyTicketClassificationToArgs(createArgs, classification, description || subject || '');
     // Misma advertencia que agrega applyCreateTicketDefaults en el flujo del chat (allí se aplica
@@ -13424,6 +13440,13 @@ app.post('/api/external/tickets', async (req, res) => {
       subcategory: createArgs.subcategory || null,
       priority: createArgs.priority || null,
       classification_confidence: classification?.confidence || null,
+      // sdp_create_request (sdp-mcp-server) intenta subir el adjunto justo después de crear el
+      // ticket y nunca hace fallar la creación por eso -- si algo sale mal, el detalle queda en
+      // sophia_warnings dentro de sdp_response. Se sube al nivel superior de la respuesta para que
+      // el sistema externo no tenga que andar buscándolo ahí adentro.
+      attachment_included: Boolean(file_base64),
+      attachment_uploaded: Boolean(data?.sophia_attachment_upload),
+      attachment_warning: (data?.sophia_warnings || []).find((w) => /adjunt/i.test(w)) || null,
       sdp_response: data
     });
   } catch (error) {
