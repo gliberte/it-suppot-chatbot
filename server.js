@@ -3060,6 +3060,26 @@ async function performWebSearchSupport(rawQuery) {
   }
 }
 
+// Frases que solo aparecen en texto que la propia Sophia generó (tarjetas de confirmación,
+// resúmenes de creación) -- nunca en algo que un usuario escribiría de su propia cuenta. Si el
+// mensaje trae dos o más, es casi seguro que el usuario copió y pegó de vuelta lo que ella ya le
+// había mostrado (reenviando la tarjeta, o intentando "confirmar" reescribiéndola) en vez de
+// escribir un pedido nuevo -- ver skipDeterministicIntercepts en handleTeamsMessage.
+const SOPHIA_TEMPLATE_MARKERS = [
+  'confirmación requerida',
+  'solicitud preparada',
+  'mci preparada',
+  'clasificación sophia',
+  'revisa estos datos antes de confirmar'
+];
+
+function looksLikeEchoedSophiaCard(message = '') {
+  const normalized = normalizeComparableText(message);
+  if (!normalized) return false;
+  const matches = SOPHIA_TEMPLATE_MARKERS.filter((marker) => normalized.includes(normalizeComparableText(marker)));
+  return matches.length >= 2;
+}
+
 function isListedTicketFollowUpReviewRequest(message = '') {
   const normalized = normalizeComparableText(message);
   if (!normalized) return false;
@@ -12780,6 +12800,21 @@ async function handleTeamsMessage(context) {
   // true cuando messageForSophia es texto sintético (análisis de imagen sin pregunta real del
   // usuario) en vez de algo que el usuario escribió -- ver runSupportTurn/skipDeterministicIntercepts.
   let skipDeterministicIntercepts = false;
+
+  // Caso real (Ronald Paredes, 24-sep): copió y pegó de vuelta el texto de la tarjeta de
+  // confirmación que Sophia ya le había mostrado (intentando reenviarla/confirmar reescribiéndola).
+  // Ese texto trae palabras propias de las plantillas de Sophia -- "Actualización" en el asunto,
+  // "Solicitud" varias veces, y el cierre "Revisa estos datos antes de confirmar." -- que juntas
+  // cumplían las tres condiciones de isListedTicketFollowUpReviewRequest (interceptor determinista
+  // por palabras clave) SIN que el mensaje tuviera nada que ver con pedir seguimientos de tickets.
+  // El turno nunca llegó a Gemini: contestó el mensaje enlatado de "necesito un listado de
+  // tickets", dos veces seguidas, sin relación con lo que Ronald pedía. Mismo patrón que ya se vio
+  // con los interceptores de imagen -- si el texto es en gran parte un eco de lo que la propia
+  // Sophia generó, los interceptores por palabras clave no son confiables y es mejor que decida
+  // Gemini directamente con el contexto completo.
+  if (looksLikeEchoedSophiaCard(text)) {
+    skipDeterministicIntercepts = true;
+  }
 
   if (audioAttachments.length > 0) {
     await context.sendActivity({ type: 'typing' });
