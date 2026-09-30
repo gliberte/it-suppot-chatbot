@@ -128,6 +128,16 @@ for (const [userKey, records] of byUser.entries()) {
     if (r.outcome !== 'confirmation_required') continue;
     const startTime = new Date(r.timestamp).getTime();
 
+    // Antes esto cortaba la búsqueda en cuanto aparecía otro "confirmation_required" más nuevo
+    // ("superada por un intento más nuevo"), sin seguir mirando si ESE intento sí se resolvía.
+    // Eso marcaba como "abandonada" a la primera tarjeta de una racha de reintentos exitosa --
+    // dos casos reales confirmados revisando el transcript (Purificación Cárdenas 22-sep: la
+    // primera confirmación expiró por los 5 minutos, volvió a pedirlo y la segunda sí se
+    // confirmó; Armando Delgado 29-sep: salieron dos tarjetas seguidas -- el mismo patrón de
+    // demora que ya se corrigió en e442680 -- y confirmó la segunda). En ambos el ticket
+    // terminó creado; no hubo abandono real. Ahora, un "confirmation_required" intermedio ya no
+    // corta la búsqueda -- solo cuenta como sin resolver si de verdad no aparece ningún
+    // confirmed_success/confirmed_error de este usuario dentro de la ventana.
     let resolved = false;
     for (let j = i + 1; j < records.length; j += 1) {
       const next = records[j];
@@ -137,7 +147,6 @@ for (const [userKey, records] of byUser.entries()) {
         resolved = true;
         break;
       }
-      if (next.outcome === 'confirmation_required') break; // superada por un intento más nuevo
     }
 
     if (!resolved) {
