@@ -12876,7 +12876,14 @@ async function handleTeamsMessage(context) {
     const { action, expired } = takePendingAction(session, actionId);
 
     if (!action) {
-      await sendTeamsReply(context, 'No tengo esa acción pendiente. Puede que ya se haya usado o que el backend se haya reiniciado.');
+      // Casi nunca es "el backend se reinició" -- prunePendingActions borra la acción del Map en
+      // cuanto expira (a los PENDING_ACTION_TTL_MS, 5 minutos por defecto), así que cualquier clic
+      // en Confirmar que llegue después de eso encuentra el registro YA BORRADO, no "expirado pero
+      // presente" (esa rama de abajo, con el mensaje más claro, casi no se alcanza en la práctica).
+      // Casos reales: Kena Pérez confirmando 23 horas después, Ronald Paredes 29 horas después --
+      // ambos vieron este mensaje y el "puede que el backend se haya reiniciado" sonaba a falla del
+      // sistema en vez de "pasó demasiado tiempo, volvé a pedirlo", que es lo que casi siempre pasa.
+      await sendTeamsReply(context, 'Esa confirmación ya no está disponible -- probablemente pasó demasiado tiempo desde que te la mostré. Vuelve a pedirme el cambio y te preparo la tarjeta de nuevo.');
       return;
     }
 
